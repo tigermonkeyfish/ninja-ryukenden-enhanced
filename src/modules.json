@@ -1,0 +1,325 @@
+[
+  {
+    "name": "stage11",
+    "source": "src/stage11/main.asm",
+    "ranges": [
+      [
+        524288,
+        557056
+      ]
+    ],
+    "prepare": "native-stage11"
+  },
+  {
+    "name": "stage31",
+    "source": "src/stage31/main.asm",
+    "ranges": [
+      [
+        581632,
+        594496
+      ],
+      [
+        598016,
+        602688
+      ],
+      [
+        606208,
+        610880
+      ],
+      [
+        614400,
+        619072
+      ]
+    ],
+    "prepare": "native-stage31"
+  },
+  {
+    "name": "stage32",
+    "source": "src/stage32/main.asm",
+    "ranges": [
+      [
+        622592,
+        663552
+      ]
+    ],
+    "prepare": "native-stage32"
+  },
+  {
+    "name": "stage41",
+    "source": "src/stage41/main.asm",
+    "ranges": [
+      [
+        663552,
+        704512
+      ]
+    ],
+    "prepare": "native-stage41"
+  },
+  {
+    "name": "stage22",
+    "source": "src/stage22/main.asm",
+    "ranges": [
+      [
+        704512,
+        835584
+      ],
+      [
+        1007616,
+        1015808
+      ],
+      [
+        594496,
+        598016
+      ],
+      [
+        602688,
+        606208
+      ]
+    ],
+    "prepare": "native-stage22"
+  },
+  {
+    "name": "stage42",
+    "source": "src/stage42/main.asm",
+    "ranges": [
+      [
+        843776,
+        942080
+      ]
+    ],
+    "prepare": "native-stage42"
+  },
+  {
+    "name": "stage52",
+    "source": "src/stage52/main.asm",
+    "ranges": [
+      [
+        942080,
+        983040
+      ]
+    ],
+    "prepare": "native-stage52"
+  },
+  {
+    "name": "stage63",
+    "source": "src/stage63/main.asm",
+    "ranges": [
+      [
+        983040,
+        1007616
+      ]
+    ],
+    "prepare": "native-stage63"
+  },
+  {
+    "name": "castle",
+    "source": "src/castle/main.asm",
+    "ranges": [
+      [
+        1015808,
+        1048576
+      ],
+      [
+        610880,
+        614400
+      ],
+      [
+        619072,
+        622592
+      ],
+      [
+        434176,
+        450560
+      ]
+    ],
+    "prepare": "native-castle"
+  },
+  {
+    "name": "stage61-sky",
+    "source": "src/stage61-sky/main.asm",
+    "ranges": [
+      [
+        557056,
+        565248
+      ]
+    ],
+    "prepare": "native-stage61-sky"
+  },
+  {
+    "name": "stage61-mountains",
+    "source": "src/stage61-mountains/main.asm",
+    "ranges": [
+      [
+        835584,
+        843776
+      ]
+    ],
+    "prepare": "native-stage61-mountains"
+  },
+  {
+    "name": "stage61-upload",
+    "source": "src/stage61-upload/main.asm",
+    "ranges": [
+      [
+        566272,
+        573440
+      ]
+    ]
+  },
+  {
+    "name": "dispatch",
+    "source": "src/dispatch/main.asm",
+    "ranges": [
+      [
+        7680,
+        7712
+      ],
+      [
+        7744,
+        7870
+      ],
+      [
+        7936,
+        7945
+      ],
+      [
+        7980,
+        8048
+      ],
+      [
+        8112,
+        8144
+      ],
+      [
+        573440,
+        573696
+      ]
+    ]
+  },
+  {
+    "name": "stage61-dispatch",
+    "source": "src/stage61-dispatch/main.asm",
+    "ranges": [
+      [
+        7945,
+        7980
+      ],
+      [
+        579584,
+        579648
+      ]
+    ]
+  },
+  {
+    "name": "options",
+    "source": "src/options/main.asm",
+    "ranges": [
+      [
+        7712,
+        7744
+      ],
+      [
+        12144,
+        12147
+      ],
+      [
+        15299,
+        15302
+      ],
+      [
+        565248,
+        566272
+      ],
+      [
+        579648,
+        579840
+      ]
+    ]
+  },
+  {
+    "name": "selector-hook",
+    "source": "src/selector-hook/main.asm",
+    "ranges": [
+      [
+        8048,
+        8112
+      ],
+      [
+        9203,
+        9206
+      ]
+    ]
+  },
+  {
+    "name": "notice",
+    "source": "src/notice/main.asm",
+    "ranges": [
+      [
+        7870,
+        7936
+      ],
+      [
+        573696,
+        579584
+      ]
+    ]
+  },
+  {
+    "name": "speed",
+    "source": "src/speed/main.asm",
+    "ranges": [
+      [
+        8144,
+        8166
+      ],
+      [
+        579840,
+        581632
+      ]
+    ]
+  },
+  {
+    "name": "native-hooks",
+    "source": "src/native-hooks/main.asm",
+    "ranges": [
+      [
+        8909,
+        8912
+      ],
+      [
+        9303,
+        9309
+      ],
+      [
+        9330,
+        9333
+      ],
+      [
+        9652,
+        9655
+      ],
+      [
+        32769,
+        32772
+      ],
+      [
+        32813,
+        32816
+      ]
+    ]
+  },
+  {
+    "name": "english",
+    "source": "src/english/main.asm",
+    "ranges": [
+      [
+        44,
+        47
+      ],
+      [
+        8166,
+        8174
+      ]
+    ]
+  }
+]

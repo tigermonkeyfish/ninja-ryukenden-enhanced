@@ -1,0 +1,7 @@
+* text=auto
+*.py text eol=lf
+*.asm text eol=lf
+*.inc text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.bps binary

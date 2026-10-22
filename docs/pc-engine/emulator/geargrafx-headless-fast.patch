@@ -1,0 +1,36 @@
+diff --git a/platforms/shared/desktop/application_headless.cpp b/platforms/shared/desktop/application_headless.cpp
+index 542df39..72bb4d7 100644
+--- a/platforms/shared/desktop/application_headless.cpp
++++ b/platforms/shared/desktop/application_headless.cpp
+@@ -19,6 +19,7 @@
+ 
+ #include <SDL3/SDL.h>
+ #include <signal.h>
++#include <cstdlib>
+ #include "application_headless.h"
+ #include "config.h"
+ #include "emu.h"
+@@ -135,6 +136,11 @@ void application_headless_mainloop(void)
+     {
+         Uint64 frame_start = SDL_GetPerformanceCounter();
+ 
++        // The GUI loop normally propagates audio pacing settings. Headless
++        // debugger runs have no GUI loop, so disable host audio pacing here.
++        const char* ng_audio_fast = std::getenv("NG_DEBUGGER_FAST");
++        if (ng_audio_fast && ng_audio_fast[0] == '1')
++            emu_audio_sync = false;
+         emu_update();
+         gui_debug_update();
+         gui_finish_loading_rom();
+@@ -148,7 +154,10 @@ void application_headless_mainloop(void)
+         Uint64 frame_end = SDL_GetPerformanceCounter();
+         float elapsed_ms = (float)(frame_end - frame_start) / (float)SDL_GetPerformanceFrequency() * 1000.0f;
+ 
+-        float target_ms = 16.666f;
++        // Opt-in debugger throughput: only the host polling delay changes.
++        // CPU/VDC cycles and explicit MCP frame counts are unchanged.
++        const char* ng_fast = std::getenv("NG_DEBUGGER_FAST");
++        float target_ms = (ng_fast && ng_fast[0] == '1') ? 1.0f : 16.666f;
+ 
+         if (elapsed_ms < target_ms)
+             SDL_Delay((Uint32)(target_ms - elapsed_ms));

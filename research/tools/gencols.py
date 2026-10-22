@@ -1,0 +1,60 @@
+"""Emit the castle column copy (two chains) for castle-generated.inc."""
+N = 33
+SEG = 8
+out = []
+w = out.append
+w('; Column copy: N map entries from Y; the BAT read and write pointers start')
+w('; at the first entry and <$0a/<$0b holds its BAT address minus Y. Only the')
+w('; BAT high byte is read. Foreground (palette >= 2) stays as it is and is not')
+w('; written; the write pointer is moved to the next backdrop cell instead')
+w('; (seek_write), so a mostly-foreground row costs a read per cell.')
+for n in range(N, 0, -1):
+    w(f'columns_{n}:')
+    w(' lda $0003')
+    w(' cmp #32')
+    w(f' bcc backdrop_{n}')
+    w(f' jmp skip_{n}')
+    w(f'backdrop_{n}:')
+    w(' lda [<$06],y')
+    w(' tax')
+    w(' lda tile_high-$80,x')
+    w(' stx $0002')
+    w(' sta $0003')
+    w(' iny')
+w(' rts')
+w('; After foreground: the write pointer lags until the next backdrop cell.')
+entries = list(range(N, 0, -1))
+for s in range(0, N, SEG):
+    seg = entries[s:s + SEG]
+    for n in seg:
+        w(f'unsynced_{n}:')
+        w(' lda $0003')
+        w(' cmp #32')
+        w(f' bcc rejoin_{n}')
+        w(f'skip_{n}:')
+        w(' iny')
+    nxt = entries[s + SEG] if s + SEG < N else None
+    w(f' bra unsynced_{nxt}' if nxt else ' rts')
+    for n in seg:
+        w(f'rejoin_{n}:')
+        w(' jsr seek_write')
+        w(f' jmp backdrop_{n}')
+w('seek_write:')
+w(' tya')
+w(' clc')
+w(' adc <$0a')
+w(' stz <$11')
+w(' st0 #0')
+w(' sta $0002')
+w(' lda <$0b')
+w(' adc #0')
+w(' sta $0003')
+w(' lda #2')
+w(' sta <$11')
+w(' st0 #2')
+w(' rts')
+w('columns_end:')
+w(' .if (columns_end > $5d00)')
+w('  .fail')
+w(' .endif')
+print('\n'.join(out))

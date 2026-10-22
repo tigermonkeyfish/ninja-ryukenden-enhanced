@@ -1,0 +1,58 @@
+{
+  "version": "1.09",
+  "title": "Ninja Ryukenden Enhanced",
+  "release_date": "2026-10-21",
+  "source": {
+    "size": 524800,
+    "sha256": "1b3f411dd7d11b1d26fdac199308f77b14144dd2291e417aeb478ad2b8061a89",
+    "header_bytes": 512,
+    "crc32": "A186DFD2",
+    "filename_reference": "Ninja Ryukenden (J).pce",
+    "title": "Ninja Ryukenden (Japan), PC Engine"
+  },
+  "patch": {
+    "path": "patches/ninja-ryukenden-enhanced-v1.09.bps",
+    "sha256": "6a1288278ac300a056cfe1db45b2b69847247572bec3bc5659bfbd7d23b00ba9"
+  },
+  "headerless": {
+    "source": {
+      "size": 524288,
+      "sha256": "3514f2e33257d6d4249aa0f0bee39c0fc7f395e1c8a37a6125b1e33601ace8e2",
+      "header_bytes": 0,
+      "crc32": "67573BAC",
+      "filename_reference": "Ninja Ryuuken Den (Japan) (En,Ja,Zh).pce"
+    },
+    "patch": {
+      "path": "patches/ninja-ryukenden-enhanced-v1.09-headerless.bps",
+      "sha256": "774f821960c704f97889ae1d415a20563d76a593fa72c413f3801e707735fe19"
+    }
+  },
+  "target": {
+    "size": 1048576,
+    "sha256": "f84a31a86da01d1a3377a68a6ad3242af19065095915ed18dab487cb732ab912",
+    "header_bytes": 0,
+    "crc32": "699381B7"
+  },
+  "defaults": {
+    "language": "English",
+    "parallax": "ENHANCED",
+    "enhanced_divisor": 8,
+    "no_damage": false
+  },
+  "tools": {
+    "pceas": {
+      "repository": "https://github.com/pce-devel/huc",
+      "commit": "54f5c73606c1e7142e8095c727cab2767e2b3cb3"
+    }
+  },
+  "build_model": "Assemble the runtime modules over the original ROM; every Enhanced backdrop is generated at build time from the original ROM's own tiles, maps and palettes. Nothing is read from an earlier release.",
+  "license": "MIT for original project contributions; see docs/LICENSING.md",
+  "hardware_validation": {
+    "platform": "NEC PC Engine Duo-RX",
+    "flash_cartridge": "Krikzz Turbo EverDrive PRO",
+    "tested_rom_sha256": "f84a31a86da01d1a3377a68a6ad3242af19065095915ed18dab487cb732ab912",
+    "exact_release_bytes_tested": true,
+    "report": "Maintainer played the release bytes and reported that it looks good (2026-10-21); stages and settings not specified."
+  },
+  "emulator_validation": "docs/validation/background-fidelity.md"
+}

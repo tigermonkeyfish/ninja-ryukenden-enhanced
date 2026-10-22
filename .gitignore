@@ -1,0 +1,24 @@
+# Local inputs, build outputs, emulator data and tools never belong in Git.
+/build/
+/dist/
+/local/
+/tools/
+/captures/
+*.pce
+*.nes
+*.sms
+*.rom
+*.bin
+*.state
+*.sav
+*.vram
+*.pal
+*.sym
+*.lst
+__pycache__/
+*.py[cod]
+.venv/
+.env
+.env.*
+!.env.example
+.DS_Store
