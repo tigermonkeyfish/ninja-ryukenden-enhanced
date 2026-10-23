@@ -28,3 +28,6 @@ and `docs/pc-engine/HARDWARE.md` before changing ROM behavior.
   in `docs/pc-engine/`; put Ninja-specific addresses in the architecture map.
   `research/tools/` holds reference probes, not maintained tools.
 - Local preparation does not authorize publishing a repository or release.
+- **Never add co-author, session, or AI/LLM attribution lines to commit
+  messages.** No `Co-Authored-By:`, no `*-Session:`, and no references to
+  Claude, AI models, LLMs, or agent sessions.
