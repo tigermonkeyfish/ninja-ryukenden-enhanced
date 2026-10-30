@@ -702,3 +702,128 @@ original's (scenes 3 to 10). Frame counts match the 1.08-dev table except
 after 4-1: 1,106 frames instead of 1,081, the same in both games (the
 cause of the longer capture was not examined).
 
+
+## Boot without the splash; menu credit line (1.10-dev, 2026-10-29)
+
+Build `e5da0e70237885a397cf8501c806c8e98b7e3759a4269054bbefdf6d92eb828e`
+(headless Geargrafx; no hardware report yet). Against 1.09, the changed bytes
+are the splash (bank 4 `$8001`, fixed `$FEBE-$FEDF`, bank `$46`
+`$4100-$41C1`, `$4400-$57FF`), all now the original's bytes, and the menu
+code in bank `$45`.
+
+**Boot.** `scripts/check_boot.py` against the original with English set
+after its first frame: idle frames 1-899 (Hudson screen, intro and title;
+136 distinct screens) are identical; mashing Run reaches the first 1-1 update
+on frame 163 in both, as 1.09 did; English, Enhanced and No Damage off are
+the defaults. Frame 0's screenshot differs between two sessions of the same
+ROM and is not compared. Without the English write, frames 1-605 match the
+unmodified original and the title (from 606) differs only in its language.
+
+**Menu credit line (1.10-dev).** The line was drawn in BAT row 31, the
+blank band under the HUD, and closing the menu wrote blank HUD words back.
+VRAM write watches over row 31 (`$07C0-$07DF`) and tile `$7AA` on 1.09, during
+all 22 Level Select stage loads and the 11 comparison runs, saw only `$F79F`
+and zeros in gameplay; `$0100` in row 31 appeared only after 4-1, 5-3 and 6-3
+had ended, in the following cinema, where the menu cannot open. A sentinel
+fill of `$2104-$21BF` showed the menu's stack low-water mark at `$215B` on
+1.09 and 1.10-dev. (That build's open/cancel probe compared only HUD rows
+28-29 plus row 31 after **I**; the corrected probe is the one below.)
+
+**1.10 candidate.** The first candidate
+(`c4ca77deb91786bee62f3f2cf2ba63e5e7185d20a7670ef5fe9245b579e6cc51`) changed
+only the credit text and was superseded the same day: at the maintainer's
+request the menu now also replaces the HUD's third row (lives, enemy bar).
+Candidate `778a1266ae949fefaf56b3ee718c6307897053c9898c5c261042f5225f40c301`,
+identical from either original format (both development patches reproduce
+it), shows the line `V1.10  BY TIGERMONKEYFISH` in HUD row 30 and parks that
+row in tiles `$7AB-$7AC`. VRAM write watches over `$7AA0-$7ACF` during all 22
+stage loads saw only zeros, and so did replaying the 11 comparison runs
+(every area change) on these bytes, including the cinemas after 4-1, 5-3 and
+6-3. In 1-1,
+opening the menu, changing every setting and pressing **II** left HUD rows
+28-31 (512 bytes) and tiles `$7AA-$7AC` byte-identical to before, and while
+open the parked words equalled row 30; **I** (3-1, Original, No Damage)
+applied the stage and options, left row 30 restored and the tiles zero.
+Stack low-water mark: `$215B`. Boot check on these bytes: idle frames 1-899
+identical to the original, first 1-1 update at frame 163 when mashing Run,
+English/Enhanced/No Damage off.
+
+**Candidate 3** (`13946978f1e77e64764a0699fe02010b8255f5019e5605508a78658c6252f94f`,
+both formats). The maintainer saw the held item's icon (a sprite over the
+item box, columns 13-14 of HUD rows 29-30) cover menu text on candidate 2;
+1.09 has the same overlap on row 29. The menu text now leaves those columns
+blank. With the cursor on each setting and with NO DAMAGE ON, both rows hold
+blank HUD words there, and a 16x16 test sprite placed in the box covered no
+text (screenshot, not a real item pickup). The open/cancel/accept probe and
+stack mark are unchanged from candidate 2; boot check: frames 1-899 identical,
+first 1-1 update at frame 163, defaults.
+
+**Candidates 4 and 5.** At the maintainer's request the menu was redesigned:
+`STAGE:`, `PARALLAX: ON/OFF` (ON = Enhanced) and `NO DMG:` on the left, the
+version and credit on the right, the button help on the band under the HUD
+(row 31), and the selected value blinking instead of a dash; candidate 5
+(`ae42cdb0b9fd9d5c32e3cd9884c06777ebbf30447389ec880a6843f6f4965b21`) also
+moved accept and cancel from I/II to Run/Select. The colon is a new glyph in
+tile `$7AD`; VRAM write watches over it during all 22 stage loads and the 11
+comparison runs saw only zeros, as for `$7AA-$7AC`. On candidate 5, in 1-1:
+all 22 stage names, the blink (16 frames shown, 16 blank), the PARALLAX and
+NO DMG values and option bits, I and II ignored, Select restoring HUD rows
+28-31 and tiles `$7AA-$7AD` byte for byte, Run applying 3-1 with both
+options, and the stack mark `$215B`.
+
+**Candidate 6** (`3d5c05dfa6fb6a9ea6c04209cbc36d8e952caa6666ea5fcb724864ff4923bbf6`,
+both formats). Right column: the version, `GITHUB.COM/` above
+`TIGERMONKEYFISH`, and `SELECT: CANCEL`; `RUN: ACCEPT` moved to the left
+column. The `/` is a new glyph in tile `$7B9`; VRAM write watches over it (run on
+candidate 4, which leaves it alone) during all 22 stage loads and the 11
+comparison runs saw only zeros. The glyph table now stores
+planes 0-1 and the menu computes plane 2 (the period tile is byte-identical to
+candidate 5's). In 1-1: the item box clear, the blink, all 22 stage names,
+both option values, I and II ignored, Select restoring HUD rows 28-31 and
+tiles `$7AA-$7AD` and `$7B9` byte for byte, Run applying 3-1 with both
+options, stack mark `$215B`. **Hardware report:** the maintainer saw the menu
+on an NEC PC Engine Duo-RX with a Krikzz Turbo EverDrive PRO and reported
+that it looks good (2026-10-29); other areas were not reported.
+
+**Menu check on candidate 6** (`scripts/check_menu.py`, headless Geargrafx,
+controller input; save states only to resume the stored runs). Boot check
+first: idle frames 1-899 identical to the original, first 1-1 update at frame
+163, defaults. In the 11 comparison runs the menu was opened 121 times (every
+300 frames and 30 frames after each area change; 4 to 21 per stage), each
+time changing every setting and cancelling with Select: on return to the
+game, VRAM, the sprite table and the palette were identical every time, and
+RAM differed only in the interrupt's and music driver's bytes, the dead
+stack and the draft settings. Level Select from a cold boot: the same cancel
+check passed in all 22 entries, and accepting each next entry with Run gave
+the right stage, health 16, Enhanced/normal damage and a restored status
+bar, band and tiles at the stage's first update. (A first version of the
+check read health 200 frames after Run; in 3-3 enemies hit the idle Ryu at
+frames 77 and 101, so it was moved to the first update.)
+
+## Release 1.10 (2026-10-30)
+
+Release bytes: candidate 6,
+`3d5c05dfa6fb6a9ea6c04209cbc36d8e952caa6666ea5fcb724864ff4923bbf6`
+(CRC32 `7CEB52BC`); both release patches and source builds from both
+original formats reproduce it. Against 1.09 the only changed bytes are the
+splash hook (`$FEBE-$FEDF`, bank 4 `$8001`), the splash data in bank `$46`
+(`$4100-$41C1`, `$4400-$57FF`, now the original's bytes) and the menu in
+bank `$45` (`$4046-$43FE`); the stage, backdrop and cinema code is 1.09's.
+
+**Comparison runs on the release bytes** (`scripts/comparison_video.py make`
+and `cinema`, headless Geargrafx): all 11 stored runs play identically on the
+original and on 1.10, 35,084 frames in all (sprite table, Ryu, timer, lives,
+health, camera, area and stage on every frame), each on its first recording.
+After every run the next cinema is identical frame for frame, with the frame
+counts of the 1.09 table (1,106 after 4-1). Together with the boot check and
+the menu check above, and the maintainer's hardware report on the menu, this
+is the release evidence for 1.10.
+
+**Hardware report (2026-10-31).** The maintainer played 1.10 from the headered
+and from the headerless patch on an NEC PC Engine Duo-RX with a Krikzz Turbo
+EverDrive PRO, the same session with each: 1-1 and 1-2 played, a warp to 2-2,
+No Damage turned on, a warp to the final boss, the boss beaten and the ending
+cinema started. Completion of the ending was not stated; other stages,
+ordinary damage after No Damage went on, deaths and Continue were not part of
+the report.
+

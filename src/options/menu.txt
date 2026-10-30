@@ -1,0 +1,4 @@
+STAGE: #####    V{version}
+PARALLAX: ###   GITHUB.COM/
+NO DMG: ###     TIGERMONKEYFISH
+RUN: ACCEPT     SELECT: CANCEL

@@ -1,7 +1,7 @@
 {
-  "version": "1.09",
+  "version": "1.10",
   "title": "Ninja Ryukenden Enhanced",
-  "release_date": "2026-10-21",
+  "release_date": "2026-10-30",
   "source": {
     "size": 524800,
     "sha256": "1b3f411dd7d11b1d26fdac199308f77b14144dd2291e417aeb478ad2b8061a89",
@@ -11,8 +11,8 @@
     "title": "Ninja Ryukenden (Japan), PC Engine"
   },
   "patch": {
-    "path": "patches/ninja-ryukenden-enhanced-v1.09.bps",
-    "sha256": "6a1288278ac300a056cfe1db45b2b69847247572bec3bc5659bfbd7d23b00ba9"
+    "path": "patches/ninja-ryukenden-enhanced-v1.10.bps",
+    "sha256": "9c71f4045f1f0b526d2c8e2c81145261b8cd571351d68b198258ff35deca1e4d"
   },
   "headerless": {
     "source": {
@@ -23,19 +23,19 @@
       "filename_reference": "Ninja Ryuuken Den (Japan) (En,Ja,Zh).pce"
     },
     "patch": {
-      "path": "patches/ninja-ryukenden-enhanced-v1.09-headerless.bps",
-      "sha256": "774f821960c704f97889ae1d415a20563d76a593fa72c413f3801e707735fe19"
+      "path": "patches/ninja-ryukenden-enhanced-v1.10-headerless.bps",
+      "sha256": "1c19fd36625b9e6c5fb18087e7b7b344c8f2da38a4f231d73f37aea3c997f469"
     }
   },
   "target": {
     "size": 1048576,
-    "sha256": "f84a31a86da01d1a3377a68a6ad3242af19065095915ed18dab487cb732ab912",
+    "sha256": "3d5c05dfa6fb6a9ea6c04209cbc36d8e952caa6666ea5fcb724864ff4923bbf6",
     "header_bytes": 0,
-    "crc32": "699381B7"
+    "crc32": "7CEB52BC"
   },
   "defaults": {
     "language": "English",
-    "parallax": "ENHANCED",
+    "parallax": "ON (Enhanced)",
     "enhanced_divisor": 8,
     "no_damage": false
   },
@@ -50,9 +50,9 @@
   "hardware_validation": {
     "platform": "NEC PC Engine Duo-RX",
     "flash_cartridge": "Krikzz Turbo EverDrive PRO",
-    "tested_rom_sha256": "f84a31a86da01d1a3377a68a6ad3242af19065095915ed18dab487cb732ab912",
+    "tested_rom_sha256": "3d5c05dfa6fb6a9ea6c04209cbc36d8e952caa6666ea5fcb724864ff4923bbf6",
     "exact_release_bytes_tested": true,
-    "report": "Maintainer played the release bytes and reported that it looks good (2026-10-21); stages and settings not specified."
+    "report": "Maintainer checked the in-game menu on the release bytes (2026-10-29), then played 1.10 from each release patch (2026-10-31): 1-1 and 1-2, a warp to 2-2, No Damage on, a warp to the final boss, the boss beaten and the ending cinema started. Completion of the ending not stated; no full playthrough."
   },
   "emulator_validation": "docs/validation/background-fidelity.md"
 }

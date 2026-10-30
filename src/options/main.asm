@@ -86,6 +86,7 @@ backup_row2:
  pha
  dex
  bne backup_row2
+ jsr open_rows
  lda $2e5f
  cmp #22
  bcc valid_stage
@@ -97,14 +98,18 @@ valid_stage:
  and #3
  sta DRAFT
 redraw:
- jsr draw_menu
+ stz <$27
+ jsr draw_values
 menu_loop:
  jsr $fd67
+ inc <$27
+ jsr draw_values
+ ; Select cancels and Run accepts (newly pressed buttons: 4 Select, 8 Run).
  lda $2e57
- and #2
+ and #4
  bne cancel
  lda $2e57
- and #1
+ and #8
  bne accept
  lda $2e57
  and #$50
@@ -164,6 +169,7 @@ choose:
  lda $2e55
  and #$0f
  bne choose
+ jsr close_rows
  lda #$5f
  sta <$26
 restore_row2:
@@ -231,74 +237,96 @@ restore_row1:
 selection_return:
  rts
 
-draw_menu:
- lda #0
+; The four menu rows (layout and value fields: menu.txt, generated into
+; menu-text.inc) cover HUD rows 28-30 and the blank band under the HUD
+; (row 31). The selected value blinks: shown for 16 frames, blank for 16.
+draw_values:
+ lda #STAGE_AT
  jsr position
- clx
-text1_loop:
- lda text1,x
- jsr character
- inx
- cpx #32
- bne text1_loop
- lda #$40
- jsr position
- clx
-text2_loop:
- lda text2,x
- jsr character
- inx
- cpx #32
- bne text2_loop
- lda #7
- jsr position
- lda <$25
- asl a
- asl a
- asl a
- tay
  ldx #5
-stage_loop:
- lda stage_labels,y
+ lda #0
+ jsr blank_value
+ bne spaces
+ ; "W-S" from the world/stage digits, then " A".." C" for the 6-4 phases.
+ ldy <$25
+ lda stage_numbers,y
+ pha
+ lsr a
+ lsr a
+ lsr a
+ lsr a
+ ora #$a0
  jsr character
- iny
- dex
- bne stage_loop
- lda #23
+ lda #$9a
+ jsr character
+ pla
+ and #$0f
+ ora #$a0
+ jsr character
+ lda #$9f
+ jsr character
+ cpy #19
+ lda #$9f
+ bcc stage_suffix
+ tya
+ adc #$6c
+stage_suffix:
+ jsr character
+ lda #PARALLAX_AT
  jsr position
+ ldx #3
+ lda #1
+ jsr blank_value
+ bne spaces_then_damage
  lda DRAFT
  and #1
  asl a
  asl a
- asl a
  tay
- ldx #8
 parallax_loop:
  lda parallax_labels,y
  jsr character
  iny
  dex
  bne parallax_loop
- lda #$4b
+draw_damage:
+ lda #DAMAGE_AT
  jsr position
- cly
+ ldx #3
+ lda #2
+ jsr blank_value
+ bne spaces
  lda DRAFT
  and #2
- beq damage_label
- ldy #3
-damage_label:
- ldx #3
+ asl a
+ tay
 damage_loop:
  lda damage_labels,y
  jsr character
  iny
  dex
  bne damage_loop
- ldx <$26
- lda cursor_positions,x
- jsr position
- lda #$9a
- ; A native hyphen marks the active field.
+ rts
+spaces_then_damage:
+ jsr spaces
+ bra draw_damage
+ ; X spaces.
+spaces:
+ lda #$9f
+ jsr character
+ dex
+ bne spaces
+ rts
+ ; A = field. Z clear while the selected field blinks off.
+blank_value:
+ cmp <$26
+ bne shown_value
+ lda <$27
+ and #$10
+ rts
+shown_value:
+ lda #0
+ rts
 character:
  sta $0002
  lda #$f7
@@ -307,9 +335,168 @@ character:
 position:
  ldx #7
  jmp $fc34
+
+ ; The HUD's third row (BAT row 30, VRAM $0780: lives, ninpo, enemy bar)
+ ; holds menu text while the menu is open. The stack has no room for a third
+ ; row (see ARCHITECTURE.md), so the row is parked in the HUD font's blank
+ ; tiles $7AB-$7AC; the menu's '.', ':' and '/' glyphs use tiles $7AA, $7AD
+ ; and $7B9. Row 31 holds 32 blank HUD tiles and those tiles are zero in
+ ; every gameplay state (VRAM write audit, 1.10), so closing the menu copies
+ ; row 30 back and writes those values again.
+open_rows:
+ stz <$11
+ st0 #0
+ st1 #$b0
+ st2 #$7a
+ lda #1
+ sta <$11
+ st0 #1
+ st1 #$80
+ st2 #7
+ lda #2
+ sta <$11
+ st0 #2
+ ldx #32
+ jsr copy_words
+ clx
+ lda #$7a
+ ldy #$a0
+ jsr upload_glyph
+ lda #$7a
+ ldy #$d0
+ jsr upload_glyph
+ lda #$7b
+ ldy #$90
+ jsr upload_glyph
+ stz <$26
+ lda #0
+ jsr row_text
+ lda #$40
+ jsr row_text
+ lda #$80
+ jsr row_text
+ lda #$c0
+row_text:
+ jsr position
+ ldy <$26
+ ldx #32
+row_loop:
+ lda menu_rows,y
+ jsr character
+ iny
+ dex
+ bne row_loop
+ sty <$26
+ rts
+close_rows:
+ stz <$11
+ st0 #0
+ st1 #$80
+ st2 #7
+ lda #1
+ sta <$11
+ st0 #1
+ st1 #$b0
+ st2 #$7a
+ lda #2
+ sta <$11
+ st0 #2
+ ldx #32
+ jsr copy_words
+ jsr glyph_address
+ ldx #64
+ jsr zero_words
+ stz <$11
+ st0 #0
+ st1 #$90
+ st2 #$7b
+ lda #2
+ sta <$11
+ st0 #2
+ ldx #16
+ jsr zero_words
+ lda #$c0
+ jsr position
+ ldx #32
+clear_band:
+ lda #$9f
+ jsr character
+ dex
+ bne clear_band
+ rts
+ ; X words from the read address to the write address.
+copy_words:
+ lda $0002
+ ldy $0003
+ sta $0002
+ sty $0003
+ dex
+ bne copy_words
+ rts
+ ; A:Y = VRAM address of a tile; X = its 16 bytes in menu_glyphs (advances
+ ; by 16). Planes 0-1 come from the table; plane 2, the HUD font's colour-4
+ ; background, is every pixel the glyph leaves clear; plane 3 is empty.
+upload_glyph:
+ stz <$11
+ st0 #0
+ sty $0002
+ sta $0003
+ lda #2
+ sta <$11
+ st0 #2
+ ldy #8
+glyph_planes01:
+ lda menu_glyphs,x
+ sta $0002
+ lda menu_glyphs+1,x
+ sta $0003
+ inx
+ inx
+ dey
+ bne glyph_planes01
+ txa
+ sec
+ sbc #16
+ tax
+ ldy #8
+glyph_planes23:
+ lda menu_glyphs,x
+ ora menu_glyphs+1,x
+ eor #$ff
+ sta $0002
+ stz $0003
+ inx
+ inx
+ dey
+ bne glyph_planes23
+ rts
+ ; X zero words at the write address.
+zero_words:
+ stz $0002
+ stz $0003
+ dex
+ bne zero_words
+ rts
+glyph_address:
+ stz <$11
+ st0 #0
+ st1 #$a0
+ st2 #$7a
+ lda #2
+ sta <$11
+ st0 #2
+ rts
 option_masks:
  .db 1,2
-cursor_positions:
- .db 0,13,64
  .include "options-text.inc"
+ .include "menu-text.inc"
+ ; '.', ':' and '/' in the HUD font's style, for tiles $7AA, $7AD and $7B9:
+ ; planes 0 and 1, row by row (colours 1-3 as in the font's own glyphs).
+menu_glyphs:
+ ; '.': the bottom two rows of the HUD font's '1' stem, three pixels wide.
+ .db $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$20,$18,$18,$38,$00,$00
+ ; ':': the same dot at rows 1-2 (shaded like the font's top rows) and 4-5.
+ .db $00,$00,$38,$00,$38,$00,$00,$00,$20,$18,$20,$18,$00,$00,$00,$00
+ ; '/': a three-pixel diagonal, shaded like the '1' stem row by row.
+ .db $0e,$00,$1c,$00,$1c,$00,$38,$00,$40,$30,$40,$30,$60,$e0,$00,$00
 menu_end:

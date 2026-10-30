@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Make the screenshots for docs/OPTIONS.md from an Enhanced ROM.
 
-Plays the ROM in headless Geargrafx with real button input: leaves the
-splash, cycles the title screen's language, starts 1-1, opens the in-game
-menu and changes each setting, checking the game's own bytes at each step.
+Plays the ROM in headless Geargrafx with real button input: cycles the title
+screen's language, starts 1-1, opens the in-game menu and changes each
+setting, checking the game's own bytes at each step.
 Writes the few how-to images that scripts/audit_public.py allows
 (GUIDE_IMAGES); nothing else from the emulator is kept.
 """
@@ -18,7 +18,7 @@ from comparison_video import Game
 LANGUAGE = 0x1227          # $3227: 0 Japanese, 1 English, 2 Chinese
 DRAFT = 0x0101             # $2101: menu settings before I applies them
 TITLE_ROWS = (28, 88)      # logo and subtitle line
-MENU_ROWS = (16, 19)       # the two menu lines that replace the score bar
+MENU_ROWS = (16, 35)       # the four menu lines: the status bar and the line under it
 SCREEN_ROWS = (18, 224)    # the visible display
 
 
@@ -36,7 +36,7 @@ def expect(game, address, value, what):
 
 
 def to_title(game):
-    """Leave the splash and the intro with Run; stop on the title screen."""
+    """Leave the publisher screen and the intro with Run; stop on the title screen."""
     game.step(60)
     tap(game, {'run'}, after=1)
     previous, since = None, 0
@@ -84,7 +84,7 @@ def capture(game, rom, shots):
         if name:
             shots[name] = game.screenshot()
     to_gameplay(game)
-    tap(game, {'select'}, after=30)
+    tap(game, {'select'}, after=12)       # inside the blink's 16 shown frames
     expect(game, DRAFT, 0, 'menu opens on the defaults')
     shots['menu'] = game.screenshot()
     for _ in range(5):                       # 1-1 -> 1-2 -> 2-1 -> 2-2 -> 2-3 -> 3-1
@@ -98,8 +98,8 @@ def capture(game, rom, shots):
     tap(game, {'right'})
     expect(game, DRAFT, 3, 'NO DAMAGE ON')
     shots['menu-no-damage'] = game.screenshot()
-    tap(game, {'II'}, after=30)
-    expect(game, 0x0100, 0, 'II leaves the settings unchanged')
+    tap(game, {'select'}, after=30)
+    expect(game, 0x0100, 0, 'Select (cancel) leaves the settings unchanged')
 
 
 def ffmpeg(inputs, graph, out):

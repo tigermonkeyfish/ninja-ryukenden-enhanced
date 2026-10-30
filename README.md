@@ -1,4 +1,4 @@
-# Ninja Ryukenden Enhanced — v1.09
+# Ninja Ryukenden Enhanced — v1.10
 
 A **Ninja Gaiden TurboGrafx-16 (Japan)** enhancement patch by **TIGERMONKEYFISH**,
 for **PC Engine (PCE) / TurboGrafx-16 (TG16)**. It adds smoother parallax,
@@ -25,7 +25,7 @@ Level Select, optional No Damage and English by default to Ninja Ryukenden.
 Both **headered** and **headerless** original Japanese ROMs are supported.
 They contain the same game data; the headered file has an extra 512-byte
 copier header. Each format needs its matching BPS patch, and **both patches
-produce the same Enhanced 1.09 game**.
+produce the same Enhanced 1.10 game**.
 
 Use your own **original, unpatched ROM**. Check its exact file size and
 SHA-256 against one of the sections below. Filenames can vary; neither a
@@ -39,7 +39,7 @@ filename nor file size alone proves a match. No game ROM is included here.
 | CRC32 | `A186DFD2` |
 | SHA-256 | `1b3f411dd7d11b1d26fdac199308f77b14144dd2291e417aeb478ad2b8061a89` |
 
-**[Download the headered BPS patch](patches/ninja-ryukenden-enhanced-v1.09.bps)**
+**[Download the headered BPS patch](patches/ninja-ryukenden-enhanced-v1.10.bps)**
 · **[Headered patching instructions](release/PLAYER-README.md)**
 
 Example filename: `Ninja Ryukenden (J).pce`.
@@ -52,7 +52,7 @@ Example filename: `Ninja Ryukenden (J).pce`.
 | CRC32 | `67573BAC` |
 | SHA-256 | `3514f2e33257d6d4249aa0f0bee39c0fc7f395e1c8a37a6125b1e33601ace8e2` |
 
-**[Download the headerless BPS patch](patches/ninja-ryukenden-enhanced-v1.09-headerless.bps)**
+**[Download the headerless BPS patch](patches/ninja-ryukenden-enhanced-v1.10-headerless.bps)**
 · **[Headerless patching instructions](release/HEADERLESS-README.md)**
 
 Example filenames: `Ninja Ryuuken Den (Japan) (En,Ja,Zh).pce` or `gaiden.pce`.
@@ -65,13 +65,12 @@ Example filenames: `Ninja Ryuuken Den (Japan) (En,Ja,Zh).pce` or `gaiden.pce`.
 2. **Open a BPS patcher.** Select your original `.pce` file as the source and
    the matching `.bps` file as the patch. The instructions linked above also
    include a Python option using the tools in this repository.
-3. **Save a new file** named `Ninja Ryukenden - Enhanced v1.09.pce`.
+3. **Save a new file** named `Ninja Ryukenden - Enhanced v1.10.pce`.
    Keep your original ROM. Apply only one patch, directly to the original;
    do not apply it over an older Enhanced version or another patched ROM.
 4. **Load the new `.pce` file** in your emulator, or copy it to your
    Turbo EverDrive's SD card and launch it on your console. Start with a fresh
-   boot/reset rather than an old save state. Press or hold **Run** to continue
-   past the splash screen.
+   boot/reset rather than an old save state.
 
 If the patcher reports a source size or checksum mismatch, compare your
 original against the two sections above and check that you chose its matching
@@ -84,8 +83,8 @@ Either patch produces this same output:
 | Patched ROM | Expected value |
 | --- | --- |
 | File size | **1,048,576 bytes**, with no copier header |
-| CRC32 | `699381B7` |
-| SHA-256 | `f84a31a86da01d1a3377a68a6ad3242af19065095915ed18dab487cb732ab912` |
+| CRC32 | `7CEB52BC` |
+| SHA-256 | `3d5c05dfa6fb6a9ea6c04209cbc36d8e952caa6666ea5fcb724864ff4923bbf6` |
 
 See [ROM identification](docs/ROM-IDENTITY.md) for further details.
 
@@ -94,13 +93,13 @@ See [ROM identification](docs/ROM-IDENTITY.md) for further details.
 **[How to change the options, with screenshots](docs/OPTIONS.md)**
 
 During gameplay, press **Select** to open the Level Select / options menu.
-**Up/Down** chooses a field; **Left/Right** changes it; **I** applies the
-settings and restarts the selected stage with full health; **II** closes the
-menu with nothing changed.
+**Up/Down** chooses a setting (its value blinks); **Left/Right** changes it;
+**Run** accepts the settings and restarts the selected stage with full
+health; **Select** cancels and closes the menu with nothing changed.
 
 | Setting | Default | Choices |
 | --- | --- | --- |
-| Parallax | ENHANCED | ENHANCED / ORIGINAL |
+| Parallax | ON (Enhanced) | ON / OFF (the original backgrounds) |
 | No Damage | OFF | OFF / ON |
 | Language | English | Native title-screen shortcut below |
 
@@ -112,7 +111,9 @@ retains its original Japanese lettering.
 
 Player testing has been reported on:
 
-- **NEC PC Engine Duo-RX** with **Krikzz Turbo EverDrive PRO** (version 1.09).
+- **NEC PC Engine Duo-RX** with **Krikzz Turbo EverDrive PRO** (version 1.10
+  from both patches: 1-1, 1-2, Level Select to 2-2 and the final boss, into
+  the ending cinema).
 - **TurboGrafx-16** with **Krikzz Turbo EverDrive** and an **EDFX RGB adapter**.
 
 Enhanced parallax covers **1-1, 2-2, 3-1, 3-2, 4-1, 4-2, 5-2, 5-3, 5-4,
@@ -129,7 +130,7 @@ and emulator checks.
   TIGERMONKEYFISH with **OpenAI Codex Astra** (the first parallax, Level
   Select, No Damage and English work) and **Anthropic Claude Opus 5.5**
   (backgrounds rebuilt from the original art, timing parity with the
-  original, and the validation and video tools)
+  original, the validation and video tools, and the 1.10 menu)
 - [Contributor guide](CONTRIBUTING.md) and [build instructions](docs/BUILDING.md)
 - [Comparison videos](docs/COMPARISON-VIDEOS.md): how the side-by-side
   original-versus-Enhanced stage videos are recorded and verified

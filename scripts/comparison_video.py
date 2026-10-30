@@ -116,7 +116,7 @@ class Game:
 
 
 def boot(game, rom):
-    """Cold boot, leave the splash/title with Run, stop at the main-loop hook."""
+    """Cold boot, leave the intro/title with Run, stop at the main-loop hook."""
     game.call('load_media', {'file_path': str(Path(rom).resolve())})
     game.call('debug_pause')
     game.call('set_breakpoint', {'address': '23f3', 'memory_area': 'rom', 'execute': True})
@@ -133,7 +133,7 @@ def boot(game, rom):
         if master == b'\x01\x01' and since == 180 and not title_pressed:
             presses.append(frame)
             title_pressed = True
-        # Enhanced's splash precedes the native master script; Run leaves it.
+        # Also leaves the splash of Enhanced builds before 1.10-dev.
         if master in (b'\x00\x00', b'\x01\x00') and since % 300 == 150:
             presses.append(frame)
         for p in presses:
@@ -448,7 +448,7 @@ def main():
     ren.add_argument('top', type=Path)
     ren.add_argument('bottom', type=Path)
     ren.add_argument('out', type=Path)
-    ren.add_argument('--version', required=True, help='Enhanced label, e.g. v1.08-dev')
+    ren.add_argument('--version', required=True, help='Enhanced label, e.g. v1.11-dev')
     ren.add_argument('--stage', required=True)
     cin = sub.add_parser('cinema', help='After each run, compare the next cinema frame by frame')
     cin.add_argument('--original', type=Path, required=True)

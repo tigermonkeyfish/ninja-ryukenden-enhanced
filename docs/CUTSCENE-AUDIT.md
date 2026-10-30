@@ -92,19 +92,23 @@ different holds (Enhanced's boot path). Scene 6 differs in one frame: an
 8-pixel run on the bottom display line shows the scene's own sky colour one
 frame longer while the cinema draws its picture (frame 9; frame 10 matches).
 No foreign graphics appear. The story scene after 2-2 (ID 4) matches the
-original for all 9,593 frames.
+original for all 9,593 frames. This whole-game audit has not been rerun since;
+1.10 changes only the boot and the menu, not the cinema code.
 
 **After full play.** The audit renders each stage for only 120 frames, so
 `scripts/comparison_video.py cinema` also checks the cinema after a full play
-of each enhanced stage. On 1.09 the cinemas after all 11 runs (ten scenes) are identical frame for
-frame, including scene 6 after 4-1, so the audit's one-frame difference
-depends on its shortened path, not on leftover Enhanced data. See
-[the review](validation/background-fidelity.md), "Smoothed comparison runs".
+of each enhanced stage. On 1.09 and again on 1.10 the cinemas after all 11
+runs (ten scenes) are identical frame for frame, including scene 6 after 4-1,
+so the audit's one-frame difference depends on its shortened path, not on
+leftover Enhanced data. See [the review](validation/background-fidelity.md),
+"Smoothed comparison runs" and "Release 1.10".
 
 **Hardware.** The maintainer played an earlier development build with the
 same cinema cleanup on an NEC PC Engine Duo-RX with a Krikzz Turbo EverDrive
 PRO and confirmed the cinemas ("The cut scene is good"): normal settings
-through 6-1, then No Damage from 6-2 onward.
+through 6-1, then No Damage from 6-2 onward. On 1.10, from each release patch,
+the maintainer beat the final boss (No Damage on) and the ending cinema
+started; whether it finished was not stated.
 
 The audit and these reports do not establish every damage/death/Continue
 path, Japanese/Chinese story behavior or audio correctness.

@@ -1,7 +1,7 @@
 # Credits and provenance
 
 **TIGERMONKEYFISH** — project direction, visual review, gameplay feedback,
-real-hardware testing and the community credit used in the patch.
+real-hardware testing and the community credit shown in the in-game menu.
 
 The first development stage (the parallax renderers, Level Select, No
 Damage, English by default, the splash and the cinema cleanup, up to the
@@ -27,6 +27,11 @@ backdrop from the original game's own tiles, maps and palettes. It also:
   every parallax stage and checked the cinemas after each full stage;
 - wrote the original-versus-Enhanced comparison tools, the measurements and
   the documentation behind these changes.
+
+Release 1.10 (the splash removed with a boot identical to the original's,
+the redesigned menu with its version and credit lines, and the boot and
+menu checks) also used **Anthropic Claude Opus 5.5**, directed and reviewed
+by TIGERMONKEYFISH.
 
 The refinement was validated in an emulator. Hardware confirmation is
 attributed to the user, not to the assistants.

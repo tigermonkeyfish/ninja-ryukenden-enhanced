@@ -542,8 +542,8 @@ Enhanced) recorded in separate sessions occasionally diverged from their
 first frame.
 
 **Finding:** two things made the start ambiguous, both in the harness, not
-the game. First, the two boot paths (Enhanced's splash) leave counters that
-stage entry does not reset, and one stage (1-1) was sensitive to them.
+the game. First, the two boot paths (Enhanced's splash, before 1.10) left counters
+that stage entry does not reset, and one stage (1-1) was sensitive to them.
 Second, after the debugger stops on a breakpoint mid-frame, the next
 frame step (Geargrafx `debug_step_frame`) covered either the rest of that
 frame or one frame more, varying between sessions; in a session that had
@@ -716,8 +716,9 @@ and the opening scene started 115 frames later.
 **Finding:** pressing Run from power-on in both games reaches the first 1-1
 update on the same frame (163), because Run leaves the notice with no delay.
 An earlier build shortened the native publisher screen instead; that was
-reverted, and the notice now runs in front of an untouched native sequence,
-which stays byte-identical to the original. (Speedrun timers for the NES
+reverted, and the notice ran in front of an untouched native sequence,
+which stayed byte-identical to the original. (1.10-dev removed the notice at
+a player's request; its version and credit moved into the in-game menu.) (Speedrun timers for the NES
 Ninja Gaiden games start at control or at Start, not at power-on; no PC
 Engine leaderboard was found.)
 

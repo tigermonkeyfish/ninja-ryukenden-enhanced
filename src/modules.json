@@ -251,16 +251,16 @@
     ]
   },
   {
-    "name": "notice",
-    "source": "src/notice/main.asm",
+    "name": "cinema-sprite",
+    "source": "src/cinema-sprite/main.asm",
     "ranges": [
       [
-        7870,
+        7904,
         7936
       ],
       [
-        573696,
-        579584
+        574208,
+        574464
       ]
     ]
   },
@@ -297,10 +297,6 @@
       [
         9652,
         9655
-      ],
-      [
-        32769,
-        32772
       ],
       [
         32813,

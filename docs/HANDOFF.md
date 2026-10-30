@@ -2,19 +2,31 @@
 
 ## Current truth
 
-- **Release 1.09** (2026-10-21) is the first public release. `VERSION`,
-  `release/current.json` and the splash all say 1.09. Patches:
-  `patches/ninja-ryukenden-enhanced-v1.09.bps` (headered original) and
-  `patches/ninja-ryukenden-enhanced-v1.09-headerless.bps`; both produce
-  `f84a31a86da01d1a3377a68a6ad3242af19065095915ed18dab487cb732ab912`.
-  The maintainer played these exact bytes on an NEC PC Engine Duo-RX with a
-  Krikzz Turbo EverDrive PRO and reported that they look good (stages and
-  settings not specified). Everything else is emulator evidence; see
+- **Release 1.10** (2026-10-30) is current. `VERSION`,
+  `release/current.json` and the in-game menu all say 1.10. Patches:
+  `patches/ninja-ryukenden-enhanced-v1.10.bps` (headered original) and
+  `patches/ninja-ryukenden-enhanced-v1.10-headerless.bps`; both produce
+  `3d5c05dfa6fb6a9ea6c04209cbc36d8e952caa6666ea5fcb724864ff4923bbf6`
+  (candidate 6 in the [validation record](validation/background-fidelity.md)).
+  The maintainer checked the menu on these exact bytes on an NEC PC Engine
+  Duo-RX with a Krikzz Turbo EverDrive PRO (2026-10-29), then played 1.10
+  from each patch on it (2026-10-31): 1-1 and 1-2, a warp to 2-2, No Damage
+  on, a warp to the final boss, the boss beaten and the ending cinema
+  started. Everything else is emulator evidence; see
   [VALIDATION.md](VALIDATION.md).
+- **Release 1.09** (2026-10-21, tag `v1.09`) was the first public release
+  (`f84a31a8…b912`), played on the same hardware. Its patches stay
+  unchanged at the tag; `patches/` holds only the current release.
+- **What 1.10 changed.** The splash is removed (native boot, frame for frame
+  the original's, checked by `scripts/check_boot.py`). The in-game menu
+  covers the HUD and the band under it, keeps the item box clear, blinks the
+  selected value, and takes Run to accept and Select to cancel
+  ([architecture: menu display](ARCHITECTURE.md#menu-display)); its text is
+  `src/options/menu.txt`. `scripts/check_menu.py` checks it throughout play.
 - **Build model.** `scripts/project.py build` assembles the runtime modules
   over the original ROM (either format) and reads nothing from any release;
   outside the module ranges the ROM is the original byte for byte.
-  `--verify-release` reproduces 1.09 exactly. Every Enhanced backdrop is
+  `--verify-release` reproduces 1.10 exactly. Every Enhanced backdrop is
   generated at build time from the original ROM's own tiles, maps and
   palettes (`scripts/native_gfx.py`, `scripts/native_backdrops.py`); no
   edited or added art remains.
@@ -28,7 +40,7 @@
   takes longer than the original's. The HUD/playfield split no longer drops
   a line (back-to-back VRAM block transfers had delayed its interrupt).
 - **Options.** English, Enhanced parallax and No Damage OFF are the reset
-  defaults. The menu (Select) offers 22 stage entries, ENHANCED/ORIGINAL and
+  defaults. The menu (Select) offers 22 stage entries, PARALLAX ON/OFF and
   No Damage; applying a stage refills Ryu's health. Do not reintroduce the
   abandoned four-speed menu or the repeating 6-1 moon.
 - **Comparison runs and videos.** `research/comparison-runs/` holds a
@@ -36,7 +48,7 @@
   `scripts/comparison_video.py` replays them on the original and on Enhanced,
   verifies identical gameplay frame by frame, renders the stacked 1440p60
   videos and checks the cinema after each full stage
-  ([guide](COMPARISON-VIDEOS.md)). All 11 match on 1.09. The maintainer
+  ([guide](COMPARISON-VIDEOS.md)). All 11 match on 1.10, and the cinemas after them. The maintainer
   publishes the videos on YouTube.
 - Validation history, build by build, is in
   [the background-fidelity review](validation/background-fidelity.md);
@@ -48,13 +60,13 @@
    [transferable lessons](pc-engine/LESSONS.md) and the
    [PC Engine hardware notes](pc-engine/HARDWARE.md).
 2. Run the ROM-free tests (`python3 -m unittest tests.test_tools`) and
-   `scripts/audit_public.py`; reproduce 1.09 with `apply` and
+   `scripts/audit_public.py`; reproduce 1.10 with `apply` and
    `build --verify-release`.
 3. Reproduce the reported problem on that exact output before editing.
 4. Record stage, subarea, camera position, options, language and reproduction
    sequence, including whether death or a stage jump is required.
 5. Change one subsystem; build a separate development output with a new
-   version on the splash (`1.10-dev`); record its hash and validation
+   version in the in-game menu (`1.11-dev`); record its hash and validation
    evidence. Never change the published patches.
 
 ## Next useful work

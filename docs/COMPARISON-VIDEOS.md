@@ -26,7 +26,7 @@ Sans fonts (any other font is found through `fc-match`).
 ```sh
 python3 scripts/comparison_video.py --emulator /path/to/geargrafx make \
   --original /path/to/original.pce --enhanced /path/to/enhanced.pce \
-  --version v1.09 --work /tmp/comparison --videos videos \
+  --version v1.10 --work /tmp/comparison --videos videos \
   research/comparison-runs/*.json
 ```
 
@@ -37,7 +37,7 @@ same declared intervention as the cinema audit's seed). It then enters the
 stage exactly as the patch Level Select does (the same debugger writes in
 both games), replays the input one frame at a time, records every frame, and
 compares the two games. The shared state matters: the two boot paths
-(Enhanced's splash) leave counters that stage entry does not reset, and the
+(before 1.10, Enhanced's splash) left counters that stage entry does not reset, and the
 emulator's frame-step phase depends on a session's history, so only replays
 from one loaded state are frame-exact (1-1 diverged from its first frame
 otherwise).

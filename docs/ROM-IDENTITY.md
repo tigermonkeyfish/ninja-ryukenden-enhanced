@@ -9,12 +9,12 @@ to identify a compatible dump regardless of its filename.
 ## Supported originals
 
 The same game data comes in two container formats. Each has its own patch;
-both patches produce the same 1.09 ROM.
+both patches produce the same 1.10 ROM.
 
 | Format | Size | CRC32 | SHA-256 | Patch |
 | --- | --- | --- | --- | --- |
-| Headered (512-byte copier header, included in the checksums) | 524,800 bytes | `A186DFD2` | `1b3f411dd7d11b1d26fdac199308f77b14144dd2291e417aeb478ad2b8061a89` | `patches/ninja-ryukenden-enhanced-v1.09.bps` |
-| Headerless | 524,288 bytes | `67573BAC` | `3514f2e33257d6d4249aa0f0bee39c0fc7f395e1c8a37a6125b1e33601ace8e2` | `patches/ninja-ryukenden-enhanced-v1.09-headerless.bps` |
+| Headered (512-byte copier header, included in the checksums) | 524,800 bytes | `A186DFD2` | `1b3f411dd7d11b1d26fdac199308f77b14144dd2291e417aeb478ad2b8061a89` | `patches/ninja-ryukenden-enhanced-v1.10.bps` |
+| Headerless | 524,288 bytes | `67573BAC` | `3514f2e33257d6d4249aa0f0bee39c0fc7f395e1c8a37a6125b1e33601ace8e2` | `patches/ninja-ryukenden-enhanced-v1.10-headerless.bps` |
 
 Some ROM tools and catalogs report only the headerless payload checksum. The
 patches and the Python tool verify the source; they do not guess at header
@@ -28,14 +28,14 @@ headered `Ninja Ryukenden (J).pce`. These are container variants, not
 different game revisions. This comparison does not establish which filename
 or format is most common.
 
-## Expected 1.09 result
+## Expected 1.10 result
 
 - File size: **1,048,576 bytes** (1 MiB)
 - Header: **none**
-- CRC32: **699381B7**
-- SHA-256: `f84a31a86da01d1a3377a68a6ad3242af19065095915ed18dab487cb732ab912`
+- CRC32: **7CEB52BC**
+- SHA-256: `3d5c05dfa6fb6a9ea6c04209cbc36d8e952caa6666ea5fcb724864ff4923bbf6`
 
 The patches themselves have their own SHA-256 values in
 `release/current.json`, and the release archives get checksums in
-`dist/SHA256SUMS-v1.09.txt`. Those identify different files and should not
+`dist/SHA256SUMS-v1.10.txt`. Those identify different files and should not
 be confused with the source or target ROM checksums.

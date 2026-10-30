@@ -191,8 +191,8 @@ the uploads made 5-3 area 2 and 2-2 area 0 miss vblank.
 | `castle` | Shared 5-3 / 5-4 castle rendering and star animation |
 | `stage61-*` | Sky/mountain separation, sky upload and dispatch |
 | `speed` | Shared divisor-8 coordinate and entrance anchor |
-| `selector-hook`, `options` | Stage selection, progression synchronization, parallax/damage settings; a chosen stage starts with full health (`$2EAD = 16`, 1.09-dev) |
-| `notice`, `english` | Community splash and native English initialization |
+| `selector-hook`, `options` | Stage selection, progression synchronization, parallax/damage settings and the menu's version/credit line; a chosen stage starts with full health (`$2EAD = 16`, 1.09-dev) |
+| `cinema-sprite`, `english` | Cinema sprite-pattern reset (below); native English initialization. Enhanced has no boot screen since 1.10-dev |
 
 The canonical bank allocations are in
 [`src/modules.json`](../src/modules.json). Do not use old experimental `.sym`
@@ -234,7 +234,6 @@ call depth or menu backups need fresh guard checks.
 | `$8457-$845C` | Gameplay loop calls `$E3F2`, `$ABD7`; Enhanced: `jsr $FE40` (which makes both calls) and three NOPs |
 | `$FE20` | Damage gate; timer expiry explicitly bypasses optional immunity |
 | `$FE40 / $FE46` | Early wrapper / preserved-scratch renderer entry |
-| `$FEBE` | Community notice wrapper |
 | `$FEE0` | Development cinema sprite reset wrapper (bank 04 `$802D` hook) |
 | `$FF2C` | Area change (bank 1 `$85B4`): native init, marks the Enhanced draw pending (`$2258 = $FE`) |
 | `$FF35` | Stage load (bank 1 `$82CD`): native init, cache invalidation, entrance draw |
@@ -261,10 +260,12 @@ no longer in the repository.
 - **Stage indices** (Level Select, `$2241`, `start_stage`): 0 1-1, 1 1-2,
   2 2-1, 3 2-2, 4 2-3, 5 3-1, 6 3-2, 7 3-3, 8 4-1, 9 4-2, 10 4-3, 11 4-4,
   12 5-1, 13 5-2, 14 5-3, 15 5-4, 16 6-1, 17 6-2, 18 6-3, 19-21 6-4 A-C.
-- **Menu text encoding** (`src/options/options-text.inc`, which has no
-  generator): letter = `$80` + position in the alphabet (A = `$80`, Z = `$99`),
-  digit = `$A0` + digit, `$9A` is '-', `$9F` is a space. For example `text1`
-  starts with a space and `$92 $93 $80 $86 $84` = "STAGE".
+- **Menu text encoding** (`scripts/menu_text.py`, `src/options/options-text.inc`):
+  letter = `$80` + position in the alphabet (A = `$80`, Z = `$99`),
+  digit = `$A0` + digit, `$9A` is '-', `$9F` is a space. For example
+  `$92 $93 $80 $86 $84` = "STAGE". `$AA` ('.') and
+  `$AD` (':') are the menu's own glyphs (see the menu display below). Since
+  1.10 the menu text is generated from `src/options/menu.txt`.
 - **Level Select next-script table** (`selected_next_sequence`, also
   `NEXT_SEQUENCE` in `scripts/comparison_video.py`): the native master script
   is 38 two-byte records (kind, parameter) at headerless ROM offset `$805`.
@@ -283,9 +284,51 @@ no longer in the repository.
   playfield line (screenshot row 50) different from an ordinary backdrop row;
   REV5-era pixel checks compared that line with the original's output rather
   than with a decoded model.
-- **Boot sequence:** the community notice runs before the untouched native
-  publisher scene. An earlier build (REV6A) shortened the publisher screen;
-  REV6B reverted that, leaving the native boot-scene region byte-identical.
+- **Boot sequence:** native and byte-identical since 1.10-dev, which removed
+  the community notice (splash) that 1.09 ran before the publisher scene
+  through a bank 4 `$8001` hook and a fixed `$FEBE` wrapper; both are the
+  original bytes again. An earlier build (REV6A) shortened the publisher
+  screen; REV6B reverted that.
+
+## Menu display
+
+The menu draws four rows, laid out in `src/options/menu.txt` (generated into
+`menu-text.inc` by `scripts/menu_text.py`; `#` runs mark the STAGE, PARALLAX
+and NO DAMAGE value fields, whose BAT positions become `STAGE_AT`,
+`PARALLAX_AT` and `DAMAGE_AT`): the HUD's rows 28-30 and the blank band
+under the HUD, row 31. The selected value blinks (16 frames shown, 16 blank;
+counter in zero page `$27`, saved by the menu). Its `.` and `:` are glyphs
+in the native style uploaded to the HUD font's blank tiles `$7AA` and `$7AD`, and
+`/` to the blank tile `$7B9` after the health-bar pieces (glyph planes 0-1 are
+stored; plane 2, the font's background, is computed).
+
+- Rows 28-29 (score/stage, timer/ninja) are backed up on the stack, as in
+  1.09. The stack has no room for a third row: with two the menu reaches
+  `$215B`, 27 bytes above the watched margin.
+- Row 30 (lives, ninpo, item box, enemy bar; VRAM `$0780-$079F`) is parked
+  word by word in the blank tiles `$7AB-$7AC` (`$7AB0-$7ACF`).
+- Row 31 holds 32 blank HUD words (`$F79F`) in gameplay and is written back
+  as such.
+
+Closing the menu (**Run** accepts, **Select** cancels) copies row 30 back, zeroes tiles
+`$7AA-$7AD` and `$7B9` and blanks row 31; this adds no stack depth. The held item's
+icon is a sprite over the item box (columns 13-14 of rows 29-30), in front of
+the HUD, so the layout keeps those columns blank and the generator rejects
+text there. Ryu can still cover the HUD if the menu is opened while he is
+above the playfield, as in normal play. The left column starts at the
+screen's first column (`PARALLAX: OFF` fills the 13 columns left of the item
+box).
+
+Evidence (1.10, emulated): VRAM write watches over `$7AA0-$7ADF`, `$7B90-$7B9F` and row 31
+during all 22 Level Select stage loads and the 11 comparison runs (area
+changes included) saw only zeros and `$F79F` in gameplay; the stage loads
+write those values. A cinema writes `$0100` into row 31 (seen after 4-1, 5-3
+and 6-3); the menu cannot open there, and the next stage load restores the
+row. `scripts/check_menu.py` opens the menu throughout the stored runs and in
+every Level Select entry and requires VRAM, the sprite table and the palette
+to be unchanged on return, and RAM except where the interrupt or the menu
+legitimately writes. Re-audit if the HUD, the font loader or the menu's open
+conditions change.
 
 ## Cinema VRAM ownership
 

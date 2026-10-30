@@ -1,5 +1,38 @@
 # Changelog
 
+## 1.10 — 2026-10-30
+
+Game:
+
+- The splash screen is gone: power-on goes straight to the original
+  publisher screen, and the boot is the original's frame for frame.
+- New in-game menu layout (Select): `STAGE:`, `PARALLAX: ON/OFF`,
+  `NO DMG: OFF/ON` and `RUN: ACCEPT` on the left; the version,
+  `GITHUB.COM/` `TIGERMONKEYFISH` and `SELECT: CANCEL` on the right. It uses
+  the status bar and the line under it. Run accepts and Select cancels (1.09
+  used I and II). The selected value blinks instead of a dash marking it.
+  The text leaves the item box clear, so a held item's icon no longer covers
+  it (in 1.09 it covered "OFF" and "I"). The full status bar returns when
+  the menu closes.
+- Gameplay, backgrounds and cinemas are unchanged from 1.09.
+
+Project:
+
+- The menu text is editable source (`src/options/menu.txt`), checked and
+  encoded at build time (`scripts/menu_text.py`).
+- New emulator checks: `scripts/check_boot.py` compares every frame from
+  power-on through the title with the original; `scripts/check_menu.py`
+  opens the menu throughout the 11 stored stage runs and in every Level
+  Select entry and requires the machine to be unchanged when it closes.
+- Patches for both ROM formats; the 1.09 patches remain at tag `v1.09`.
+
+Evidence: emulator validation in
+[docs/validation/background-fidelity.md](docs/validation/background-fidelity.md);
+the maintainer played 1.10 from both patches on an NEC PC Engine Duo-RX with
+a Krikzz Turbo EverDrive PRO (1-1, 1-2, Level Select to 2-2 and the final
+boss, into the ending cinema). See
+[docs/VALIDATION.md](docs/VALIDATION.md) for scope.
+
 ## 1.09 — 2026-10-21
 
 The first public release. A patch for the Japanese PC Engine Ninja Ryukenden

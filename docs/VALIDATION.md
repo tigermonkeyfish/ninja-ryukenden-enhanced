@@ -1,30 +1,33 @@
 # Validation and limits
 
-## 1.09 release validation
+## 1.10 release validation
 
-Release 1.09 is defined by `release/current.json`. A source build from either
+Release 1.10 is defined by `release/current.json`. A source build from either
 original ROM format (`scripts/project.py build --verify-release`) and direct
 application of either release patch reproduce its target SHA-256
-(`f84a31a8…b912`).
+(`3d5c05df…bbf6`).
 
 **Emulator evidence** (headless Geargrafx; method and results in
-[the background-fidelity review](validation/background-fidelity.md)):
+[the background-fidelity review](validation/background-fidelity.md)). 1.10
+changes the boot (the splash is removed) and the in-game menu; the stage,
+background and cinema code is 1.09's.
 
 | Check | Result |
 | --- | --- |
-| Backgrounds | Every Enhanced backdrop is generated from the original ROM's own art; every round of the 11 parallax entries opens exactly like the original |
-| Gameplay | Stored button input for all 11 enhanced stages plays frame for frame identically on the original and on 1.09 (sprites, Ryu, timer, lives, health, camera, area) |
-| Timing | Stage loads, respawns and area changes take the original's frame counts; force-scrolling every area at 2 px per update, no update takes longer than the original's |
-| Cinemas | On 1.09, after a full play of each enhanced stage, the next cinema is identical frame for frame. The whole-game cinema audit ([CUTSCENE-AUDIT.md](CUTSCENE-AUDIT.md)) reached all 15 cinemas on 1.08-dev, which differs from 1.09 only in the menu code and the splash version |
-| Start timing | Power-on to the first 1-1 update with Run pressed takes 163 frames in both games |
-| Splash and boot | `scripts/check_notice.py` on the release bytes: splash pixels match the ROM data, it holds still for 300 frames, a press or held Run leaves it at once, the Hudson screen is unchanged, and the English title and the defaults (Enhanced, No Damage off, English) are reached |
-| Level Select | Applying a stage refills health; **II** closes the menu with nothing changed (cases in the review) |
+| Boot | `scripts/check_boot.py`: every idle frame from power-on through the title (frames 1-899) is identical to the original's (given English); power-on to the first 1-1 update with Run pressed takes 163 frames, as in the original and 1.09; defaults English, Enhanced, No Damage off |
+| Menu | `scripts/check_menu.py`: opened 121 times across the 11 stored stage runs (every 300 frames and after each area change), every setting changed and cancelled with Select: VRAM, sprite table and palette identical on return, RAM changed only in the interrupt's, music driver's and menu's own bytes. In all 22 Level Select entries the same, and Run starts the next entry with the right stage, full health, the options and the status bar restored |
+| Gameplay | Stored button input for all 11 enhanced stages plays frame for frame identically on the original and on 1.10 (35,084 frames: sprites, Ryu, timer, lives, health, camera, area), with no re-recording needed |
+| Cinemas | On 1.10, after a full play of each enhanced stage, the next cinema is identical frame for frame (the same frame counts as on 1.09). The whole-game cinema audit ([CUTSCENE-AUDIT.md](CUTSCENE-AUDIT.md)) reached all 15 cinemas on 1.08-dev |
+| Backgrounds | Every Enhanced backdrop is generated from the original ROM's own art; every round of the 11 parallax entries opens exactly like the original (1.09 evidence; the code is unchanged) |
+| Timing | Stage loads, respawns and area changes take the original's frame counts; force-scrolling every area at 2 px per update, no update takes longer than the original's (1.09 evidence; the code is unchanged) |
 
 **Hardware reports** (from the maintainer; separate from the emulator
 evidence above):
 
 | Hardware | Build | Report |
 | --- | --- | --- |
+| NEC PC Engine Duo-RX with Krikzz Turbo EverDrive PRO | 1.10, made with each of the two release patches | The same session with each patch: 1-1 and 1-2 played, a warp to 2-2, No Damage turned on, a warp to the final boss, the boss beaten and the ending cinema started (completion of the ending not stated) |
+| NEC PC Engine Duo-RX with Krikzz Turbo EverDrive PRO | 1.10 release bytes (`3d5c05df…bbf6`) | The in-game menu looks good; other areas not reported |
 | NEC PC Engine Duo-RX with Krikzz Turbo EverDrive PRO | 1.09 release bytes (`f84a31a8…b912`) | Looks good; stages and settings not specified |
 | NEC PC Engine Duo-RX with Krikzz Turbo EverDrive PRO | An earlier development build with the same cinema cleanup | Cinemas good; normal settings through 6-1, No Damage from 6-2 onward (completion of the ending not stated) |
 | TurboGrafx-16 with Krikzz Turbo EverDrive and an EDFX RGB adapter | An earlier development build | Some play testing; build, stages and settings not specified |
@@ -54,14 +57,26 @@ camera forcing, temporary hooks, scripted health restoration or save-state
 CRC edits must be declared in a report and absent from the released bytes.
 Prefer real input replays for the final behavioral check.
 
-The splash and boot handoff check compares a build with an earlier Enhanced
-build that has the splash (here the 1.09-dev build):
+The boot check compares a build with the original game (given native
+English after its first frame): every idle frame from power-on through the
+title, the frame of the first 1-1 update when mashing Run, and the defaults:
 
 ```sh
-python3 scripts/check_notice.py --emulator /path/to/geargrafx \
-  --baseline "/path/to/earlier-enhanced.pce" \
-  --candidate "dist/Ninja Ryukenden - Enhanced v1.09.pce" \
-  --output captures/splash-1.09
+python3 scripts/check_boot.py --emulator /path/to/geargrafx \
+  --original "/path/to/original.pce" \
+  --candidate "dist/Ninja Ryukenden - development.pce" \
+  --output captures/boot-check
+```
+
+The menu check opens the in-game menu throughout the 11 stored runs and in
+every Level Select entry, and requires the machine to be unchanged when it
+returns to the game (see the script for the RAM the interrupt may change):
+
+```sh
+python3 scripts/check_menu.py --emulator /path/to/geargrafx \
+  --original "/path/to/original.pce" \
+  --candidate "dist/Ninja Ryukenden - development.pce" \
+  --output captures/menu-check
 ```
 
 ## Outstanding

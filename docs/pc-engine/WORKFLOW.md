@@ -11,7 +11,7 @@ immutable. Record emulator/tool versions and hardware separately. Start with
 an unmodified game run and a minimal input sequence that reproduces the issue.
 
 Use a new output name, hash and version for every candidate given to a
-tester, and show the version on screen (Ninja's notice splash prints it), so
+tester, and show the version on screen (Ninja's in-game menu prints it), so
 a report always names the bytes it is about. Never overwrite a differing copy
 under the same name, and never infer the running revision from an emulator
 window title or a renamed file.

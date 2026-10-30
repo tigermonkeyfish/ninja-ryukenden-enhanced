@@ -124,6 +124,7 @@ the trace log's cycle counts are both master clocks (see EMULATOR.md).
   require the expected count. (Ninja's current build checks the whole
   original by SHA-256 instead.)
 - Put an added screen in front of a native sequence instead of editing the
-  sequence. Ninja's community notice runs before an untouched publisher scene,
-  so that region stays byte-identical to the original and easy to verify; an
-  earlier build that shortened the publisher screen was reverted.
+  sequence. Ninja's community notice (1.09; removed in 1.10-dev) ran before
+  an untouched publisher scene, so that region stayed byte-identical to the
+  original and easy to verify; an earlier build that shortened the publisher
+  screen was reverted.

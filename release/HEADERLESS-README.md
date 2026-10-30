@@ -1,10 +1,10 @@
-# Ninja Ryukenden Enhanced 1.09 — headerless ROM patch
+# Ninja Ryukenden Enhanced 1.10 — headerless ROM patch
 
 For **Ninja Gaiden TurboGrafx-16 (Japan)**, the PC Engine game titled
 **Ninja Ryukenden**, also spelled **Ninja Ryuuken Den** in ROM filenames.
 
 This patch accepts the original Japanese game **without a copier header**.
-It produces exactly the same Enhanced 1.09 ROM as the headered patch.
+It produces exactly the same Enhanced 1.10 ROM as the headered patch.
 
 ## Choose the correct input
 
@@ -18,7 +18,7 @@ Known filenames include `Ninja Ryuuken Den (Japan) (En,Ja,Zh).pce` and
 `gaiden.pce`. Filenames alone do not establish compatibility.
 
 If your original is **524,800 bytes**, CRC32 **A186DFD2**, use
-`ninja-ryukenden-enhanced-v1.09.bps` instead (see `README.md`). That file
+`ninja-ryukenden-enhanced-v1.10.bps` instead (see `README.md`). That file
 includes a 512-byte copier header; the game data itself is identical. Do not
 add or remove header bytes, and do not apply either patch over an
 already-patched ROM.
@@ -27,9 +27,9 @@ already-patched ROM.
 
 In a BPS patcher:
 
-1. Select `patches/ninja-ryukenden-enhanced-v1.09-headerless.bps` as the patch.
+1. Select `patches/ninja-ryukenden-enhanced-v1.10-headerless.bps` as the patch.
 2. Select your matching 524,288-byte original ROM as the source.
-3. Save the output as `Ninja Ryukenden - Enhanced v1.09.pce`.
+3. Save the output as `Ninja Ryukenden - Enhanced v1.10.pce`.
 
 Alternatively, from the extracted package, use the included Python tool:
 
@@ -40,11 +40,11 @@ python3 scripts/project.py apply --rom "/path/to/original.pce"
 Expected output:
 
 - Size: **1,048,576 bytes**, no copier header
-- CRC32: **699381B7**
-- SHA-256: `f84a31a86da01d1a3377a68a6ad3242af19065095915ed18dab487cb732ab912`
+- CRC32: **7CEB52BC**
+- SHA-256: `3d5c05dfa6fb6a9ea6c04209cbc36d8e952caa6666ea5fcb724864ff4923bbf6`
 
-Start with a fresh boot/reset. Press or hold Run to leave the splash;
-press Select during gameplay for the options menu.
+Start with a fresh boot/reset. Press Select during gameplay for the options
+menu: Run accepts, Select cancels.
 
 This package contains no game ROM. Original project code, tools and docs use
 MIT; the original game's material is excluded. See LICENSE, CREDITS.md and

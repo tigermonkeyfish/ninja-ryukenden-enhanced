@@ -326,19 +326,28 @@ class ReleaseTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'Original ROM'):
             original_image(source[:-1], manifest)
 
-    def test_notice_font_is_editable_source(self):
+    def test_menu_text_is_editable_source(self):
         import tempfile
-        from notice_assets import GLYPHS, generate
+        from menu_text import ITEM_BOX, generate, layout
         with tempfile.TemporaryDirectory() as temp:
             work = Path(temp)
-            (work / 'screen.json').write_text(json.dumps([[4, 'V{version}', 0]]))
-            generate(work, '1.05-dev')
-            font = (work / 'font.bin').read_bytes()
-        characters = ' -.015DEV'
-        self.assertEqual(len(font), 32 * len(characters))
-        tile = font[characters.index('V') * 32:][:32]
-        self.assertEqual(list(tile[:16:2]), GLYPHS['V'])
-        self.assertEqual(set(tile[1:16:2] + tile[16:]), {0})
+            (work / 'menu.txt').write_text((ROOT / 'src/options/menu.txt').read_text())
+            generate(work, '1.10-dev')
+            include = (work / 'menu-text.inc').read_text()
+        self.assertIn('STAGE_AT = $07\nPARALLAX_AT = $4a\nDAMAGE_AT = $88\n', include)
+        codes = [int(b) for line in include.split('.db ')[1:] for b in line.split('\n')[0].split(',')]
+        self.assertEqual(len(codes), 128)
+        # V 1 . 1 0 - D E V at column 16 of the first row; the item box stays blank.
+        self.assertEqual(codes[16:25], [0x95, 0xa1, 0xaa, 0xa1, 0xa0, 0x9a, 0x83, 0x84, 0x95])
+        self.assertEqual({codes[row * 32 + c] for row in (1, 2) for c in ITEM_BOX}, {0x9f})
+        self.assertEqual(codes[5], 0xad)                    # STAGE:
+        good = ['A: #####', 'B: ###', 'C: ###', '']
+        layout(good)
+        with self.assertRaises(ValueError): layout(['A: #####', 'B: ###' + ' ' * 7 + 'X', 'C: ###', ''])  # column 13
+        with self.assertRaises(ValueError): layout(['A: #####', 'B: ###', 'C: ###', 'X' * 33])
+        with self.assertRaises(ValueError): layout(['A: #####', 'B: ###', 'C: ###', '!'])
+        with self.assertRaises(ValueError): layout(['A: ###', 'B: ###', 'C: ###', ''])        # field width
+        with self.assertRaises(ValueError): layout(good[:3])
 
 
 class ComparisonRunTests(unittest.TestCase):

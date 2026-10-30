@@ -84,8 +84,8 @@ def build_runtime(base, assembler, directory, original):
             from asset_transforms import prepare
             prepare(module['prepare'], work, original)
         overlay = work / 'overlay.pce'
-        if module['name'] == 'notice':
-            from notice_assets import generate
+        if module['name'] == 'options':
+            from menu_text import generate
             generate(work, (ROOT / 'VERSION').read_text().strip())
         command = [assembler, '--raw', '--pad', '-I', str(work), '-o', str(overlay), str(work / 'main.asm')]
         run = subprocess.run(command, cwd=work, capture_output=True, text=True)
