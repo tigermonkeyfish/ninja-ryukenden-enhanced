@@ -23,7 +23,7 @@ GB = gb_dmg_table()
 CAP = int(os.environ.get('MODEL_CAP', 168))
 ENTRY_COST = int(os.environ.get('MODEL_ENTRY_COST', 6))
 LEFTOVER_CAP = 32
-NATIVE_PLUS = 36
+NATIVE_PLUS = 0
 BUDGET_MIN = 16
 SENTINEL = 0x1ff ^ 0x0aa
 
