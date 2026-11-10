@@ -43,12 +43,11 @@ NATIVE_UPLOAD = $f3b5
 QUEUE_ALL = $f394           ; native: queue colours 0-511, under the lock
 MAPPED_STATE = $80          ; $2100 bit 7: the VCE holds mapped colours
 LEFTOVER = $20              ; $2100 bit 5: the queue's one entry was left over
-LEFTOVER_FIRST = $40        ; $2100 bit 6: ... by the last vblank's upload of new work
 PALETTE_BANK = $46
 
-PALETTE_CAP = 176           ; colours per vblank (measured: docs/validation/gb-palette.md)
+PALETTE_CAP = 168           ; colours per vblank (measured: docs/validation/gb-palette.md)
 ENTRY_COST = 6              ; colours' worth of time per further queue entry
-LEFTOVER_FIRST_CAP = 32     ; colours in the first vblank after a large upload
+LEFTOVER_CAP = 32           ; colours a vblank for a left-over entry alone
 NATIVE_PLUS = 36            ; colours (about 4 lines) beyond the native upload's time
 BUDGET_MIN = 16
 
@@ -57,6 +56,7 @@ PTR = $20                   ; and $21: source pointer
 BUDGET = $22                ; colours left this vblank
 CHUNK = $23                 ; colours in this chunk (1-128)
 ENTRY = $24                 ; queue entry being read
+FULL = $25                  ; nonzero: the queue was full (8 entries)
 
  .bank 0
  ; The vblank interrupt's palette upload (native: jsr $f3b5).
@@ -117,14 +117,11 @@ mapped_state:
  bne queue_present
  ; Nothing queued, so nothing is left over either.
  lda OPTIONS
- and #$ff - LEFTOVER - LEFTOVER_FIRST
+ and #$ff - LEFTOVER
  sta OPTIONS
  rts
 queue_present:
- ; A full queue may have dropped an entry ($F350 drops when full): upload
- ; everything instead.
- cmp #8
- bcc mapped_upload
+ bra mapped_upload
 queue_everything:
  jsr QUEUE_ALL
  lda OPTIONS
@@ -144,9 +141,9 @@ native_upload:
 upload_return:
  rts
 
- ; Stack in mapped_upload after its 7 pushes: S+8/9 return to the
- ; trampoline, S+10 its saved MPR2, S+11/12 return to $FD16, S+13-15 the
- ; interrupt's Y, X, A, S+16 P, S+17/18 the interrupted PC.
+ ; Stack in mapped_upload after its 8 pushes: S+9/10 return to the
+ ; trampoline, S+11 its saved MPR2, S+12/13 return to $FD16, S+14-16 the
+ ; interrupt's Y, X, A, S+17 P, S+18/19 the interrupted PC.
 mapped_upload:
  phx
  phy
@@ -160,37 +157,42 @@ mapped_upload:
  pha
  lda <ENTRY
  pha
+ lda <FULL
+ pha
+ ; A full queue may have dropped an entry ($F350 drops when full): once
+ ; this upload is done, all 512 colours are left over instead.
+ stz <FULL
+ lda QUEUE_COUNT
+ cmp #8
+ bcc queue_not_full
+ inc <FULL
+queue_not_full:
  lda #PALETTE_CAP
  sta <BUDGET
  ldx QUEUE_COUNT
- ; A single entry that the last upload left over ($2100 bit 5) is not new
- ; work, and the main loop may need the time: the frame after a large
- ; upload is often an area change's load. While the main loop is busy
- ; (the interrupt did not stop it in the vblank wait, $FD67-$FD6F) it waits;
- ; in the first vblank after the upload that left it (bit 6) only
- ; LEFTOVER_FIRST colours go; after that the full budget.
+ ; A single entry that an upload left over ($2100 bit 5) is work the native
+ ; game does not have in this frame, and the main loop may need the time
+ ; (the frames after a large upload are often an area change's load). While
+ ; the main loop is busy (the interrupt did not stop it in the vblank wait,
+ ; $FD67-$FD6F) it waits; otherwise LEFTOVER_CAP colours go (about 4 lines).
  cpx #1
  bne new_work
  lda OPTIONS
  and #LEFTOVER
  beq new_work
  tsx
- lda $2100 + 18,x           ; the interrupted PC, high byte (see below)
+ lda $2100 + 19,x           ; the interrupted PC, high byte (see below)
  cmp #$fd
  bne main_loop_busy
- lda $2100 + 17,x
+ lda $2100 + 18,x
  cmp #$67
  bcc main_loop_busy
  cmp #$70
  bcs main_loop_busy
- lda OPTIONS
- bit #LEFTOVER_FIRST
- beq leftover_later
- lda #LEFTOVER_FIRST_CAP
+ lda #LEFTOVER_CAP
  sta <BUDGET
-leftover_later:
  lda OPTIONS
- and #$ff - LEFTOVER - LEFTOVER_FIRST
+ and #$ff - LEFTOVER
  bra flags_set
 main_loop_busy:
  jmp mapped_return
@@ -262,7 +264,6 @@ budget_set:
 budget_done:
  lda OPTIONS
  and #$ff - LEFTOVER
- ora #LEFTOVER_FIRST
 flags_set:
  sta OPTIONS
  stz <ENTRY
@@ -326,16 +327,17 @@ entry_done:
 queue_done:
  stz QUEUE_COUNT
 border:
- ; Bit 5: an entry is left over; bit 6 stays set only with one.
- lda OPTIONS
- ldx QUEUE_COUNT
+ lda <FULL
+ beq full_done
+ jsr QUEUE_ALL
+full_done:
+ ; Bit 5: an entry is left over (it was cleared above).
+ lda QUEUE_COUNT
  beq nothing_left
+ lda OPTIONS
  ora #LEFTOVER
- bra left_noted
-nothing_left:
- and #$ff - LEFTOVER_FIRST
-left_noted:
  sta OPTIONS
+nothing_left:
  ; The border colour (entry $100), mapped like the rest.
  stz $0402
  lda #1
@@ -355,6 +357,8 @@ border_high:
  lda gb_hi1,x
  sta $0405
 mapped_return:
+ pla
+ sta <FULL
  pla
  sta <ENTRY
  pla

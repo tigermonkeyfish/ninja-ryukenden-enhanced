@@ -20,9 +20,9 @@ from palette_tables import gb_dmg_table  # noqa: E402
 
 GB = gb_dmg_table()
 # MODEL_CAP set to a wrong value is the negative control: cases must fail.
-CAP = int(os.environ.get('MODEL_CAP', 176))
+CAP = int(os.environ.get('MODEL_CAP', 168))
 ENTRY_COST = int(os.environ.get('MODEL_ENTRY_COST', 6))
-LEFTOVER_FIRST = 32
+LEFTOVER_CAP = 32
 NATIVE_PLUS = 36
 BUDGET_MIN = 16
 SENTINEL = 0x1ff ^ 0x0aa
@@ -48,30 +48,26 @@ def model(case):
             opts &= ~0x20
     if not queue:
         if mapped:
-            opts &= ~0x60
+            opts &= ~0x20
         return vce, queue, opts
-    if mapped and len(queue) >= 8:
-        queue = [[0, 512]]
-        opts &= ~0x20
+    full = mapped and len(queue) >= 8
     f = (lambda c: GB[c & 0x1ff]) if mapped else (lambda c: c & 0xffff)
     budget = CAP - ENTRY_COST * (min(len(queue), 8) - 1) if mapped else 1 << 30
     if mapped:
-        # Bits 5-6: a single left-over entry waits while the main loop is busy
-        # (interrupted PC outside $FD67-$FD6F), gets LEFTOVER_FIRST colours in
-        # the first vblank after the upload that left it, else the full budget.
+        # Bit 5: a single left-over entry waits while the main loop is busy
+        # (interrupted PC outside $FD67-$FD6F), else gets LEFTOVER_CAP colours.
         if len(queue) == 1 and opts & 0x20:
             if not 0xfd67 <= case.get('pc', 0xfd69) <= 0xfd6f:
                 return vce, queue, opts
-            if opts & 0x40:
-                budget = LEFTOVER_FIRST
-            opts &= ~0x60
+            budget = LEFTOVER_CAP
+            opts &= ~0x20
         else:
             new = queue[1:] if opts & 0x20 else queue
             total = sum(2 * n for _, n in new)
             b = min((total >> 3) + (total >> 7) + NATIVE_PLUS, 255) if total < 2048 else 255
             b = min(b, CAP) - ENTRY_COST * (len(queue) - 1)
             budget = max(b, BUDGET_MIN)
-            opts = (opts & ~0x20) | 0x40
+            opts &= ~0x20
     kept = []
     for idx, n in queue:
         k = min(n, budget)
@@ -84,13 +80,13 @@ def model(case):
         lo = min(i for i, _ in kept)
         hi = max(i + n for i, n in kept)
         kept = [[lo, hi - lo]]
+    if full:
+        kept = [[0, 512]]           # a full queue may have dropped an entry
     vce[256] = f(case['border'])
     if not mapped:
         kept = []
     elif kept:
         opts |= 0x20
-    else:
-        opts &= ~0x40
     return vce, kept, opts
 
 
