@@ -321,5 +321,19 @@
         8174
       ]
     ]
+  },
+  {
+    "name": "nes-firewheel",
+    "source": "src/nes-firewheel/main.asm",
+    "ranges": [
+      [
+        31744,
+        32768
+      ],
+      [
+        19082,
+        19085
+      ]
+    ]
   }
 ]
