@@ -49,6 +49,19 @@ FLICKER_FROM = WHEEL_LIFE - 180
  ; Fire Wheel handler: its lifetime countdown ($AF2D, replaces lda $2EDA).
  .org $af2d
  jmp nes_wheel_timer
+ ; Item pickups (table at $A6D6): Fire Wheel, the four arts, time freeze.
+ .org $a6ab
+ jmp nes_wheel_pickup
+ .org $a6b5
+ jmp nes_art_pickup
+ .org $a6bf
+ jmp nes_art_pickup
+ .org $a6c9
+ jmp nes_art_pickup
+ .org $a6d3
+ jmp nes_art_pickup
+ .org $a682
+ jmp nes_freeze_pickup
 
  .bank 3
  .org $dc00
@@ -199,6 +212,97 @@ boundary_lo:
  .db LOW(96),LOW(156),LOW(216),LOW(276),LOW(336),LOW(396),LOW(456),LOW(WHEEL_LIFE)
 boundary_hi:
  .db HIGH(96),HIGH(156),HIGH(216),HIGH(276),HIGH(336),HIGH(396),HIGH(456),HIGH(WHEEL_LIFE)
+
+; Pickups. NES: the wheel replaces Ryu's art (none is left when it ends),
+; clears his projectiles in flight and an active time freeze; a second wheel
+; restarts the first; any art or the time freeze ends it.
+nes_wheel_pickup:
+ lda OPTIONS
+ and #NES_FIREWHEEL
+ bne nes_pickup
+ jmp $a919
+nes_pickup:
+ lda EFFECT
+ pha
+ cly                            ; Y = 0: no wheel found yet
+ phy
+ ldy #4
+pickup_scan:
+ lda EFFECT_TYPE,y
+ cmp #3
+ bcc pickup_remove              ; types 0-2: projectiles of the arts
+ cmp #4
+ beq pickup_unfreeze
+ cmp #WHEEL
+ bne pickup_next
+ cla                            ; restart: the full 516 updates again
+ sta WHEEL_COUNT_LO,y
+ sta WHEEL_COUNT_HI,y
+ pla
+ lda #1
+ pha
+ bra pickup_next
+pickup_unfreeze:
+ ; As the freeze's own end ($AEFA): release, palette, then remove.
+ stz $3179
+ stz $3157
+ phy
+ jsr $f720
+ jsr $f394
+ ply
+pickup_remove:
+ sty EFFECT
+ phy
+ jsr $a7b9                      ; native removal (sound, sprite)
+ ply
+pickup_next:
+ dey
+ bpl pickup_scan
+ lda #6                         ; no art, as after a respawn ($8E20)
+ jsr $a7f7
+ pla
+ tay
+ pla
+ sta EFFECT
+ cpy #0
+ bne pickup_restarted
+ jmp $a919
+pickup_restarted:
+ rts
+
+nes_art_pickup:
+ pha
+ jsr nes_end_wheel
+ pla
+ jmp $a7f7
+
+nes_freeze_pickup:
+ jsr nes_end_wheel
+ jmp $a8fd
+
+ ; With the option set, remove every wheel now. Preserves EFFECT.
+nes_end_wheel:
+ lda OPTIONS
+ and #NES_FIREWHEEL
+ beq end_done
+ lda EFFECT
+ pha
+ ldy #4
+end_scan:
+ lda EFFECT_TYPE,y
+ cmp #WHEEL
+ bne end_next
+ sty EFFECT
+ phy
+ jsr $a7b9
+ ply
+end_next:
+ dey
+ bpl end_scan
+ pla
+ sta EFFECT
+end_done:
+ rts
 nes_firewheel_end:
  .if (nes_firewheel_end > $e000)
  .fail
