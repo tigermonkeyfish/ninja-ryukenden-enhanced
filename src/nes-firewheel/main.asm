@@ -43,6 +43,9 @@ FLICKER_FROM = WHEEL_LIFE - 180
  ; Effect-versus-enemy box (in $AA74, every kill check): A = effect type.
  .org $aa8a
  jsr nes_effect_box
+ ; Boss kill check entry ($A211, replaces lda $2EB2).
+ .org $a211
+ jsr nes_boss_check
 
  .bank 3
  .org $dc00
@@ -83,6 +86,47 @@ wheel_top:
  rts
 native_effect_box:
  jmp $aabd
+
+; Bosses. Native: one point per contact (the hit flag stays set while any
+; sword or effect still touches). NES: the wheel takes one point every
+; update it touches. While a wheel touches this boss, clear its hit flag so
+; the native check counts this update. At 0 the native death takes over.
+nes_boss_check:
+ lda OPTIONS
+ and #NES_FIREWHEEL
+ beq boss_native
+ lda BOSS_HEALTH
+ beq boss_native
+ phx
+ phy
+ lda EFFECT
+ pha
+ ldy #4
+boss_scan:
+ lda EFFECT_TYPE,y
+ cmp #WHEEL
+ bne boss_next
+ sty EFFECT
+ phy
+ jsr nes_effect_box
+ jsr $9489                      ; A = 0: the boxes overlap
+ ply
+ cmp #0
+ bne boss_next
+ ldx ENEMY_SLOT
+ stz BOSS_HIT,x
+ bra boss_done
+boss_next:
+ dey
+ bpl boss_scan
+boss_done:
+ pla
+ sta EFFECT
+ ply
+ plx
+boss_native:
+ lda $2eb2
+ rts
 nes_firewheel_end:
  .if (nes_firewheel_end > $e000)
  .fail
