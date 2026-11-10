@@ -44,6 +44,45 @@ class AssetTransformTests(unittest.TestCase):
                 self.assertIn(module['prepare'], PREPARE)
 
 
+class PaletteTableTests(unittest.TestCase):
+    def test_gb_dmg_table_follows_the_editable_parameters(self):
+        from palette_tables import gb_dmg_table
+        table = gb_dmg_table()
+        self.assertEqual(len(table), 512)
+        self.assertEqual(set(table), {0x040, 0x090, 0x0d0, 0x120})
+        # GGGRRRBBB: black, white, pure blue / red / green at full, and the
+        # darkest shade itself (Y = 0.587 < 0.6).
+        for colour, shade in ((0x000, 0x040), (0x1ff, 0x120), (0x007, 0x090), (0x038, 0x0d0),
+                              (0x1c0, 0x120), (0x040, 0x040), (0x092, 0x0d0), (0x124, 0x120)):
+            self.assertEqual(table[colour], shade, hex(colour))
+
+    def test_thresholds_are_exact_and_editable(self):
+        import tempfile
+        from palette_tables import gb_dmg_table, generate, pages
+        with tempfile.TemporaryDirectory() as temp:
+            spec = Path(temp) / 'gb.json'
+            # A colour exactly on a threshold takes the lighter shade: G = 1
+            # gives Y = 0.587 exactly.
+            spec.write_text(json.dumps({'luma': ['0.299', '0.587', '0.114'],
+                                        'thresholds': ['0.587', '1.8', '3.2'],
+                                        'shades': ['000', '001', '002', '1FF']}))
+            table = gb_dmg_table(spec)
+            self.assertEqual(table[0x040], 0x001)
+            self.assertEqual(table[0x000], 0x000)
+            generate(temp, spec)
+            include = (Path(temp) / 'gb-table.inc').read_text()
+            spec.write_text(json.dumps({'luma': ['0.299', '0.587', '0.114'],
+                                        'thresholds': ['3.2', '1.8', '0.6'],
+                                        'shades': ['040', '090', '0D0', '120']}))
+            with self.assertRaisesRegex(ValueError, 'increase'):
+                gb_dmg_table(spec)
+        values = [int(b[1:], 16) for line in include.splitlines() if line.startswith(' .db ')
+                  for b in line[5:].split(',')]
+        self.assertEqual(bytes(values), b''.join(pages(table)))
+        self.assertEqual(values[0x40], 0x01)                      # gb_lo0[$40]
+        self.assertEqual(values[3 * 256 + 0xff], 0x01)            # gb_hi1[$FF]: colour $1FF
+
+
 def pack_half(words):
     """Inverse of the native $F13F packing for one 16-byte half tile: per
     group of 4 words a control byte, MSB first, low then high lane, 1 = literal."""
