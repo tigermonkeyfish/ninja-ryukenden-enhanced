@@ -13,10 +13,10 @@
 ; ($2240 = 1 or 2) keep the native upload in every mode.
 ;
 ; The mapped upload costs about 3.5 times the native TIA per colour, so it
-; uploads at most PALETTE_CAP colours per vblank (it must end before the
-; display starts) and leaves the rest queued, in the native format: entries
-; it did not reach stay, the one it stopped in keeps its remainder. When more
-; than one entry is left they are folded into the one range that covers them
+; uploads at most PALETTE_CAP colours per vblank, less ENTRY_COST for each
+; queue entry after the first (it must end before the display starts), and
+; leaves the rest queued in the native format: what is left of the entry it
+; stopped in and the entries it did not reach become one entry covering them
 ; (lowest to highest colour), so the producers keep seven free entries.
 
 OPTIONS = $2100
@@ -33,14 +33,14 @@ PALETTE_LOCK = $2283
 NATIVE_UPLOAD = $f3b5
 PALETTE_BANK = $46
 
-PALETTE_CAP = 192           ; colours per vblank (measured: docs/validation/gb-palette.md)
+PALETTE_CAP = 176           ; colours per vblank (measured: docs/validation/gb-palette.md)
+ENTRY_COST = 6              ; colours' worth of time per further queue entry
 
 ; Zero page borrowed by the mapped upload; saved and restored around it.
 PTR = $20                   ; and $21: source pointer
 BUDGET = $22                ; colours left this vblank
 CHUNK = $23                 ; colours in this chunk (1-128)
 ENTRY = $24                 ; queue entry being read
-KEPT = $25                  ; queue entries kept so far
 
  .bank 0
  ; The vblank interrupt's palette upload (native: jsr $f3b5).
@@ -108,20 +108,20 @@ mapped_upload:
  pha
  lda <ENTRY
  pha
- lda <KEPT
- pha
- lda #PALETTE_CAP
+ ; BUDGET = PALETTE_CAP less ENTRY_COST for each entry after the first
+ ; (an entry's own work, and folding what is left, cost time too).
+ ldx QUEUE_COUNT
+ cpx #9
+ bcc count_ok
+ ldx #8
+count_ok:
+ lda budget_by_count-1,x
  sta <BUDGET
  stz <ENTRY
- stz <KEPT
 next_entry:
  ldx <ENTRY
  cpx QUEUE_COUNT
- bcc entry_present
- jmp entries_done
-entry_present:
- lda <BUDGET
- beq keep_entry
+ bcs queue_done
 next_chunk:
  lda QUEUE_BYTES_LO,x
  ora QUEUE_BYTES_HI,x
@@ -143,7 +143,6 @@ entry_short:
  sta <CHUNK
 budget_ok:
  jsr upload_chunk
-chunk_done:
  ; The entry moves on by CHUNK colours.
  ldx <ENTRY
  lda QUEUE_INDEX_LO,x
@@ -170,33 +169,14 @@ index_done:
  sec
  sbc <CHUNK
  sta <BUDGET
- beq budget_spent
- jmp next_chunk
-budget_spent:
- lda QUEUE_BYTES_LO,x
- ora QUEUE_BYTES_HI,x
- beq entry_done
-keep_entry:
- ; Move the entry (or what is left of it) down to the next kept slot.
- ldy <KEPT
- lda QUEUE_BYTES_LO,x
- sta QUEUE_BYTES_LO,y
- lda QUEUE_BYTES_HI,x
- sta QUEUE_BYTES_HI,y
- lda QUEUE_INDEX_LO,x
- sta QUEUE_INDEX_LO,y
- lda QUEUE_INDEX_HI,x
- sta QUEUE_INDEX_HI,y
- inc <KEPT
+ bne next_chunk
+ jsr fold_queue
+ bra border
 entry_done:
  inc <ENTRY
- jmp next_entry
-entries_done:
- lda <KEPT
- sta QUEUE_COUNT
- cmp #2
- bcc border
- jsr fold_queue
+ bra next_entry
+queue_done:
+ stz QUEUE_COUNT
 border:
  ; The border colour (entry $100), mapped like the rest.
  stz $0402
@@ -218,8 +198,6 @@ border_high:
  sta $0405
 mapped_return:
  pla
- sta <KEPT
- pla
  sta <ENTRY
  pla
  sta <CHUNK
@@ -232,6 +210,11 @@ mapped_return:
  ply
  plx
  rts
+budget_by_count:
+ .db PALETTE_CAP, PALETTE_CAP - ENTRY_COST, PALETTE_CAP - 2 * ENTRY_COST
+ .db PALETTE_CAP - 3 * ENTRY_COST, PALETTE_CAP - 4 * ENTRY_COST
+ .db PALETTE_CAP - 5 * ENTRY_COST, PALETTE_CAP - 6 * ENTRY_COST
+ .db PALETTE_CAP - 7 * ENTRY_COST
 
  ; Upload CHUNK colours (1-128) of queue entry X, mapped, from its first
  ; colour. Y runs from -2 x CHUNK up to 0 with
@@ -285,18 +268,20 @@ upload_high:
  bne upload_colour
  rts
 
- ; Two or more entries are left: replace them with one entry from the
- ; lowest first colour to the highest last colour, so the producers keep
- ; seven free entries. PTR = lowest first colour, CHUNK/BUDGET = highest end.
+ ; The budget ran out in entry X: what is left of it and the entries after
+ ; it become one entry, from the lowest first colour to the highest last
+ ; colour, so the producers keep seven free entries. PTR = lowest first
+ ; colour, CHUNK/BUDGET = highest end (0: nothing left).
 fold_queue:
  lda #$ff
  sta <PTR
  sta <PTR+1
  stz <CHUNK
  stz <BUDGET
- ldx QUEUE_COUNT
 fold_entry:
- dex
+ lda QUEUE_BYTES_LO,x
+ ora QUEUE_BYTES_HI,x
+ beq fold_next
  lda QUEUE_INDEX_LO,x
  cmp <PTR
  lda QUEUE_INDEX_HI,x
@@ -329,8 +314,15 @@ fold_end:
  sta <CHUNK
  sty <BUDGET
 fold_next:
- cpx #0
- bne fold_entry
+ inx
+ cpx QUEUE_COUNT
+ bcc fold_entry
+ lda <CHUNK
+ ora <BUDGET
+ bne fold_write
+ stz QUEUE_COUNT
+ rts
+fold_write:
  lda <PTR
  sta QUEUE_INDEX_LO
  lda <PTR+1
@@ -349,6 +341,7 @@ fold_next:
  lda #1
  sta QUEUE_COUNT
  rts
+
  ; palette_now: colours X (0-255) to X+Y-1 (Y = 1-127) of the RAM palette
  ; to the VCE at once, in the active mode's colours (the stage modules'
  ; merged palettes, which the display shows in the frame they are drawn;
