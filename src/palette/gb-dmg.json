@@ -1,0 +1,6 @@
+{
+  "about": "GB DMG palette mode: every 9-bit PC Engine colour becomes one of four shades by luminance Y = R*luma[0] + G*luma[1] + B*luma[2] on the 0-7 channel scale. Shade 0 (darkest) if Y < thresholds[0], shade 1 if Y < thresholds[1], shade 2 if Y < thresholds[2], else shade 3. Shades are PC Engine colour words (GGG RRR BBB), darkest first; the defaults are the ModRetro Chromatic's dark olive palette at 3 bits a channel: RGB (0,1,0), (2,2,0), (2,3,0), (4,4,0). scripts/palette_tables.py turns this file into the 512-entry table at build time.",
+  "luma": ["0.299", "0.587", "0.114"],
+  "thresholds": ["0.6", "1.8", "3.2"],
+  "shades": ["040", "090", "0D0", "120"]
+}

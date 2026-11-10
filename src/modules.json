@@ -363,5 +363,24 @@
         18053
       ]
     ]
+  },
+  {
+    "name": "palette",
+    "source": "src/palette/main.asm",
+    "ranges": [
+      [
+        7443,
+        7446
+      ],
+      [
+        7870,
+        7887
+      ],
+      [
+        577792,
+        579584
+      ]
+    ],
+    "prepare": "palette-tables"
   }
 ]

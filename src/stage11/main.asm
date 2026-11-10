@@ -95,19 +95,39 @@ new_left:
  bra cache
 initialize:
  ; Palette 1 is exclusively scenery. Preserve the original foreground palette 2.
- lda #16
- sta $0402
- stz $0403
+ ; The merged palette goes into the RAM palette ($2286 + 16 colours), so a
+ ; full re-queue keeps it, is queued for the vblank upload like the native
+ ; palette writers ($F350), and is written to the VCE at once, as the display
+ ; shows the new backdrop in this frame (src/palette, palette_now at $FEBE:
+ ; in the active palette mode's colours).
  clx
 palette_loop:
  lda extra_palette,x
- sta $0404
- inx
- lda extra_palette,x
- sta $0405
+ sta $22a6,x
  inx
  cpx #32
  bne palette_loop
+ ; Queue colours 16-31 (32 bytes) as $F350 does, under the upload lock.
+ lda $2283
+ pha
+ lda #1
+ sta $2283
+ ldx $2260
+ cpx #8
+ bcs palette_queued
+ inc $2260
+ lda #32
+ sta $2261,x
+ stz $2269,x
+ lda #16
+ sta $2271,x
+ stz $2279,x
+palette_queued:
+ pla
+ sta $2283
+ ldx #16
+ ldy #16
+ jsr $febe
 cache:
  lda $2e4b
  sta $2257

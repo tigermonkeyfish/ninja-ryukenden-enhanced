@@ -19,6 +19,15 @@ PREPARE = {'native-' + module: native(module) for module in (
     'castle', 'stage61-mountains', 'stage61-sky')}
 
 
+def palette_tables(work, original):
+    from palette_tables import generate
+    generate(work)
+
+
+# Palette-mode colour tables from editable parameters (scripts/palette_tables.py).
+PREPARE['palette-tables'] = palette_tables
+
+
 def prepare(name, work, original):
     if name not in PREPARE:
         raise ValueError(f'Unknown module prepare step: {name}')

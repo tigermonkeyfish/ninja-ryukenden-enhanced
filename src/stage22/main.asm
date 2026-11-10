@@ -126,36 +126,40 @@ initialize:
  lda #101
  tam #3
  jsr $6000
+ ; The merged palettes 13 and 14 go into the RAM palette, are queued for the
+ ; vblank upload like the native palette writers ($F350), and are written
+ ; to the VCE at once, as the display shows the new backdrop in this frame
+ ; (src/palette, palette_now at $FEBE: in the active palette mode's colours).
+ clx
+palette_loop:
+ lda palette13,x
+ sta $2426,x
+ lda palette14,x
+ sta $2446,x
+ inx
+ cpx #32
+ bne palette_loop
+ ; Queue colours 208-239 (64 bytes) as $F350 does, under the upload lock.
+ lda $2283
+ pha
+ lda #1
+ sta $2283
+ ldx $2260
+ cpx #8
+ bcs palette_queued
+ inc $2260
+ lda #64
+ sta $2261,x
+ stz $2269,x
  lda #208
- sta $0402
- stz $0403
- clx
-palette13_loop:
- lda palette13,x
- sta $2426,x
- sta $0404
- inx
- lda palette13,x
- sta $2426,x
- sta $0405
- inx
- cpx #32
- bne palette13_loop
- lda #224
- sta $0402
- stz $0403
- clx
-palette14_loop:
- lda palette14,x
- sta $2446,x
- sta $0404
- inx
- lda palette14,x
- sta $2446,x
- sta $0405
- inx
- cpx #32
- bne palette14_loop
+ sta $2271,x
+ stz $2279,x
+palette_queued:
+ pla
+ sta $2283
+ ldx #208
+ ldy #32
+ jsr $febe
 cache:
  lda $2e4b
  sta $2257
