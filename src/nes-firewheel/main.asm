@@ -175,11 +175,13 @@ nes_timer:
  ldy EFFECT
  lda RYU_HEALTH
  beq wheel_end
- ; Count only while the stage timer runs: its update counter ($2EDA,
- ; 65..1) is left at 0 once a boss is beaten (tally) and at a time-out. The
- ; handler does not run during pause or loads.
+ ; Count only while the stage timer runs: its update counter ($2EDA) is
+ ; 1..65 then (reloaded at 0), and stays $FF here from the update a boss is
+ ; beaten through the tally. The handler does not run during pause or loads.
  lda $2eda
  beq timer_done
+ cmp #$42
+ bcs timer_done
  lda WHEEL_COUNT_LO,y
  clc
  adc #1
