@@ -1,8 +1,8 @@
 ; Use NES Firewheel logic ($2100 bit 2, 1.11-dev): the Fire Wheel (item 7,
 ; item effect type 5) behaves like the NES game's Invincible Fire Wheel.
 ; With the bit clear every hook below runs the original instruction it
-; replaced and nothing else. The protection from damage is the damage gate's
-; rule (src/options); this module holds the rest.
+; replaced and nothing else. The damage gate (src/options) calls the
+; protection rule here; this module holds the rest of the behaviour.
 ;
 ; Code lives in bank 3's unused tail ($FF in the original, never read or
 ; executed in the audited boot and stored runs; docs/validation/
@@ -65,6 +65,23 @@ FLICKER_FROM = WHEEL_LIFE - 180
 
  .bank 3
  .org $dc00
+; Protection (called by the damage gate, src/options, at this fixed address):
+; carry clear = no damage and no knockback. NES: while the wheel is active
+; the player-damage routine is skipped outright, whatever touches Ryu
+; (enemies, projectiles, bosses). The wheel is item effect type 5, created
+; only by its pickup ($A919), in one of the effect slots $310E-$3112; native
+; $AA63 (A = type; A = 0 if present) is in bank 2, mapped at $A000 here.
+nes_firewheel_rule:
+ phy
+ lda #WHEEL
+ jsr $aa63
+ ply
+ lsr a
+ rts
+ .if (nes_firewheel_rule <> $dc00)
+ .fail
+ .endif
+
 ; Hitbox. NES: the wheel hits an object whose X - Ryu X is within
 ; [-(hw+8), hw+11] and whose feet - Ryu's feet is within [-24, h-1], on the
 ; ground and in the air, whatever his facing. The native test ($9489) needs

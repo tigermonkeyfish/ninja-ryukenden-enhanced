@@ -5,6 +5,9 @@
 OPTIONS = $2100
 DRAFT = $2101
 NES_FIREWHEEL = 4
+; The protection rule (src/nes-firewheel, bank 3, mapped at $C000 whenever
+; the gate's callers run): carry clear = no damage and no knockback.
+NES_FIREWHEEL_RULE = $dc00
  .bank 0
  ; Contact damage (bank 1 $8F70, A = damage). Its only callers are the
  ; enemy contact check in bank 2 ($A1C8, $A1D0); timer expiry enters at
@@ -19,7 +22,7 @@ damage_gate:
  bne ignore_damage
  and #NES_FIREWHEEL
  beq native_damage
- jsr nes_firewheel_rule
+ jsr NES_FIREWHEEL_RULE
  bcc ignore_damage
 native_damage:
  pla
@@ -38,26 +41,6 @@ damage_gate_end:
  .fail
  .endif
 
- ; NES Firewheel: the rule deciding which contact Ryu ignores, kept
- ; apart from the gate so it can be narrowed or widened. Entered only with
- ; the flag set; carry clear = no damage and no knockback; preserves X, Y.
- ; Provisional rule: no contact damage while the Fire Wheel (item effect
- ; type 5, created only by its pickup, bank 2 $A919) is in one of the five
- ; effect slots $310E-$3112. Native $AA63 (A = type; A = 0 if present)
- ; is in bank 2, which is mapped at $A000 here: the gate's callers run there.
- ; $FEBE-$FEDF was the 1.09 splash wrapper; unowned since 1.10-dev.
- .org $febe
-nes_firewheel_rule:
- phy
- lda #5
- jsr $aa63
- ply
- lsr a
- rts
-nes_firewheel_rule_end:
- .if (nes_firewheel_rule_end > $fec7)
- .fail
- .endif
  .bank 1
  .org $8f70
  jmp damage_gate
