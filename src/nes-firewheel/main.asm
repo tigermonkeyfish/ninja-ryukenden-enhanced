@@ -46,6 +46,9 @@ FLICKER_FROM = WHEEL_LIFE - 180
  ; Boss kill check entry ($A211, replaces lda $2EB2).
  .org $a211
  jsr nes_boss_check
+ ; Fire Wheel handler: its lifetime countdown ($AF2D, replaces lda $2EDA).
+ .org $af2d
+ jmp nes_wheel_timer
 
  .bank 3
  .org $dc00
@@ -127,6 +130,75 @@ boss_done:
 boss_native:
  lda $2eb2
  rts
+
+; Lifetime. Native: 10 stage-timer ticks (about 650 updates), a sound at
+; each, faster spin in the last three, ten fast ticks once Ryu is dead.
+; NES: 516 updates, a tick at 96 and every 60 after (the last ends it), drawn
+; only on alternate updates in the last 180, cleared at death.
+nes_wheel_timer:
+ lda OPTIONS
+ and #NES_FIREWHEEL
+ bne nes_timer
+ lda $2eda
+ jmp $af30
+nes_timer:
+ ldy EFFECT
+ lda RYU_HEALTH
+ beq wheel_end
+ ; Count only while the stage timer runs: its update counter ($2EDA,
+ ; 65..1) is left at 0 once a boss is beaten (tally) and at a time-out. The
+ ; handler does not run during pause or loads.
+ lda $2eda
+ beq timer_done
+ lda WHEEL_COUNT_LO,y
+ clc
+ adc #1
+ sta WHEEL_COUNT_LO,y
+ lda WHEEL_COUNT_HI,y
+ adc #0
+ sta WHEEL_COUNT_HI,y
+ ldx #7
+timer_boundary:
+ lda WHEEL_COUNT_LO,y
+ cmp boundary_lo,x
+ bne timer_next
+ lda WHEEL_COUNT_HI,y
+ cmp boundary_hi,x
+ beq timer_tick
+timer_next:
+ dex
+ bpl timer_boundary
+ bra timer_flicker
+timer_tick:
+ phx
+ lda #$16                       ; the native wheel tick
+ jsr $ea84
+ plx
+ ldy EFFECT
+ cpx #7
+ beq wheel_end
+timer_flicker:
+ lda WHEEL_COUNT_LO,y
+ cmp #LOW(FLICKER_FROM)
+ lda WHEEL_COUNT_HI,y
+ sbc #HIGH(FLICKER_FROM)
+ bcc timer_done
+ lda WHEEL_COUNT_LO,y
+ lsr a
+ bcc timer_done
+ ; Hidden this update: the handler placed the sprite already; move it below
+ ; the display. The next update's placement ($946D) clears this byte.
+ ldx EFFECT_SPRITE,y
+ lda #1
+ sta SPRITE_Y_HIGH,x
+timer_done:
+ rts
+wheel_end:
+ jmp $aaa5                      ; native: mark the effect for removal
+boundary_lo:
+ .db LOW(96),LOW(156),LOW(216),LOW(276),LOW(336),LOW(396),LOW(456),LOW(WHEEL_LIFE)
+boundary_hi:
+ .db HIGH(96),HIGH(156),HIGH(216),HIGH(276),HIGH(336),HIGH(396),HIGH(456),HIGH(WHEEL_LIFE)
 nes_firewheel_end:
  .if (nes_firewheel_end > $e000)
  .fail
