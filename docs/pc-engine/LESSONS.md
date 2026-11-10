@@ -112,6 +112,29 @@ time-out immortal. Falling has its own native death path.
 **Reusable lesson:** audit every caller before intercepting a shared routine.
 Specify the option's behavior precisely and test each distinct death cause.
 
+## A protective effect lost to the order of two checks
+
+**Observed:** with the Fire Wheel spinning round him, Ryu was still hurt by
+enemies he fell onto, by bullets, and by bosses.
+
+**Finding/fix:** each enemy runs its contact check (hurts Ryu) before its
+kill check (where the wheel kills it), and the wheel's hitbox reaches only a
+few pixels below Ryu's feet. Anything entered faster than that per update,
+and anything the kill check never kills, touches Ryu first. The "Use NES Firewheel logic"
+option (1.11-dev) asks a separate rule from the existing damage
+gate instead of reordering the native checks, so with the option off the
+game runs the original code path.
+
+**Reusable lesson:** when a power-up "should" protect but does not, read the
+order of the per-object checks and the hitbox reach per update, not just
+whether the protection flag exists. Put an optional behaviour change at an
+existing choke point and keep the condition in its own routine so it can be
+changed to match a reference without touching the hook.
+
+**Confidence/limits:** game code read and emulator replays (1.11-dev,
+[validation](../validation/nes-firewheel.md)); the per-object order is
+Ninja's.
+
 ## One repeating moon became a fixed sky
 
 **Observed:** a repeated moon made the stage look wrong; the requested result

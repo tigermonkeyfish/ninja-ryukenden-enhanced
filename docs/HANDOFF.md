@@ -14,6 +14,16 @@
   on, a warp to the final boss, the boss beaten and the ending cinema
   started. Everything else is emulator evidence; see
   [VALIDATION.md](VALIDATION.md).
+- **Development 1.11-dev** (`VERSION`; the menu shows `V1.11-DEV`) adds
+  **Use NES Firewheel logic**, `$2100` bit 2, off by default and without a
+  menu row yet (the menu is being rebuilt; the row would read
+  `NES FIREWHEEL: OFF/ON` and only toggle bit 2 of the draft). With it on,
+  the Fire Wheel behaves like the NES Invincible Fire Wheel: no damage while
+  it spins, NES hitbox, bosses lose a point per update, 516-update life with
+  flicker, NES pickup rules ([architecture](ARCHITECTURE.md#contact-damage-and-nes-firewheel),
+  [evidence](validation/nes-firewheel.md), emulator only). With it off the
+  game plays as 1.10. Code: `src/nes-firewheel` in bank 3's unused tail;
+  no fixed-bank bytes.
 - **Release 1.09** (2026-10-21, tag `v1.09`) was the first public release
   (`f84a31a8…b912`), played on the same hardware. Its patches stay
   unchanged at the tag; `patches/` holds only the current release.

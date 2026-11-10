@@ -202,8 +202,8 @@ files to allocate free space.
 
 | CPU address | Meaning / constraint |
 | --- | --- |
-| `$2100` | Active options: bit 0 Original, bit 1 No Damage |
-| `$2101` | Draft menu options |
+| `$2100` | Active options: bit 0 Original, bit 1 No Damage, bit 2 Use NES Firewheel logic (1.11-dev, no menu row yet); bits 3-7 unused. Zero = the defaults |
+| `$2101` | Draft menu options (the menu copies bits 0-2, so Run keeps the NES Firewheel bit) |
 | `$2102–$2103` | Entrance anchor |
 | `$2104–$213F` | Watched stack margin; not general-purpose spare RAM |
 | `$220F–$2210` | Absolute foreground camera |
@@ -216,6 +216,14 @@ files to allocate free space.
 | `$2E5F / $2E60` | Visible stage / subarea |
 | `$2EAD / $2EAE / $2EAF` | Health / hurt timer / lives |
 | `$2ED0–$2ED5` | Score digits, least significant first (decimal 0-9 each) |
+| `$2EAB` | Ryu's state; 9 while hurt (knockback) |
+| `$2EDF / $2EE0–$2EF3` | Enemy slot being updated / enemy type per slot (`$FF` empty); `$2FBC,slot` bit 7 = killed |
+| `$310C / $310D / $310E–$3112` | Item effect count / slot being processed / effect type per slot (`$FF` empty): 0-2 art projectiles, 3 Jump & Slash, 4 time freeze, 5 Fire Wheel |
+| `$3127,slot / $3136,slot` | Type 5 with NES Firewheel: the wheel's update count (the wheel's handler never uses these fields; the effect constructor clears them) |
+| `$3157 / $3179` | Time freeze active / its remaining ticks |
+| `$3158` | Ryu's art: 0-3, 6 = none (set by `$A7F7`, which also draws the HUD icon) |
+| `$3035 / $3036,slot` | Boss health / boss already hit by the current contact |
+| `$317A` | Fire Wheel counter: 10 at pickup, one less per stage-timer tick; the effect ends at 0 |
 | `$3035` | Boss health in the 5-4 boss room (16, like Ryu's) |
 | `$2240 / $2241` | Native master state (0 gameplay, 1 cinema, 2 ending) / scene id |
 | `$3227` | Native language: 0 Japanese, 1 English, 2 Chinese |
@@ -232,7 +240,8 @@ call depth or menu backups need fresh guard checks.
 | `$8244` | Native stage initialization (stage in A) |
 | `$8457 / $8478` | Gameplay loop / native completion path |
 | `$8457-$845C` | Gameplay loop calls `$E3F2`, `$ABD7`; Enhanced: `jsr $FE40` (which makes both calls) and three NOPs |
-| `$FE20` | Damage gate; timer expiry explicitly bypasses optional immunity |
+| `$FE20` | Damage gate (bank 1 `$8F70`): No Damage, then the NES Firewheel protection rule (`$DC00`, bank 3); timer expiry explicitly bypasses optional immunity (`$9BC3` jumps to `$FE34`). `$FE3E–$FE3F` unused in the options range |
+| `$FEBE–$FEDF` | Free (`$FF`; the 1.09 splash wrapper, removed in 1.10-dev) |
 | `$FE40 / $FE46` | Early wrapper / preserved-scratch renderer entry |
 | `$FEE0` | Development cinema sprite reset wrapper (bank 04 `$802D` hook) |
 | `$FF2C` | Area change (bank 1 `$85B4`): native init, marks the Enhanced draw pending (`$2258 = $FE`) |
@@ -242,6 +251,7 @@ call depth or menu backups need fresh guard checks.
 | `$FFB0` | Banked renderer lookup |
 | `$FFD0–$FFE5` | Shared speed bridge |
 | `$FFE6–$FFED` | English reset initialization — occupied production code |
+| `$FFEE–$FFF5` | Free (`$FF`) |
 | `$FFF6–$FFFF` | Native interrupt/reset vectors |
 
 Earlier timing tests temporarily used `$FFE6` as a stub; that range is now
@@ -251,6 +261,55 @@ Preserve caller registers, processor flags, bank mappings and all borrowed
 zero-page scratch. The early renderer saves `$06–$0B` and `$25–$30`. IRQ
 behavior and individual block-transfer lengths matter in addition to total
 frame cost. Existing 16/32-byte transfers are intentional.
+
+## Contact damage and NES Firewheel
+
+Every enemy, projectile and boss runs the contact check `$A186` (bank 2,
+mapped at `$A000`) before its kill check (`$A1D4`, bosses `$A211`): contact
+(`jsr $94DF`) sets the knockback direction (`<$37` bit 0) and calls
+`$8F70` with A = 1 from `$A1C8`/`$A1D0`, the routine's only `jsr` callers.
+`$8F70` returns at once while Ryu is immune (`<$36` bit 5, `<$37` bit 2);
+otherwise it takes the damage and starts the knockback (Ryu's state
+`$2EAB = 9`). Timer expiry (`$9BC3`, A = 16) jumps there too; pits do not.
+
+The Fire Wheel (item 7 of the pickup table at bank 2 `$A6D6`: `$A6A6`, then
+`$A919`) is item effect type 5 in the effect slots `$310E–$3112`; `$A919` is
+the only code that creates type 5. Its handler (`$AF21`, from the effect
+table at `$AB12`) counts `$317A` down from 10 at each stage-timer tick and
+removes the effect at 0 (about 650 updates); the initialization sequence at
+bank 1 `$82A2` clears the slots (`$A75D`). The effect kills what it touches through `$AA74` in the enemy's kill
+check, after the contact check, and its hitbox reaches only a few pixels
+below Ryu's feet: an enemy Ryu falls onto faster than that, and anything the
+kill check does not kill (bosses, some types, e.g. 48 in 6-4 A), touch Ryu
+first and hurt him.
+
+**Use NES Firewheel logic** (`$2100` bit 2, 1.11-dev; module
+`src/nes-firewheel`) makes the wheel behave like the NES game's Invincible
+Fire Wheel. All its code is in bank 3's unused tail (`$DC00–$DD95` of the
+claimed `$DC00–$DFFF`; bank 3 is mapped at `$C000` whenever object code
+runs), reached from 3-byte hooks in bank 2; with the bit clear each hook
+runs the instruction it replaced. The option adds no fixed-bank bytes.
+
+| Hook | NES behaviour with the bit set |
+| --- | --- |
+| Damage gate `$FE20` → rule `$DC00` | No damage, knockback, hurt state or sound from any contact while a type 5 effect exists; pits and the timer still kill; no grace period when it ends |
+| `$AA8A` (box in `$AA74`) | The wheel's box is Ryu X-9..X+12, feet-25..feet with the native strict tests (NES: X − Ryu X in [−(hw+8), hw+11], feet difference in [−24, h−1]); native box X±20, feet-35..feet+3 |
+| `$A211` (boss kill check) | While a wheel touches the boss, its hit flag `$3036` is cleared, so it loses a point every update (native: one per contact); at 0 the native death takes over |
+| `$AF2D` (wheel handler countdown) | 516 updates counted only while the stage timer runs (`$2EDA` 1-65 at the handler; `$FF` from a boss's defeat through the tally), the native tick sound at 96 and every 60, hidden on alternate updates in the last 180, ends at once when health is 0 (native: 10 timer ticks, about 650 updates) |
+| `$A6AB` (wheel pickup) | Art set to none (6), art projectiles (types 0-2) removed, a time freeze ended as its own end does (`$AEFA`), a second wheel restarts the first |
+| `$A6B5/$A6BF/$A6C9/$A6D3`, `$A682` (art and time-freeze pickups) | Remove the wheel at once |
+
+Not reproduced (open decisions): enemy types the native code never gives
+a kill check (7, 8, 11, 48 per the audit; 11 and 48 seen in 5-4 and 6-4 A)
+stay unkillable; a boss dies on the update its health reaches 0 (NES: the
+next touching frame); the HUD shows no art while the wheel spins (NES: the
+wheel's icon); the tick sound is the native wheel tick. Up+attack shows the
+throw pose with no projectile and no ninpo, as on the NES. Evidence:
+[validation/nes-firewheel.md](validation/nes-firewheel.md).
+
+A menu row would only toggle bit 2 of the draft (`DRAFT eor #4`, as
+`option_masks` does for bits 0-1) and draw its value; accept already copies
+the draft to `$2100`.
 
 ## Facts kept from retired build scripts
 

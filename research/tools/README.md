@@ -91,3 +91,23 @@ layer with `vdc.py` and compare.
 | --- | --- |
 | `mkwork.py` | Assemble all modules into a kept work directory with listings and symbols (for `tprof.py` labels) |
 | `gencols.py`, `gencols22.py`, `gencols_sky.py` | Emit the column-copy code pasted into `src/castle`, `src/stage22` and `src/stage61-sky` (`*-generated.inc`) |
+
+## NES Firewheel probes (1.11-dev)
+
+`nes-firewheel/`: the probes behind
+[docs/validation/nes-firewheel.md](../../docs/validation/nes-firewheel.md).
+Run them with `NG_EMULATOR` (Geargrafx), `LD_LIBRARY_PATH` for its SDL,
+`NFW_ORIGINAL` (original ROM copy), `NFW_V110` (a 1.10 build), `NFW_DEV`
+(the build under test) and `NFW_WORK` (work folder, default
+`build/nes-firewheel`; the shared start state is `NFW_WORK/seed.state`).
+
+| Tool | What it does |
+| --- | --- |
+| `fw.py` | Shared helpers: start state, Level Select entry, synthetic JSR at the gameplay loop |
+| `scen.py`, `mkscen.py`, `runscen.py`, `report_sc.py` | Scenarios stepped by game update (run to `$8457` each time, so injections land at the same point in every build); option on/off and 1.10; stack low-water mark |
+| `catalog.py`, `survey.py`, `sweep.py`, `sweep_all.py` | Every contact-damage event of the stored runs, then the same replay with the wheel granted 30/8/2 updates earlier |
+| `ffwatch.py`, `ffwatch_all.py` | Read/execute watch over a ROM range during a cold boot and every stored run |
+| `rec2.py`, `regress2.py` | `comparison_video.py record` with screenshot hashes instead of images; pairwise comparison |
+| `boxtest.py`, `pause.py` | The wheel box in place (unit test); the wheel counter during pause |
+| `ramdiff.py` | Which RAM bytes differ between two builds over a stored run |
+| `dis.py` | Small HuC6280 disassembler for a ROM bank |
