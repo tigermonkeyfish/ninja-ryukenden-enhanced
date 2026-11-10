@@ -1,5 +1,6 @@
 ; Active flags: bit 0 = original background, bit 1 = no contact damage,
-; bit 2 = Use NES Firewheel logic (no menu row yet; see docs/ARCHITECTURE.md).
+; bit 2 = Use NES Firewheel logic, bits 3-4 = palette mode (src/palette)
+; (no menu rows yet; see docs/ARCHITECTURE.md).
 ; Two bytes at the bottom of the CPU stack page. The native stack grows
 ; downward from $21FF; validation watches the reserved low margin.
 OPTIONS = $2100
@@ -112,10 +113,11 @@ backup_row2:
 valid_stage:
  sta <$25
  stz <$26
- ; The draft carries every flag the menu knows, NES Firewheel included,
- ; so Run (accept) keeps it although the menu has no row for it yet.
+ ; The draft carries every flag the menu knows, NES Firewheel (bit 2) and
+ ; the palette mode (bits 3-4) included, so Run (accept) keeps them
+ ; although the menu has no rows for them yet.
  lda OPTIONS
- and #7
+ and #$1f
  sta DRAFT
 redraw:
  stz <$27
