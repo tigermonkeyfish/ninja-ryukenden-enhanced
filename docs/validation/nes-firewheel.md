@@ -7,8 +7,16 @@ binary SHA-256 `2de50e51…85e9`), not a hardware report. Builds:
 | --- | --- | --- |
 | 1.10 | `3d5c05df…bbf6` | `build --verify-release` |
 | Protection only | `e85c03c1…438d` | commits `7da3181`-`4ad08fa` |
-| Final 1.11-dev | `4b07211b…8707` | commit `8c2d557` (this record and the probes follow it; `f660e80a…8601` at `8ca201c` lacked the tally fix) |
+| Final 1.11-dev | `4b07211b…8707` | commit `8c2d557` (`f660e80a…8601` at `8ca201c` lacked the tally fix; later commits change documents and probes only) |
 
+Which build each result comes from. Rows marked **final** were measured (or
+re-measured on 2026-11-10 with this branch's probes) on `4b07211b…8707`,
+headless, `$2100` = 4 on, 0 off, from one shared start state; 1.10 replays
+use the 1.10 ROM. Everything else was measured on an earlier build of the
+module (the protection-only build for the protection sweep, otherwise a
+build between `023fd86` and `8ca201c`) and not repeated on the final one,
+except where the independent review's own re-measurements on the final
+build are named as such (its logs are not in the repository).
 Method ([EMULATOR.md](../pc-engine/EMULATOR.md)): one start state, a cold
 boot of the original saved at the 1-1 main-loop hook in a session of its own;
 every replay is a fresh session that loads it (cartridge CRC retargeted),
@@ -35,8 +43,11 @@ updates) on the original; the same watch over the table read each update
 left), leaving the bytes next to the table at `$D3FC` alone. Every hook site
 and the rule were checked for MPR6 = `$03` (and MPR5 = `$02`) at each stop
 (451 stops in 1-2: gate 20, rule 20, `$A211` 115, `$AA8A` 109, `$AF2D` 180,
-pickups 7). Fixed bank: no new bytes; `$FEBE-$FEDF` (34) and `$FFEE-$FFF5`
-(8) remain free, and 2 bytes (`$FE3E-$FE3F`) inside the options range.
+pickups 7). Fixed bank: no new range. The damage gate at `$FE20` grew from
+21 to 30 bytes inside the options module's existing range (ROM
+`0x1E35-0x1E3D`, `$FF` in 1.10) and calls the rule at `$DC00`, so it depends
+on bank 3 being mapped at `$C000`. `$FEBE-$FEDF` (34) and `$FFEE-$FFF5` (8)
+remain free, and 2 bytes (`$FE3E-$FE3F`) inside the options range.
 
 Stack low-water marks (sentinel fill below S at the first update): 2-2 with
 the wheel, `$21D3` on 1.10, the protection build off and on; the final
@@ -50,12 +61,12 @@ on 1.10. The menu's own mark (`$215B`) is unchanged code.
 | No damage, knockback, hurt state while the wheel is active, from anything | Hurt by enemies it touches before they die, anything it cannot kill, bosses | No damage, no knockback (`$2EAB` never 9) | 2-2 (stored input, wheel at 1150): 1.10 hurt at 1263 by a bullet (type 40) Ryu falls onto at 5 px/update; on: no damage, the bullet still killed that update. Stored 4-1 run picks up a real wheel at 989; 1.10 hurt at 1051 (type 41); on: not. Sweep (protection build) of every contact in the 11 runs with the wheel granted 30/8/2 updates before (78 events, 205 replays): 15 still hurt on 1.10, none with the bit set (2-2 ×2, 4-1, 5-3 ×3, 5-4 boss type 4 ×5, unkillable type 11 ×3, 6-3) |
 | Bosses and unkillable objects do not hurt | Hurt | No damage | 1-2 boss (type 0) walked into: 1.10 health 16 → 7, on 16. 6-4 A type 48 (the standing figure; no kill check): 1.10 hurt at 75, 122, 169; on: not hurt while the wheel lasts |
 | No grace period at the end | — | Hurt on the first update after the wheel is gone | 6-4 A: wheel present to update 544, hurt at 545 (hurt state 546) |
-| Pits and the timer still kill; death clears the wheel | Native; wheel ticks out 10 times after death | Pit and time-out death as 1.10; wheel removed the update health reaches 0 | Time-out with the wheel: health 0 at 193/194, lives 2 → 1 and respawn, traces identical to 1.10 (protection build); final: wheel gone at 194 (1.10: 200). Pit in 2-2 at 1277 with the wheel: death, wheel removed |
+| Pits and the timer still kill; death clears the wheel | Native; wheel ticks out 10 times after death | Pit and time-out death as 1.10; wheel removed the update health reaches 0 | Time-out with the wheel: health 0 at 193/194, lives 2 → 1 and respawn, traces identical to 1.10 (protection build); **final:** health 0 at update 194, wheel gone at 194 (1.10: 200), lives still 2 at update 260 in both. Pit in 2-2 at 1277 with the wheel: death, wheel removed. **Final** (frame-stepped 2-2 run, wheel granted at 1150): health 13 → 0 at 1277 on the same update the wheel is removed (the pit death; wheel counter 10); 1.10 is hurt at 1263 by the bullet, option on is not (health stays 13) |
 | Each frame an overlapping object loses 1 HP; bosses 1 per frame | Ordinary enemies die at once; bosses one point per contact (`$3036`) | Bosses one point every update the wheel touches | 1-2 boss: 16 → 0 in 16 consecutive updates (99-114), then the native defeat and cinema; 1.10: 6 points in 500 updates |
-| Hitbox Ryu X-8..X+11 (inclusive), feet-24..feet, any facing | X±20, feet-35..feet+3 | X-9..X+12, feet-25..feet with the native strict tests (same set) | In place: the box routine with 8 positions (x 8/9 borrow, feet 0/24/25 clamp, x > 255): all NES, option off all native |
-| 516 frames: 96, then 7 × 60, tick at each | 10 stage-timer ticks (617 updates in the test), tick each | 516 updates, the native tick sound at 96, 156, …, 516 | 1-1 idle: wheel 30-544 (counter 1-515, removed at 516); 1.10 30-647 |
-| Timer stops in pause, transitions, intro, tally | Stage-timer driven | Counted only while the stage timer runs | Pause: counter 71 from frame 99 to 299, then on. Area change in 2-2: counter frozen for the 6-frame transition, wheel kept. 1-2 boss beaten at update 114: count held at 86 from 116 through the tally until the stage ends (the native wheel does not tick then either: `$2EDA` is `$FF`) |
-| Last 180 frames on alternate frames | Faster spin in the last 3 ticks | Hidden on alternate updates from 337 | 90 hidden updates; screenshots at 400 (hidden) / 401 and 200 (shown) |
+| Hitbox Ryu X-8..X+11 (inclusive), feet-24..feet, any facing | X±20, feet-35..feet+3 | X-9..X+12, feet-25..feet with the native strict tests (same set) | In place: the box routine with 8 positions (x 8/9 borrow, feet 0/24/25 clamp, x > 255): all NES, option off all native. **Final:** `boxtest.py` (routine `$DC09`, found from the `jsr` at `$AA8A`): option on 8/8 positions give the NES box; option off 0/8 (native box); the independent review, with 10 positions, got 10/10 NES on and 10/10 native off |
+| 516 frames: 96, then 7 × 60, tick at each | 10 stage-timer ticks (617 updates in the test), tick each | 516 updates, the native tick sound at 96, 156, …, 516 | **Final:** 1-1 idle: wheel 30-544 (counter 1-515, removed at 516); 1.10 30-647 |
+| Timer stops in pause, transitions, intro, tally | Stage-timer driven | Counted only while the stage timer runs | **Final:** pause (wheel at frame 30, Run at 100 and 300): counter 71 from frame 99 to 299, 76 at 305, 170 at 399 (option off: no counter). Area change in 2-2 (frame-stepped run, wheel granted at 760): the counter is 34 at frames 792-797, the 6-frame transition, wheel kept, then counts on (1.10: wheel kept, same timing). 1-2 boss beaten at update 114: count held at 86 from 116 through the tally until the stage ends (the native wheel does not tick then either: `$2EDA` is `$FF`) |
+| Last 180 frames on alternate frames | Faster spin in the last 3 ticks | Hidden on alternate updates from 337 | **Final:** 90 hidden updates in 1-1 idle, every second update from counter 337 (update 366) to the end (544). Screenshots at 400 (hidden) / 401 and 200 (shown) are from an earlier build, not repeated |
 | Pickup replaces the art; none at the end | Art kept | Art 6 (none, as after a respawn), HUD icon blank | Shuriken → none at pickup; 1.10 keeps it |
 | Pickup clears projectiles and a time freeze | Kept | Removed / ended as its own end does | Shuriken in flight removed at pickup; freeze `$3157` 1 → 0, effect removed |
 | Another art or the time freeze ends the wheel; a second wheel restarts it | Wheel kept; two wheels | Removed at once; one wheel, counter reset | Art at 100: wheel gone at 100. Freeze: gone. Second pickup at 230: counter 200 → 2, wheel to 744 (1.10: two wheels) |
@@ -78,7 +89,13 @@ SHA-1 of every screenshot instead of the image (probe `rec2.py`):
   (1-1 2, 2-2 1, 4-2 1, 5-2 1, 5-3 2, 5-4 6); in 5-4 these are `$380C`,
   `$380D`, `$380E`, `$38BE` and `$38DF`, the music driver's workspace, one
   frame each (the hooks add a few cycles; the same class of difference as
-  1.10 against the original).
+  1.10 against the original). Scope: that figure comes from a hash that
+  excludes zero page (`$2000-$20FF`). The independent review, comparing the
+  whole of `$2000-$3FFF` except `$2104-$21FF` on the final build, also found
+  `$2083` and `$2088` differing for single frames (4-1 frame 1308; 5-4
+  frames 119, 406, 602 and 623), both mostly used by the sound driver. The
+  review's other differences (1-1, 2-2, 4-2, 5-2, 5-3) match the list above;
+  the zero-page figures are the review's and were not reproduced here.
 - **Option off against the original:** identical gameplay in all 11, as 1.10.
 - **Option on:** 10 runs never hold a wheel and are identical to 1.10
   (gameplay and screenshots). The stored 4-1 run picks up a real wheel at

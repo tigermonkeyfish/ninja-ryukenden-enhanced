@@ -7,8 +7,11 @@
 ; Code lives in bank 3's unused tail ($FF in the original, never read or
 ; executed in the audited boot and stored runs; docs/validation/
 ; nes-firewheel.md). Bank 3 is mapped at $C000 whenever the object code
-; runs: the enemy dispatch jumps to bank 3 handlers. Every hook is in bank 2
-; object code ($A000) and calls this code directly; no fixed-bank bytes.
+; runs: the enemy dispatch jumps to bank 3 handlers. The object-code hooks
+; (bank 2, $A000) call this code directly. The damage gate in the fixed bank
+; (src/options, $FE20) calls the protection rule at $DC00: no new fixed-bank
+; range, but the gate uses 9 more bytes inside the options module's range
+; and depends on bank 3 being mapped at $C000.
 
 OPTIONS = $2100
 NES_FIREWHEEL = 4

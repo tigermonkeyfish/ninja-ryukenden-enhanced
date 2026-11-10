@@ -36,7 +36,10 @@
   flicker, NES pickup rules ([architecture](ARCHITECTURE.md#contact-damage-and-nes-firewheel),
   [evidence](validation/nes-firewheel.md), emulator only). With it off the
   game plays as 1.10. Code: `src/nes-firewheel` in bank 3's unused tail;
-  no fixed-bank bytes.
+  no new fixed-bank range: the damage gate at `$FE20` grew from 21 to 30
+  bytes inside the options module's existing range (ROM `0x1E35-0x1E3D`,
+  `$FF` in 1.10) and calls the rule at `$DC00`, so it depends on bank 3
+  being mapped at `$C000`.
 - **The build to test on hardware** (since 2026-11-12 the `v111-reset` build below, which is this one with only the menu changed; 1.11-dev, branch `v111-final` =
   `v111` + `dark-lift-fix`, merged with conflicts in two documents only):
   everything below in one ROM, `f3114ade…a0a0`, delivered in

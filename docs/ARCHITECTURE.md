@@ -255,6 +255,7 @@ files to allocate free space.
 | `$2105` | Save status (1.11-dev, `src/bram` ST_ values 0-8: what the reset found in backup RAM, then what the last Run's save came to); the menu shows it. Not a setting; zero (NONE) from the RAM clear until the loader sets it |
 | `$2106–$213F` | Watched stack margin; not general-purpose spare RAM |
 | `$220F–$2210` | Absolute foreground camera |
+| `$2240 / $2241` | Native master state (0 gameplay, 1 cinema, 2 ending) / scene id |
 | `$2241` | Current master stage parameter |
 | `$2247` | Next master-script cursor; must match selected stage |
 | `$2248` | Pending progression state; cleared on selection |
@@ -263,18 +264,16 @@ files to allocate free space.
 | `$2E4B–$2E4C` | Render-time camera, modulo 512; can lag the later camera sample |
 | `$2E5F / $2E60` | Visible stage / subarea |
 | `$2E63` | Native countdown of a scripted sequence's updates (`$83F3`: non-zero runs `[$2033]` and decrements); a stage load sets `$3A` (58-update entry with the fade-in), an area change `$0A`. Read only by Enhanced: the Select hook's menu gate, the stage-load draw pieces (load-exact) |
+| `$2EAB` | Ryu's state; 9 while hurt (knockback) |
 | `$2EAD / $2EAE / $2EAF` | Health / hurt timer / lives |
 | `$2ED0–$2ED5` | Score digits, least significant first (decimal 0-9 each) |
-| `$2EAB` | Ryu's state; 9 while hurt (knockback) |
 | `$2EDF / $2EE0–$2EF3` | Enemy slot being updated / enemy type per slot (`$FF` empty); `$2FBC,slot` bit 7 = killed |
+| `$3035 / $3036,slot` | Boss health (16 in the 5-4 boss room, like Ryu's) / boss already hit by the current contact |
 | `$310C / $310D / $310E–$3112` | Item effect count / slot being processed / effect type per slot (`$FF` empty): 0-2 art projectiles, 3 Jump & Slash, 4 time freeze, 5 Fire Wheel |
 | `$3127,slot / $3136,slot` | Type 5 with NES Firewheel: the wheel's update count (the wheel's handler never uses these fields; the effect constructor clears them) |
 | `$3157 / $3179` | Time freeze active / its remaining ticks |
 | `$3158` | Ryu's art: 0-3, 6 = none (set by `$A7F7`, which also draws the HUD icon) |
-| `$3035 / $3036,slot` | Boss health / boss already hit by the current contact |
 | `$317A` | Fire Wheel counter: 10 at pickup, one less per stage-timer tick; the effect ends at 0 |
-| `$3035` | Boss health in the 5-4 boss room (16, like Ryu's) |
-| `$2240 / $2241` | Native master state (0 gameplay, 1 cinema, 2 ending) / scene id |
 | `$3227` | Native language: 0 Japanese, 1 English, 2 Chinese |
 
 The CPU stack grows down from `$21FF`. Since 1.11-dev the menu keeps only
@@ -344,7 +343,10 @@ first and hurt him.
 Fire Wheel. All its code is in bank 3's unused tail (`$DC00–$DD95` of the
 claimed `$DC00–$DFFF`; bank 3 is mapped at `$C000` whenever object code
 runs), reached from 3-byte hooks in bank 2; with the bit clear each hook
-runs the instruction it replaced. The option adds no fixed-bank bytes.
+runs the instruction it replaced. The option claims no new fixed-bank range:
+the damage gate at `$FE20` (options module) grew from 21 to 30 bytes inside
+its existing range (ROM `0x1E35-0x1E3D`, `$FF` in 1.10) and calls the rule at
+`$DC00`, so it depends on bank 3 being mapped at `$C000`.
 
 | Hook | NES behaviour with the bit set |
 | --- | --- |
