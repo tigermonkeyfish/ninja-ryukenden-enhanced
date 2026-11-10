@@ -1,16 +1,27 @@
-; Active flags: bit 0 = original background, bit 1 = no contact damage.
+; Active flags: bit 0 = original background, bit 1 = no contact damage,
+; bit 2 = Corrected Damage (no menu row yet; see docs/ARCHITECTURE.md).
 ; Two bytes at the bottom of the CPU stack page. The native stack grows
 ; downward from $21FF; validation watches the reserved low margin.
 OPTIONS = $2100
 DRAFT = $2101
+CORRECTED_DAMAGE = 4
  .bank 0
+ ; Contact damage (bank 1 $8F70, A = damage). Its only callers are the
+ ; enemy contact check in bank 2 ($A1C8, $A1D0); timer expiry enters at
+ ; native_damage_entry. Returning early skips the damage and the knockback,
+ ; with A, X, Y and P as on entry (like the native immunity checks).
  .org $fe20
 damage_gate:
  php
  pha
  lda OPTIONS
- and #2
+ bit #2
  bne ignore_damage
+ and #CORRECTED_DAMAGE
+ beq native_damage
+ jsr corrected_damage_rule
+ bcc ignore_damage
+native_damage:
  pla
  plp
 native_damage_entry:
@@ -23,6 +34,30 @@ ignore_damage:
  plp
  rts
 damage_gate_end:
+ .if (damage_gate_end > $fe40)
+ .fail
+ .endif
+
+ ; Corrected Damage: the rule deciding which contact Ryu ignores, kept
+ ; apart from the gate so it can be narrowed or widened. Entered only with
+ ; the flag set; carry clear = no damage and no knockback; preserves X, Y.
+ ; Provisional rule: no contact damage while the Fire Wheel (item effect
+ ; type 5, created only by its pickup, bank 2 $A919) is in one of the five
+ ; effect slots $310E-$3112. Native $AA63 (A = type; A = 0 if present)
+ ; is in bank 2, which is mapped at $A000 here: the gate's callers run there.
+ ; $FEBE-$FEDF was the 1.09 splash wrapper; unowned since 1.10-dev.
+ .org $febe
+corrected_damage_rule:
+ phy
+ lda #5
+ jsr $aa63
+ ply
+ lsr a
+ rts
+corrected_damage_rule_end:
+ .if (corrected_damage_rule_end > $fec7)
+ .fail
+ .endif
  .bank 1
  .org $8f70
  jmp damage_gate
@@ -94,8 +129,10 @@ backup_row2:
 valid_stage:
  sta <$25
  stz <$26
+ ; The draft carries every flag the menu knows, Corrected Damage included,
+ ; so Run (accept) keeps it although the menu has no row for it yet.
  lda OPTIONS
- and #3
+ and #7
  sta DRAFT
 redraw:
  stz <$27
