@@ -42,10 +42,15 @@ PALETTE_LOCK = $2283
 NATIVE_UPLOAD = $f3b5
 QUEUE_ALL = $f394           ; native: queue colours 0-511, under the lock
 MAPPED_STATE = $80          ; $2100 bit 7: the VCE holds mapped colours
+LEFTOVER = $20              ; $2100 bit 5: the queue's one entry was left over
+LEFTOVER_FIRST = $40        ; $2100 bit 6: ... by the last vblank's upload of new work
 PALETTE_BANK = $46
 
 PALETTE_CAP = 176           ; colours per vblank (measured: docs/validation/gb-palette.md)
 ENTRY_COST = 6              ; colours' worth of time per further queue entry
+LEFTOVER_FIRST_CAP = 32     ; colours in the first vblank after a large upload
+NATIVE_PLUS = 36            ; colours (about 4 lines) beyond the native upload's time
+BUDGET_MIN = 16
 
 ; Zero page borrowed by the mapped upload; saved and restored around it.
 PTR = $20                   ; and $21: source pointer
@@ -85,7 +90,7 @@ palette_upload_end:
  .endif
 
  .bank PALETTE_BANK
- .org $5100
+ .org $5000
 palette_entry:
  bcc palette_vblank
  jmp palette_now_mapped
@@ -106,15 +111,25 @@ palette_vblank:
  bmi mapped_state
  ora #MAPPED_STATE
  sta OPTIONS
- jsr QUEUE_ALL
+ bra queue_everything
 mapped_state:
  lda QUEUE_COUNT
- beq upload_return
+ bne queue_present
+ ; Nothing queued, so nothing is left over either.
+ lda OPTIONS
+ and #$ff - LEFTOVER - LEFTOVER_FIRST
+ sta OPTIONS
+ rts
+queue_present:
  ; A full queue may have dropped an entry ($F350 drops when full): upload
  ; everything instead.
  cmp #8
  bcc mapped_upload
+queue_everything:
  jsr QUEUE_ALL
+ lda OPTIONS
+ and #$ff - LEFTOVER
+ sta OPTIONS
  bra mapped_upload
 vblank_original:
  ; Original colours. If the VCE holds mapped ones (bit 7 set: the mode was
@@ -129,6 +144,9 @@ native_upload:
 upload_return:
  rts
 
+ ; Stack in mapped_upload after its 7 pushes: S+8/9 return to the
+ ; trampoline, S+10 its saved MPR2, S+11/12 return to $FD16, S+13-15 the
+ ; interrupt's Y, X, A, S+16 P, S+17/18 the interrupted PC.
 mapped_upload:
  phx
  phy
@@ -142,15 +160,111 @@ mapped_upload:
  pha
  lda <ENTRY
  pha
- ; BUDGET = PALETTE_CAP less ENTRY_COST for each entry after the first
- ; (an entry's own work, and folding what is left, cost time too).
- ldx QUEUE_COUNT
- cpx #9
- bcc count_ok
- ldx #8
-count_ok:
- lda budget_by_count-1,x
+ lda #PALETTE_CAP
  sta <BUDGET
+ ldx QUEUE_COUNT
+ ; A single entry that the last upload left over ($2100 bit 5) is not new
+ ; work, and the main loop may need the time: the frame after a large
+ ; upload is often an area change's load. While the main loop is busy
+ ; (the interrupt did not stop it in the vblank wait, $FD67-$FD6F) it waits;
+ ; in the first vblank after the upload that left it (bit 6) only
+ ; LEFTOVER_FIRST colours go; after that the full budget.
+ cpx #1
+ bne new_work
+ lda OPTIONS
+ and #LEFTOVER
+ beq new_work
+ tsx
+ lda $2100 + 18,x           ; the interrupted PC, high byte (see below)
+ cmp #$fd
+ bne main_loop_busy
+ lda $2100 + 17,x
+ cmp #$67
+ bcc main_loop_busy
+ cmp #$70
+ bcs main_loop_busy
+ lda OPTIONS
+ bit #LEFTOVER_FIRST
+ beq leftover_later
+ lda #LEFTOVER_FIRST_CAP
+ sta <BUDGET
+leftover_later:
+ lda OPTIONS
+ and #$ff - LEFTOVER - LEFTOVER_FIRST
+ bra flags_set
+main_loop_busy:
+ jmp mapped_return
+new_work:
+ ; New entries: about the time the native upload would take for them (a
+ ; mapped colour costs about 156 master clocks, a native one 42, so 0.266
+ ; mapped colours per native one) plus NATIVE_PLUS colours, at most
+ ; PALETTE_CAP, less ENTRY_COST for each further entry, at least
+ ; BUDGET_MIN. An entry left
+ ; over in slot 0 is not counted. PTR = the new entries' bytes.
+ stz <PTR
+ stz <PTR+1
+ ldx #0
+ lda OPTIONS
+ and #LEFTOVER
+ beq sum_bytes
+ inx
+sum_bytes:
+ cpx QUEUE_COUNT
+ bcs bytes_summed
+ lda QUEUE_BYTES_LO,x
+ clc
+ adc <PTR
+ sta <PTR
+ lda QUEUE_BYTES_HI,x
+ adc <PTR+1
+ sta <PTR+1
+ inx
+ bra sum_bytes
+bytes_summed:
+ lda <PTR+1
+ cmp #8
+ bcs budget_large           ; 2048 bytes or more
+ ; colours x 0.266 = bytes / 8 + bytes / 128
+ lda <PTR
+ asl a
+ lda <PTR+1
+ rol a
+ sta <CHUNK                 ; bytes / 128
+ lsr <PTR+1
+ ror <PTR
+ lsr <PTR+1
+ ror <PTR
+ lsr <PTR+1
+ ror <PTR                   ; bytes / 8 (< 256)
+ lda <PTR
+ clc
+ adc <CHUNK
+ bcs budget_large
+ adc #NATIVE_PLUS
+ bcc budget_costs
+budget_large:
+ lda #$ff
+budget_costs:
+ cmp #PALETTE_CAP
+ bcc budget_capped
+ lda #PALETTE_CAP
+budget_capped:
+ ldx QUEUE_COUNT
+ sec
+ sbc entry_costs-1,x
+ bcc budget_min
+ cmp #BUDGET_MIN
+ bcs budget_set
+budget_min:
+ lda #BUDGET_MIN
+budget_set:
+ sta <BUDGET
+budget_done:
+ lda OPTIONS
+ and #$ff - LEFTOVER
+ ora #LEFTOVER_FIRST
+flags_set:
+ sta OPTIONS
  stz <ENTRY
 next_entry:
  ldx <ENTRY
@@ -212,6 +326,16 @@ entry_done:
 queue_done:
  stz QUEUE_COUNT
 border:
+ ; Bit 5: an entry is left over; bit 6 stays set only with one.
+ lda OPTIONS
+ ldx QUEUE_COUNT
+ beq nothing_left
+ ora #LEFTOVER
+ bra left_noted
+nothing_left:
+ and #$ff - LEFTOVER_FIRST
+left_noted:
+ sta OPTIONS
  ; The border colour (entry $100), mapped like the rest.
  stz $0402
  lda #1
@@ -244,11 +368,9 @@ mapped_return:
  ply
  plx
  rts
-budget_by_count:
- .db PALETTE_CAP, PALETTE_CAP - ENTRY_COST, PALETTE_CAP - 2 * ENTRY_COST
- .db PALETTE_CAP - 3 * ENTRY_COST, PALETTE_CAP - 4 * ENTRY_COST
- .db PALETTE_CAP - 5 * ENTRY_COST, PALETTE_CAP - 6 * ENTRY_COST
- .db PALETTE_CAP - 7 * ENTRY_COST
+entry_costs:
+ .db 0, ENTRY_COST, 2 * ENTRY_COST, 3 * ENTRY_COST
+ .db 4 * ENTRY_COST, 5 * ENTRY_COST, 6 * ENTRY_COST, 7 * ENTRY_COST
 
  ; Upload CHUNK colours (1-128) of queue entry X, mapped, from its first
  ; colour. Y runs from -2 x CHUNK up to 0 with

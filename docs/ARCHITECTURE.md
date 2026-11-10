@@ -202,8 +202,11 @@ files to allocate free space.
 
 | CPU address | Meaning / constraint |
 | --- | --- |
-| `$2100` | Active options: bit 0 Original, bit 1 No Damage, bit 2 Use NES Firewheel logic (1.11-dev, no menu row yet); bits 3-7 unused. Zero = the defaults |
-| `$2101` | Draft menu options (the menu copies bits 0-2, so Run keeps the NES Firewheel bit) |
+| `$2100` | Active options: bit 0 Original, bit 1 No Damage, bit 2 Use NES Firewheel logic, bits 3-4 palette mode (00 Original, 01 NES reserved, 10 GB DMG, 11 reserved; 1.11-dev, no menu rows yet); bits 5-6 unused; bit 7 is the palette module's state (set while the VCE holds mapped colours), not an option: menus and saved settings mask it out. Zero = the defaults |
+| `$2101` | Draft menu options (the menu copies bits 0-4, so Run keeps the NES Firewheel and palette bits) |
+| `$2260-$2280` | Native palette upload queue: count, then 8 entries of byte count (low `$2261`, high `$2269`) and first colour (low `$2271`, high `$2279`); `$F350` adds one under the lock and drops it when 8 are queued; `$F394` replaces the queue with all 512 colours |
+| `$2281-$2283` | Border colour (written to VCE entry `$100` after each upload) / upload lock |
+| `$2286-$2685` / `$2686-$2A85` | RAM palette (512 words, the source of every upload) / its backup (`$F718` copies to it, `$F720` back; fades compute `$2286` from it) |
 | `$2102–$2103` | Entrance anchor |
 | `$2104–$213F` | Watched stack margin; not general-purpose spare RAM |
 | `$220F–$2210` | Absolute foreground camera |
@@ -241,7 +244,9 @@ call depth or menu backups need fresh guard checks.
 | `$8457 / $8478` | Gameplay loop / native completion path |
 | `$8457-$845C` | Gameplay loop calls `$E3F2`, `$ABD7`; Enhanced: `jsr $FE40` (which makes both calls) and three NOPs |
 | `$FE20` | Damage gate (bank 1 `$8F70`): No Damage, then the NES Firewheel protection rule (`$DC00`, bank 3); timer expiry explicitly bypasses optional immunity (`$9BC3` jumps to `$FE34`). `$FE3E–$FE3F` unused in the options range |
-| `$FEBE–$FEDF` | Free (`$FF`; the 1.09 splash wrapper, removed in 1.10-dev) |
+| `$FD13` | Vblank interrupt's palette upload (native `jsr $F3B5`): `jsr $FEC0` |
+| `$FEBE–$FECE` | Palette trampoline (1.11-dev, 17 bytes): `$FEBE` palette_now (stage modules: write colours X..X+Y-1 of the RAM palette to the VCE at once, in the mode's colours), `$FEC0` vblank upload; both map bank `$46` into MPR2 and restore it |
+| `$FECF–$FEDF` | Free (`$FF`, 17 bytes) |
 | `$FE40 / $FE46` | Early wrapper / preserved-scratch renderer entry |
 | `$FEE0` | Development cinema sprite reset wrapper (bank 04 `$802D` hook) |
 | `$FF2C` | Area change (bank 1 `$85B4`): native init, marks the Enhanced draw pending (`$2258 = $FE`) |
@@ -310,6 +315,51 @@ throw pose with no projectile and no ninpo, as on the NES. Evidence:
 A menu row would only toggle bit 2 of the draft (`DRAFT eor #4`, as
 `option_masks` does for bits 0-1) and draw its value; accept already copies
 the draft to `$2100`.
+
+## Palette modes
+
+`$2100` bits 3-4 (1.11-dev; module `src/palette`): 00 Original, 01 NES
+(reserved; shown as Original), 10 GB DMG. Evidence:
+[validation/gb-palette.md](validation/gb-palette.md).
+
+The native game writes colours only into the RAM palette `$2286` and queues
+ranges (`$F350`); the vblank interrupt (`$FCD7`) uploads the queue at `$FD13`
+(`$F3B5`: one TIA per entry from `$2205`, then the border colour to entry
+`$100`; nothing while the lock `$2283` is set). Fades queue the whole range
+each step and compute `$2286` from the backup `$2686`. In the original game
+only `$F3B5` writes the VCE; in Enhanced also the 1-1 and 2-2 renderers'
+merged palettes (below).
+
+The upload goes through the trampoline at `$FEC0` to bank `$46` `$5100`:
+
+- Original (and the reserved modes), or `$2240` != 0 (cinema, title,
+  ending): the native `$F3B5`.
+- GB DMG in gameplay: the same queue, each colour looked up in a 512-entry
+  table (`scripts/palette_tables.py` from `src/palette/gb-dmg.json`:
+  luminance thresholds and four shades; four 256-byte pages at
+  `$5400-$57FF`). The mapped loop costs about 156 master clocks a colour
+  against the TIA's 42, so it uploads at most 176 colours a vblank, 6 fewer
+  for each further queue entry, and keeps the rest queued as one entry (the
+  lowest to the highest colour left), ending by about 21.8 lines after the
+  vblank interrupt (the display starts at about 22.8). A full queue (8
+  entries, which `$F350` may have overflowed) becomes all 512 colours.
+- `$2100` bit 7 records whether the VCE holds mapped colours; when the
+  colours due differ (mode changed, cinema started or ended) the upload
+  queues all 512 first (`$F394`). Changing the mode therefore needs only a
+  write of bits 3-4; the RAM palette always holds the original colours.
+
+1-1 (palette 1) and 2-2 (palettes 13-14) write their merged palettes into
+the RAM palette and call `$FEBE` (palette_now) to write them to the VCE at
+once, as the backdrop they draw shows in that frame. Before 1.11-dev the 1-1
+palette existed only in the VCE, so any full re-queue (the area-1 fade in the
+stored 1-1 run) put back the native palette 1 and showed the Enhanced
+backdrop in wrong colours until the stage changed.
+
+A menu row would toggle the draft's bits 3-4 between 00 and 10 (`DRAFT eor
+#$10`, as `option_masks` does for bits 0-1) and draw the value; accept copies
+the draft to `$2100` and the next vblank re-uploads everything. Bank `$46`
+use: `$5100-$5372` code (`$5373-$53FF`, 141 bytes, free inside the claimed `$5100-$57FF`),
+tables `$5400-$57FF`; `$4100-$42FF` and `$4400-$50FF` remain unowned.
 
 ## Facts kept from retired build scripts
 

@@ -22,6 +22,9 @@ GB = gb_dmg_table()
 # MODEL_CAP set to a wrong value is the negative control: cases must fail.
 CAP = int(os.environ.get('MODEL_CAP', 176))
 ENTRY_COST = int(os.environ.get('MODEL_ENTRY_COST', 6))
+LEFTOVER_FIRST = 32
+NATIVE_PLUS = 36
+BUDGET_MIN = 16
 SENTINEL = 0x1ff ^ 0x0aa
 
 
@@ -41,12 +44,34 @@ def model(case):
     if bool(opts & 0x80) != mapped:
         opts ^= 0x80
         queue = [[0, 512]]
+        if mapped:
+            opts &= ~0x20
     if not queue:
+        if mapped:
+            opts &= ~0x60
         return vce, queue, opts
     if mapped and len(queue) >= 8:
         queue = [[0, 512]]
+        opts &= ~0x20
     f = (lambda c: GB[c & 0x1ff]) if mapped else (lambda c: c & 0xffff)
     budget = CAP - ENTRY_COST * (min(len(queue), 8) - 1) if mapped else 1 << 30
+    if mapped:
+        # Bits 5-6: a single left-over entry waits while the main loop is busy
+        # (interrupted PC outside $FD67-$FD6F), gets LEFTOVER_FIRST colours in
+        # the first vblank after the upload that left it, else the full budget.
+        if len(queue) == 1 and opts & 0x20:
+            if not 0xfd67 <= case.get('pc', 0xfd69) <= 0xfd6f:
+                return vce, queue, opts
+            if opts & 0x40:
+                budget = LEFTOVER_FIRST
+            opts &= ~0x60
+        else:
+            new = queue[1:] if opts & 0x20 else queue
+            total = sum(2 * n for _, n in new)
+            b = min((total >> 3) + (total >> 7) + NATIVE_PLUS, 255) if total < 2048 else 255
+            b = min(b, CAP) - ENTRY_COST * (len(queue) - 1)
+            budget = max(b, BUDGET_MIN)
+            opts = (opts & ~0x20) | 0x40
     kept = []
     for idx, n in queue:
         k = min(n, budget)
@@ -62,6 +87,10 @@ def model(case):
     vce[256] = f(case['border'])
     if not mapped:
         kept = []
+    elif kept:
+        opts |= 0x20
+    else:
+        opts &= ~0x40
     return vce, kept, opts
 
 
@@ -80,7 +109,8 @@ def random_case(rng):
             n = rng.randint(1, 512 - idx)
         queue.append((idx, n))
     return {'pal': pal, 'queue': queue, 'border': rng.randrange(0x200), 'lock': 0,
-            'opts': rng.choice([0x90, 0x90, 0x90, 0x10, 0x00, 0x80]), 'master': rng.choice([0, 0, 0, 1])}
+            'opts': rng.choice([0x90, 0x90, 0x90, 0x10, 0x00, 0x80, 0xb0, 0xf0, 0xd0, 0x30]),
+            'master': rng.choice([0, 0, 0, 1]), 'pc': rng.choice([0xfd69, 0xfd6b, 0xfd6d, 0xfd6f, 0xfd70, 0x4f52, 0xfd66])}
 
 
 def edge_cases():
@@ -99,6 +129,11 @@ def edge_cases():
     for opts in (0x00, 0x08, 0x18, 0x07, 0x67, 0x80, 0x88, 0x98, 0x10, 0x90):
         cases.append(dict(base, queue=[(0, 512), (16, 16)], opts=opts))
         cases.append(dict(base, queue=[], opts=opts))
+    # Left-over entries: busy or idle main loop, first vblank or later.
+    for opts in (0xb0, 0xf0, 0xd0, 0x90):
+        for pc in (0xfd69, 0xfd6d, 0xfd6f, 0xfd70, 0xfd66, 0x8457):
+            cases.append(dict(base, queue=[(176, 336)], opts=opts, pc=pc))
+        cases.append(dict(base, queue=[(176, 336), (16, 16)], opts=opts, pc=0x8457))
     for master in (1, 2):
         for opts in (0x10, 0x90):
             cases.append(dict(base, queue=[(0, 300), (400, 50)], master=master, opts=opts))
@@ -135,6 +170,11 @@ def run_case(g, case):
     sp = saved['S']
     g.write(0x100 + sp - 1, bytes([0xf2, 0x83]))
     g.reg('S', sp - 2)
+    # The interrupt frame the vblank entry finds above the return address:
+    # Y, X, A, P, then the interrupted PC (live main-loop stack, restored below).
+    live = g.read(0x100 + sp + 1, 6)
+    pc = case.get('pc', 0xfd69)
+    g.write(0x100 + sp + 1, bytes([0, 0, 0, 0, pc & 0xff, pc >> 8]))
     if 'now' in case:
         g.reg('X', case['now'][0])
         g.reg('Y', case['now'][1])
@@ -148,6 +188,7 @@ def run_case(g, case):
     g.call('set_breakpoint', {'address': '23f3', 'memory_area': 'rom', 'execute': True})
     g.run_to('83F3', polls=20000)
     after = g.call('get_huc6280_status')
+    g.write(0x100 + sp + 1, live)
     regs = (after['X'], after['Y'], int(after['S'], 16), after['MPR'][2]['value'])
     g.reg('X', saved['X'])
     g.reg('Y', saved['Y'])
