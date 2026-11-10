@@ -8,16 +8,25 @@
 ; writes the border colour $2281/$2282 to entry $100; a lock ($2283) holds
 ; it off. In GB DMG mode during gameplay this module uploads the same queue
 ; with every colour looked up in the mode's table, so the RAM palette always
-; holds the original colours and fades map every step. Changing the mode
-; only needs a full re-queue ($F394). Cinemas, the title and the ending
-; ($2240 = 1 or 2) keep the native upload in every mode.
+; holds the original colours and fades map every step. Cinemas, the title
+; and the ending ($2240 = 1 or 2) keep the native upload in every mode.
+;
+; $2100 bit 7 is this module's state, not an option: set while the VCE holds
+; mapped colours. Whenever the colours due (mapped in GB DMG gameplay,
+; original otherwise) differ from that state, the vblank upload queues all
+; 512 colours ($F394) and flips the bit, so a mode change, or a cinema
+; starting or ending, re-uploads everything by itself (a menu need only
+; change bits 3-4). Menus and saved settings must mask bit 7 out; clearing
+; it costs at most one needless full re-upload.
 ;
 ; The mapped upload costs about 3.5 times the native TIA per colour, so it
 ; uploads at most PALETTE_CAP colours per vblank, less ENTRY_COST for each
 ; queue entry after the first (it must end before the display starts), and
 ; leaves the rest queued in the native format: what is left of the entry it
 ; stopped in and the entries it did not reach become one entry covering them
-; (lowest to highest colour), so the producers keep seven free entries.
+; (lowest to highest colour), so the producers keep seven free entries. A
+; queue found full (8 entries) may have lost an entry ($F350 drops when full),
+; so it is replaced by all 512 colours.
 
 OPTIONS = $2100
 PALETTE_BITS = $18
@@ -31,6 +40,8 @@ QUEUE_INDEX_HI = $2279
 BORDER = $2281              ; written to colour $100 after each upload
 PALETTE_LOCK = $2283
 NATIVE_UPLOAD = $f3b5
+QUEUE_ALL = $f394           ; native: queue colours 0-511, under the lock
+MAPPED_STATE = $80          ; $2100 bit 7: the VCE holds mapped colours
 PALETTE_BANK = $46
 
 PALETTE_CAP = 176           ; colours per vblank (measured: docs/validation/gb-palette.md)
@@ -79,21 +90,44 @@ palette_entry:
  bcc palette_vblank
  jmp palette_now_mapped
 palette_vblank:
+ ; As the native upload: nothing happens while the palette is locked.
+ lda PALETTE_LOCK
+ bne upload_return
  lda OPTIONS
  and #PALETTE_BITS
  cmp #PALETTE_GB
- bne native_upload
+ bne vblank_original
  lda MASTER_STATE
- bne native_upload
- ; As the native upload: nothing queued or locked, nothing written.
+ bne vblank_original
+ ; GB DMG in gameplay. If the VCE still holds original colours (bit 7
+ ; clear: the mode was just chosen, or a cinema or the title just ended),
+ ; queue all 512 colours ($F394) first.
+ lda OPTIONS
+ bmi mapped_state
+ ora #MAPPED_STATE
+ sta OPTIONS
+ jsr QUEUE_ALL
+mapped_state:
  lda QUEUE_COUNT
  beq upload_return
- lda PALETTE_LOCK
- beq mapped_upload
-upload_return:
- rts
+ ; A full queue may have dropped an entry ($F350 drops when full): upload
+ ; everything instead.
+ cmp #8
+ bcc mapped_upload
+ jsr QUEUE_ALL
+ bra mapped_upload
+vblank_original:
+ ; Original colours. If the VCE holds mapped ones (bit 7 set: the mode was
+ ; just changed, or a cinema just began), queue all 512 colours first.
+ lda OPTIONS
+ bpl native_upload
+ and #$ff - MAPPED_STATE
+ sta OPTIONS
+ jsr QUEUE_ALL
 native_upload:
  jmp NATIVE_UPLOAD
+upload_return:
+ rts
 
 mapped_upload:
  phx
