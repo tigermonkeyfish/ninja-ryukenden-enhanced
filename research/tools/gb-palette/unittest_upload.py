@@ -8,7 +8,7 @@ known bytes, then calls the fixed-bank trampoline by a synthetic JSR and runs
 back to the hook: the vblank entry ($FEC0) with the I flag set, as in the
 interrupt, and the stage modules' palette_now ($FEBE, X = first colour, Y =
 count) with I clear, as from a renderer. Checked: every VCE word, the queue,
-the lock, S, MPR2 and zero page $20-$25; for the vblank entry also X and Y.
+the lock, S, MPR2 and zero page $20-$26; for the vblank entry also X and Y.
 usage: unittest_upload.py ROM [CASES] [SEED]"""
 import os
 import random
@@ -71,21 +71,20 @@ def model(case):
             b = min((total >> 3) + (total >> 7) + NATIVE_PLUS, 255) if total < 2048 else 255
             b = min(b, CAP) - ENTRY_COST * (len(queue) - 1)
             budget = max(b, BUDGET_MIN)
-            if opts & 0x20:
-                queue = queue[1:] + queue[:1]   # the left-over entry goes last
             opts &= ~0x20
     kept = []
     for idx, n in queue:
         k = min(n, budget)
         for i in range(idx, idx + k):
-            vce[i & 0x1ff] = f(pal[i]) & 0x1ff if mapped else pal[i]
+            vce[i & 0x1ff] = f(pal[i & 0x1ff]) & 0x1ff if mapped else pal[i]
         budget -= k
         if n - k:
-            kept.append([idx + k, n - k])
-    if len(kept) > 1:
-        lo = min(i for i, _ in kept)
-        hi = max(i + n for i, n in kept)
-        kept = [[lo, hi - lo]]
+            kept.append([(idx + k) & 0x1ff, n - k])
+    if kept:
+        # One entry from where the upload stopped, running on (past 511 to 0)
+        # far enough to cover the rest, at most 512 colours.
+        s = kept[0][0]
+        kept = [[s, max(min(512, ((a - s) & 0x1ff) + n) for a, n in kept)]]
     if full:
         kept = [[0, 512]]           # a full queue may have dropped an entry
     vce[256] = f(case['border'])
@@ -136,6 +135,9 @@ def edge_cases():
         for pc in (0xfd69, 0xfd6d, 0xfd6f, 0xfd70, 0xfd66, 0x8457):
             cases.append(dict(base, queue=[(176, 336)], opts=opts, pc=pc))
         cases.append(dict(base, queue=[(176, 336), (16, 16)], opts=opts, pc=0x8457))
+        cases.append(dict(base, queue=[(480, 64)], opts=opts))              # wraps to colour 0
+        cases.append(dict(base, queue=[(300, 512), (0, 512)], opts=opts))
+        cases.append(dict(base, queue=[(480, 32), (96, 18)], opts=opts))
     for master in (1, 2):
         for opts in (0x10, 0x90):
             cases.append(dict(base, queue=[(0, 300), (400, 50)], master=master, opts=opts))
@@ -162,7 +164,7 @@ def run_case(g, case):
     g.write(0x281, bytes([case['border'] & 0xff, case['border'] >> 8, case['lock']]))
     g.write(0x100, bytes([case['opts']]))
     g.write(0x240, bytes([case['master']]))
-    g.write(0x020, bytes([0x5a, 0xa5, 0x11, 0x22, 0x33, 0x44]))
+    g.write(0x020, bytes([0x5a, 0xa5, 0x11, 0x22, 0x33, 0x44, 0x55]))
     g.call('write_memory', {'area': 8, 'offset': '0000',
                             'bytes': bytes([SENTINEL & 0xff, SENTINEL >> 8] * 512).hex(' ')})
     cpu = g.call('get_huc6280_status')
@@ -200,7 +202,7 @@ def run_case(g, case):
     errors = []
     n = r[0x260]
     queue = [[r[0x271 + k] | r[0x279 + k] << 8, (r[0x261 + k] | r[0x269 + k] << 8) // 2] for k in range(min(n, 8))]
-    zp = r[0x20:0x26]
+    zp = r[0x20:0x27]
     want_vce, want_queue, want_opts = model(case)
     if r[0x100] != want_opts:
         errors.append(f'options {r[0x100]:#04x} want {want_opts:#04x}')
@@ -215,8 +217,8 @@ def run_case(g, case):
         errors.append(f'registers X Y S MPR2 {regs} want 37 73 {sp} {mpr2}')
     if r[0x283] != case['lock']:
         errors.append(f'lock {r[0x283]}')
-    if zp != bytes([0x5a, 0xa5, 0x11, 0x22, 0x33, 0x44]):
-        errors.append(f'zero page $20-$25 {zp.hex()}')
+    if zp != bytes([0x5a, 0xa5, 0x11, 0x22, 0x33, 0x44, 0x55]):
+        errors.append(f'zero page $20-$26 {zp.hex()}')
     return errors
 
 

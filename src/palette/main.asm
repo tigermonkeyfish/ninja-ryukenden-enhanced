@@ -22,9 +22,9 @@
 ; The mapped upload costs about 3.5 times the native TIA per colour, so it
 ; uploads at most PALETTE_CAP colours per vblank, less ENTRY_COST for each
 ; queue entry after the first (it must end before the display starts), and
-; leaves the rest queued in the native format: what is left of the entry it
-; stopped in and the entries it did not reach become one entry covering them
-; (lowest to highest colour), so the producers keep seven free entries. A
+; leaves the rest queued: what is left of the entry it stopped in and the
+; entries it did not reach become one entry that starts there and runs on,
+; past colour 511 to 0 if need be, so the producers keep seven free entries. A
 ; queue found full (8 entries) may have lost an entry ($F350 drops when full),
 ; so it is replaced by all 512 colours.
 
@@ -58,6 +58,7 @@ BUDGET = $22                ; colours left this vblank
 CHUNK = $23                 ; colours in this chunk (1-128)
 ENTRY = $24                 ; queue entry being read
 FULL = $25                  ; nonzero: the queue was full (8 entries)
+TMP = $26
 
  .bank 0
  ; The vblank interrupt's palette upload (native: jsr $f3b5).
@@ -142,9 +143,9 @@ native_upload:
 upload_return:
  rts
 
- ; Stack in mapped_upload after its 8 pushes: S+9/10 return to the
- ; trampoline, S+11 its saved MPR2, S+12/13 return to $FD16, S+14-16 the
- ; interrupt's Y, X, A, S+17 P, S+18/19 the interrupted PC.
+ ; Stack in mapped_upload after its 9 pushes: S+10/11 return to the
+ ; trampoline, S+12 its saved MPR2, S+13/14 return to $FD16, S+15-17 the
+ ; interrupt's Y, X, A, S+18 P, S+19/20 the interrupted PC.
 mapped_upload:
  phx
  phy
@@ -159,6 +160,8 @@ mapped_upload:
  lda <ENTRY
  pha
  lda <FULL
+ pha
+ lda <TMP
  pha
  ; A full queue may have dropped an entry ($F350 drops when full): once
  ; this upload is done, all 512 colours are left over instead.
@@ -175,10 +178,10 @@ queue_not_full:
  ; same for the last vblank that found work queued ($2100 bit 6).
  ldy #0
  tsx
- lda $2100 + 19,x           ; the interrupted PC, high byte (see below)
+ lda $2100 + 20,x           ; the interrupted PC, high byte (see below)
  cmp #$fd
  bne busy_now
- lda $2100 + 18,x
+ lda $2100 + 19,x
  cmp #$67
  bcc busy_now
  cmp #$70
@@ -278,42 +281,6 @@ budget_min:
  lda #BUDGET_MIN
 budget_set:
  sta <BUDGET
- ; New entries go before an entry left over in slot 0, which moves to the
- ; end: it is the one most likely to be cut by the budget, and what is left
- ; over then stays that one range.
- lda OPTIONS
- and #LEFTOVER
- beq budget_done
- lda QUEUE_BYTES_LO
- pha
- lda QUEUE_BYTES_HI
- pha
- lda QUEUE_INDEX_LO
- pha
- lda QUEUE_INDEX_HI
- pha
- ldx #0
-rotate_entry:
- lda QUEUE_BYTES_LO+1,x
- sta QUEUE_BYTES_LO,x
- lda QUEUE_BYTES_HI+1,x
- sta QUEUE_BYTES_HI,x
- lda QUEUE_INDEX_LO+1,x
- sta QUEUE_INDEX_LO,x
- lda QUEUE_INDEX_HI+1,x
- sta QUEUE_INDEX_HI,x
- inx
- cpx QUEUE_COUNT
- bcc rotate_entry
- ldx QUEUE_COUNT
- pla
- sta QUEUE_INDEX_HI-1,x
- pla
- sta QUEUE_INDEX_LO-1,x
- pla
- sta QUEUE_BYTES_HI-1,x
- pla
- sta QUEUE_BYTES_LO-1,x
 budget_done:
  lda OPTIONS
  and #$ff - LEFTOVER
@@ -343,6 +310,19 @@ entry_short:
  bcs budget_ok
  sta <CHUNK
 budget_ok:
+ ; ... and no further than colour 511: a left-over entry may run on from
+ ; colour 0 (only this upload sees such an entry: whenever the native
+ ; upload takes over, all 512 colours are queued first).
+ lda QUEUE_INDEX_HI,x
+ beq to_end_ok
+ lda QUEUE_INDEX_LO,x
+ beq to_end_ok
+ eor #$ff
+ inc a
+ cmp <CHUNK
+ bcs to_end_ok
+ sta <CHUNK
+to_end_ok:
  jsr upload_chunk
  ; The entry moves on by CHUNK colours.
  ldx <ENTRY
@@ -351,7 +331,10 @@ budget_ok:
  adc <CHUNK
  sta QUEUE_INDEX_LO,x
  bcc index_done
- inc QUEUE_INDEX_HI,x
+ lda QUEUE_INDEX_HI,x
+ inc a
+ and #1
+ sta QUEUE_INDEX_HI,x
 index_done:
  lda <CHUNK
  asl a
@@ -409,6 +392,8 @@ border_high:
  lda gb_hi1,x
  sta $0405
 mapped_return:
+ pla
+ sta <TMP
  pla
  sta <FULL
  pla
@@ -481,12 +466,25 @@ upload_high:
  rts
 
  ; The budget ran out in entry X: what is left of it and the entries after
- ; it become one entry, from the lowest first colour to the highest last
- ; colour, so the producers keep seven free entries. PTR = lowest first
- ; colour, CHUNK/BUDGET = highest end (0: nothing left).
+ ; it become one entry that starts where the upload stopped and runs on
+ ; (past colour 511 to 0) far enough to cover them all, at most 512 colours,
+ ; so the producers keep seven free entries and every colour comes in turn.
+ ; PTR = its first colour, BUDGET:CHUNK its length E, ENTRY:TMP scratch.
 fold_queue:
- lda #$ff
+ cpx QUEUE_COUNT
+ bcs fold_none
+ lda QUEUE_BYTES_LO,x
+ ora QUEUE_BYTES_HI,x
+ bne fold_start
+ inx
+ bra fold_queue
+fold_none:
+ stz QUEUE_COUNT
+ rts
+fold_start:
+ lda QUEUE_INDEX_LO,x
  sta <PTR
+ lda QUEUE_INDEX_HI,x
  sta <PTR+1
  stz <CHUNK
  stz <BUDGET
@@ -494,62 +492,55 @@ fold_entry:
  lda QUEUE_BYTES_LO,x
  ora QUEUE_BYTES_HI,x
  beq fold_next
+ ; e = ((first colour - PTR) mod 512) + colours, at most 512
  lda QUEUE_INDEX_LO,x
- cmp <PTR
+ sec
+ sbc <PTR
+ sta <TMP
  lda QUEUE_INDEX_HI,x
  sbc <PTR+1
- bcs fold_end
- lda QUEUE_INDEX_LO,x
- sta <PTR
- lda QUEUE_INDEX_HI,x
- sta <PTR+1
-fold_end:
- ; end = first colour + bytes / 2
+ and #1
+ sta <ENTRY
  lda QUEUE_BYTES_HI,x
  lsr a
  tay
  lda QUEUE_BYTES_LO,x
  ror a
  clc
- adc QUEUE_INDEX_LO,x
- pha
+ adc <TMP
+ sta <TMP
  tya
- adc QUEUE_INDEX_HI,x
- tay
- pla
- cmp <CHUNK
- pha
- tya
- sbc <BUDGET
- pla
- bcc fold_next
+ adc <ENTRY
+ sta <ENTRY
+ cmp #2
+ bcc fold_max
+ lda #2
+ sta <ENTRY
+ stz <TMP
+fold_max:
+ lda <CHUNK
+ cmp <TMP
+ lda <BUDGET
+ sbc <ENTRY
+ bcs fold_next
+ lda <TMP
  sta <CHUNK
- sty <BUDGET
+ lda <ENTRY
+ sta <BUDGET
 fold_next:
  inx
  cpx QUEUE_COUNT
  bcc fold_entry
- lda <CHUNK
- ora <BUDGET
- bne fold_write
- stz QUEUE_COUNT
- rts
-fold_write:
  lda <PTR
  sta QUEUE_INDEX_LO
  lda <PTR+1
  sta QUEUE_INDEX_HI
- lda <CHUNK
- sec
- sbc <PTR
- sta <CHUNK
- lda <BUDGET
- sbc <PTR+1
  asl <CHUNK
- rol a
- sta QUEUE_BYTES_HI
+ rol <BUDGET
  lda <CHUNK
  sta QUEUE_BYTES_LO
+ lda <BUDGET
+ sta QUEUE_BYTES_HI
  lda #1
  sta QUEUE_COUNT
  rts

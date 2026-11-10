@@ -338,18 +338,19 @@ The upload goes through the trampoline at `$FEC0` to bank `$46` `$5000`:
   table (`scripts/palette_tables.py` from `src/palette/gb-dmg.json`:
   luminance thresholds and four shades; four 256-byte pages at
   `$5400-$57FF`). The mapped loop costs about 156 master clocks a colour
-  against the TIA's 42, so a vblank uploads only what fits two limits: it
-  must end before the display (at most 168 colours, 6 fewer for each further
-  queue entry; the worst upload ends about 22.2 lines after the vblank
-  interrupt, the first display line is at about 22.8), and it may take only
-  about 4 lines more than the native upload of the same entries (0.266
-  mapped colours per native one plus 36), because the main loop has as
-  little as 6.75 lines to spare in the frames after an area change. What is
-  left becomes one entry (lowest to highest colour left); `$2100` bit 5
-  marks it. Such a left-over entry alone gets 32 colours a vblank when the
-  main loop was waiting for vblank (the interrupted PC in `$FD67-$FD6F`) at
-  this and at the last vblank with palette work (bit 6), else none. A full queue (8 entries: `$F350` may have dropped
-  one) leaves all 512 colours over.
+  against the TIA's 42, so a vblank uploads only what fits two limits. It
+  must end before the display: at most 168 colours, 6 fewer for each further
+  queue entry (the first display line is about 22.8 lines after the vblank
+  interrupt). And it may take no longer than the native upload of the same
+  entries: 0.266 mapped colours per native one, less 6 per further entry,
+  at least 16, because in the frames around an area change the native main
+  loop has under a line to spare (6-3); the stored runs' worst mapped upload
+  ends 18.1 lines after the interrupt. New entries go first; what is left
+  becomes one entry (lowest to highest colour left), marked by `$2100` bit 5.
+  A left-over entry alone gets 32 colours a vblank when the main loop was
+  waiting for vblank (interrupted PC in `$FD67-$FD6F`) at this vblank and at
+  the last one with palette work (bit 6), otherwise none. A full queue (8
+  entries: `$F350` may have dropped one) leaves all 512 colours over.
 - `$2100` bit 7 records whether the VCE holds mapped colours; when the
   colours due differ (mode changed, cinema started or ended) the upload
   queues all 512 first (`$F394`). Changing the mode therefore needs only a
