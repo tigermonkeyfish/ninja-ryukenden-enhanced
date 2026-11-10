@@ -17,7 +17,7 @@ import re
 import sys
 from pathlib import Path
 
-from gbtools import Session, cv, load_run
+from gbtools import Session, cv, h, load_run
 
 LINE = 1365
 EVENT = re.compile(r'@(\d+)\s.*?\[(VCE|VDC1|CPU)\]\s+(\S+)\s+(\S+)?')
@@ -56,7 +56,8 @@ def main():
                     ram = g.read(0, 0x1000)
                     frames.append({'f': n, 'timer': ram[0xeda:0xede].hex(), 'ryu': ram[0xe9e:0xeb8].hex(),
                                    'cam': int.from_bytes(ram[0x20f:0x211], 'little'), 'area': ram[0xe60],
-                                   'master': ram[0x240], 'stage': ram[0xe5f], 'events_upto': len(events)})
+                                   'master': ram[0x240], 'stage': ram[0xe5f], 'events_upto': len(events),
+                                   'sat': h(g.read(0, 512, area=6))})
                     n += 1
         return frames, events
 

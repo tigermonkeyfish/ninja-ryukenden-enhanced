@@ -48,7 +48,7 @@ PALETTE_BANK = $46
 
 PALETTE_CAP = 168           ; colours per vblank (measured: docs/validation/gb-palette.md)
 ENTRY_COST = 6              ; colours' worth of time per further queue entry
-LEFTOVER_CAP = 32           ; colours a vblank for a left-over entry alone
+LEFTOVER_CAP = 16           ; colours a vblank for a left-over entry alone
 NATIVE_PLUS = 0             ; colours beyond the native upload's time
 BUDGET_MIN = 16
 
