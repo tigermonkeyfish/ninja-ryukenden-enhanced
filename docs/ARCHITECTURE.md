@@ -202,7 +202,7 @@ files to allocate free space.
 
 | CPU address | Meaning / constraint |
 | --- | --- |
-| `$2100` | Active options: bit 0 Original, bit 1 No Damage, bit 2 Use NES Firewheel logic, bits 3-4 palette mode (00 Original, 01 NES reserved, 10 GB DMG, 11 reserved; 1.11-dev, no menu rows yet); bits 5-6 unused; bit 7 is the palette module's state (set while the VCE holds mapped colours), not an option: menus and saved settings mask it out. Zero = the defaults |
+| `$2100` | Active options: bit 0 Original, bit 1 No Damage, bit 2 Use NES Firewheel logic, bits 3-4 palette mode (00 Original, 01 NES reserved, 10 GB DMG, 11 reserved; 1.11-dev, no menu rows yet); bits 5-7 are the palette module's state (5: a left-over palette entry is queued; 6: the main loop was busy at the last vblank with palette work; 7: the VCE holds mapped colours), not options: menus and saved settings mask them out. Zero = the defaults |
 | `$2101` | Draft menu options (the menu copies bits 0-4, so Run keeps the NES Firewheel and palette bits) |
 | `$2260-$2280` | Native palette upload queue: count, then 8 entries of byte count (low `$2261`, high `$2269`) and first colour (low `$2271`, high `$2279`); `$F350` adds one under the lock and drops it when 8 are queued; `$F394` replaces the queue with all 512 colours |
 | `$2281-$2283` | Border colour (written to VCE entry `$100` after each upload) / upload lock |
@@ -330,7 +330,7 @@ each step and compute `$2286` from the backup `$2686`. In the original game
 only `$F3B5` writes the VCE; in Enhanced also the 1-1 and 2-2 renderers'
 merged palettes (below).
 
-The upload goes through the trampoline at `$FEC0` to bank `$46` `$5100`:
+The upload goes through the trampoline at `$FEC0` to bank `$46` `$5000`:
 
 - Original (and the reserved modes), or `$2240` != 0 (cinema, title,
   ending): the native `$F3B5`.
@@ -338,11 +338,18 @@ The upload goes through the trampoline at `$FEC0` to bank `$46` `$5100`:
   table (`scripts/palette_tables.py` from `src/palette/gb-dmg.json`:
   luminance thresholds and four shades; four 256-byte pages at
   `$5400-$57FF`). The mapped loop costs about 156 master clocks a colour
-  against the TIA's 42, so it uploads at most 176 colours a vblank, 6 fewer
-  for each further queue entry, and keeps the rest queued as one entry (the
-  lowest to the highest colour left), ending by about 21.8 lines after the
-  vblank interrupt (the display starts at about 22.8). A full queue (8
-  entries, which `$F350` may have overflowed) becomes all 512 colours.
+  against the TIA's 42, so a vblank uploads only what fits two limits: it
+  must end before the display (at most 168 colours, 6 fewer for each further
+  queue entry; the worst upload ends about 22.2 lines after the vblank
+  interrupt, the first display line is at about 22.8), and it may take only
+  about 4 lines more than the native upload of the same entries (0.266
+  mapped colours per native one plus 36), because the main loop has as
+  little as 6.75 lines to spare in the frames after an area change. What is
+  left becomes one entry (lowest to highest colour left); `$2100` bit 5
+  marks it. Such a left-over entry alone gets 32 colours a vblank when the
+  main loop was waiting for vblank (the interrupted PC in `$FD67-$FD6F`) at
+  this and at the last vblank with palette work (bit 6), else none. A full queue (8 entries: `$F350` may have dropped
+  one) leaves all 512 colours over.
 - `$2100` bit 7 records whether the VCE holds mapped colours; when the
   colours due differ (mode changed, cinema started or ended) the upload
   queues all 512 first (`$F394`). Changing the mode therefore needs only a
@@ -358,8 +365,8 @@ backdrop in wrong colours until the stage changed.
 A menu row would toggle the draft's bits 3-4 between 00 and 10 (`DRAFT eor
 #$10`, as `option_masks` does for bits 0-1) and draw the value; accept copies
 the draft to `$2100` and the next vblank re-uploads everything. Bank `$46`
-use: `$5100-$5372` code (`$5373-$53FF`, 141 bytes, free inside the claimed `$5100-$57FF`),
-tables `$5400-$57FF`; `$4100-$42FF` and `$4400-$50FF` remain unowned.
+use: code `$5000-$53FF` (claimed with the tables), tables `$5400-$57FF`;
+`$4100-$42FF` and `$4400-$4FFF` remain unowned.
 
 ## Facts kept from retired build scripts
 

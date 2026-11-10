@@ -43,6 +43,7 @@ NATIVE_UPLOAD = $f3b5
 QUEUE_ALL = $f394           ; native: queue colours 0-511, under the lock
 MAPPED_STATE = $80          ; $2100 bit 7: the VCE holds mapped colours
 LEFTOVER = $20              ; $2100 bit 5: the queue's one entry was left over
+WAS_BUSY = $40              ; $2100 bit 6: the main loop was busy at the last vblank with work
 PALETTE_BANK = $46
 
 PALETTE_CAP = 168           ; colours per vblank (measured: docs/validation/gb-palette.md)
@@ -169,31 +170,47 @@ mapped_upload:
 queue_not_full:
  lda #PALETTE_CAP
  sta <BUDGET
- ldx QUEUE_COUNT
+ ; Was the main loop waiting for vblank when the interrupt came (the
+ ; interrupted PC in $FD67-$FD6F)? CHUNK = WAS_BUSY if not, ENTRY = the
+ ; same for the last vblank that found work queued ($2100 bit 6).
+ ldy #0
+ tsx
+ lda $2100 + 19,x           ; the interrupted PC, high byte (see below)
+ cmp #$fd
+ bne busy_now
+ lda $2100 + 18,x
+ cmp #$67
+ bcc busy_now
+ cmp #$70
+ bcc idle_now
+busy_now:
+ ldy #WAS_BUSY
+idle_now:
+ sty <CHUNK
+ lda OPTIONS
+ and #WAS_BUSY
+ sta <ENTRY
+ lda OPTIONS
+ and #$ff - WAS_BUSY
+ ora <CHUNK
+ sta OPTIONS
  ; A single entry that an upload left over ($2100 bit 5) is work the native
  ; game does not have in this frame, and the main loop may need the time
- ; (the frames after a large upload are often an area change's load). While
- ; the main loop is busy (the interrupt did not stop it in the vblank wait,
- ; $FD67-$FD6F) it waits; otherwise LEFTOVER_CAP colours go (about 4 lines).
+ ; (the frames after a large upload are often an area change's load). It
+ ; waits while the main loop is busy, or was at the last vblank with work;
+ ; otherwise LEFTOVER_CAP colours go (about 4 lines).
+ ldx QUEUE_COUNT
  cpx #1
  bne new_work
  lda OPTIONS
  and #LEFTOVER
  beq new_work
- tsx
- lda $2100 + 19,x           ; the interrupted PC, high byte (see below)
- cmp #$fd
+ lda <CHUNK
+ ora <ENTRY
  bne main_loop_busy
- lda $2100 + 18,x
- cmp #$67
- bcc main_loop_busy
- cmp #$70
- bcs main_loop_busy
  lda #LEFTOVER_CAP
  sta <BUDGET
- lda OPTIONS
- and #$ff - LEFTOVER
- bra flags_set
+ jmp budget_done
 main_loop_busy:
  jmp mapped_return
 new_work:
@@ -201,8 +218,8 @@ new_work:
  ; mapped colour costs about 156 master clocks, a native one 42, so 0.266
  ; mapped colours per native one) plus NATIVE_PLUS colours, at most
  ; PALETTE_CAP, less ENTRY_COST for each further entry, at least
- ; BUDGET_MIN. An entry left
- ; over in slot 0 is not counted. PTR = the new entries' bytes.
+ ; BUDGET_MIN. An entry left over in slot 0 is not counted. PTR = the new
+ ; entries' bytes.
  stz <PTR
  stz <PTR+1
  ldx #0
@@ -261,10 +278,45 @@ budget_min:
  lda #BUDGET_MIN
 budget_set:
  sta <BUDGET
+ ; New entries go before an entry left over in slot 0, which moves to the
+ ; end: it is the one most likely to be cut by the budget, and what is left
+ ; over then stays that one range.
+ lda OPTIONS
+ and #LEFTOVER
+ beq budget_done
+ lda QUEUE_BYTES_LO
+ pha
+ lda QUEUE_BYTES_HI
+ pha
+ lda QUEUE_INDEX_LO
+ pha
+ lda QUEUE_INDEX_HI
+ pha
+ ldx #0
+rotate_entry:
+ lda QUEUE_BYTES_LO+1,x
+ sta QUEUE_BYTES_LO,x
+ lda QUEUE_BYTES_HI+1,x
+ sta QUEUE_BYTES_HI,x
+ lda QUEUE_INDEX_LO+1,x
+ sta QUEUE_INDEX_LO,x
+ lda QUEUE_INDEX_HI+1,x
+ sta QUEUE_INDEX_HI,x
+ inx
+ cpx QUEUE_COUNT
+ bcc rotate_entry
+ ldx QUEUE_COUNT
+ pla
+ sta QUEUE_INDEX_HI-1,x
+ pla
+ sta QUEUE_INDEX_LO-1,x
+ pla
+ sta QUEUE_BYTES_HI-1,x
+ pla
+ sta QUEUE_BYTES_LO-1,x
 budget_done:
  lda OPTIONS
  and #$ff - LEFTOVER
-flags_set:
  sta OPTIONS
  stz <ENTRY
 next_entry:

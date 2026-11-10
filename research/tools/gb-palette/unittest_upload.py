@@ -54,10 +54,14 @@ def model(case):
     f = (lambda c: GB[c & 0x1ff]) if mapped else (lambda c: c & 0xffff)
     budget = CAP - ENTRY_COST * (min(len(queue), 8) - 1) if mapped else 1 << 30
     if mapped:
-        # Bit 5: a single left-over entry waits while the main loop is busy
-        # (interrupted PC outside $FD67-$FD6F), else gets LEFTOVER_CAP colours.
+        # Bit 6: the main loop was busy (interrupted PC outside $FD67-$FD6F) at
+        # the last vblank with work. Bit 5: a single left-over entry waits if it
+        # is busy now or was then, else gets LEFTOVER_CAP colours.
+        busy = not 0xfd67 <= case.get('pc', 0xfd69) <= 0xfd6f
+        was_busy = bool(opts & 0x40)
+        opts = (opts & ~0x40) | (0x40 if busy else 0)
         if len(queue) == 1 and opts & 0x20:
-            if not 0xfd67 <= case.get('pc', 0xfd69) <= 0xfd6f:
+            if busy or was_busy:
                 return vce, queue, opts
             budget = LEFTOVER_CAP
             opts &= ~0x20
@@ -67,6 +71,8 @@ def model(case):
             b = min((total >> 3) + (total >> 7) + NATIVE_PLUS, 255) if total < 2048 else 255
             b = min(b, CAP) - ENTRY_COST * (len(queue) - 1)
             budget = max(b, BUDGET_MIN)
+            if opts & 0x20:
+                queue = queue[1:] + queue[:1]   # the left-over entry goes last
             opts &= ~0x20
     kept = []
     for idx, n in queue:
