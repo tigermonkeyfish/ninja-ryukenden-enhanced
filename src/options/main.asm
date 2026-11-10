@@ -1,10 +1,10 @@
 ; Active flags: bit 0 = original background, bit 1 = no contact damage,
-; bit 2 = Fix Firewheel (no menu row yet; see docs/ARCHITECTURE.md).
+; bit 2 = Use NES Firewheel logic (no menu row yet; see docs/ARCHITECTURE.md).
 ; Two bytes at the bottom of the CPU stack page. The native stack grows
 ; downward from $21FF; validation watches the reserved low margin.
 OPTIONS = $2100
 DRAFT = $2101
-FIX_FIREWHEEL = 4
+NES_FIREWHEEL = 4
  .bank 0
  ; Contact damage (bank 1 $8F70, A = damage). Its only callers are the
  ; enemy contact check in bank 2 ($A1C8, $A1D0); timer expiry enters at
@@ -17,9 +17,9 @@ damage_gate:
  lda OPTIONS
  bit #2
  bne ignore_damage
- and #FIX_FIREWHEEL
+ and #NES_FIREWHEEL
  beq native_damage
- jsr fix_firewheel_rule
+ jsr nes_firewheel_rule
  bcc ignore_damage
 native_damage:
  pla
@@ -38,7 +38,7 @@ damage_gate_end:
  .fail
  .endif
 
- ; Fix Firewheel: the rule deciding which contact Ryu ignores, kept
+ ; NES Firewheel: the rule deciding which contact Ryu ignores, kept
  ; apart from the gate so it can be narrowed or widened. Entered only with
  ; the flag set; carry clear = no damage and no knockback; preserves X, Y.
  ; Provisional rule: no contact damage while the Fire Wheel (item effect
@@ -47,15 +47,15 @@ damage_gate_end:
  ; is in bank 2, which is mapped at $A000 here: the gate's callers run there.
  ; $FEBE-$FEDF was the 1.09 splash wrapper; unowned since 1.10-dev.
  .org $febe
-fix_firewheel_rule:
+nes_firewheel_rule:
  phy
  lda #5
  jsr $aa63
  ply
  lsr a
  rts
-fix_firewheel_rule_end:
- .if (fix_firewheel_rule_end > $fec7)
+nes_firewheel_rule_end:
+ .if (nes_firewheel_rule_end > $fec7)
  .fail
  .endif
  .bank 1
@@ -129,7 +129,7 @@ backup_row2:
 valid_stage:
  sta <$25
  stz <$26
- ; The draft carries every flag the menu knows, Fix Firewheel included,
+ ; The draft carries every flag the menu knows, NES Firewheel included,
  ; so Run (accept) keeps it although the menu has no row for it yet.
  lda OPTIONS
  and #7
