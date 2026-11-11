@@ -12,8 +12,10 @@ What only a console can show: that the Duo's backup RAM answers a HuCard in
 the cartridge slot with the EverDrive in it. **Part 1 is the test that
 matters.**
 
-Build: `Ninja Ryukenden - Enhanced v1.11-dev (all palettes, dark lift,
-settings save).pce`. In the game, press **Select** during play. The band
+Build: `Ninja Ryukenden - Enhanced v1.11-dev (all palettes, dark lift 2,
+settings save).pce` (SHA-256 `f3114ade…a0a0`; the saved-settings code is
+byte for byte that of the earlier `dark lift, settings save` build, which
+this one replaces, [v111-final.md](v111-final.md)). In the game, press **Select** during play. The band
 under the status bar must show `V1.11-DEV`, and the window ends with a
 status line:
 

@@ -121,6 +121,12 @@ console can show are in [validation/bram-save.md](validation/bram-save.md);
 the console test list is
 [validation/bram-save-hardware-checklist.md](validation/bram-save-hardware-checklist.md).
 
+The build that holds the saved settings and the dark lift's fade-out fix
+together (branch `v111-final`) is shown to be the byte union of the two
+builds those records were made on, and has its own interaction checks
+(a mode loaded from backup RAM played to a stage end among them) in
+[validation/v111-final.md](validation/v111-final.md).
+
 ```sh
 python3 scripts/check_bram.py --emulator /path/to/geargrafx \
   --candidate "dist/Ninja Ryukenden - development.pce" \

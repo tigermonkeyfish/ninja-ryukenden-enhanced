@@ -503,6 +503,16 @@ must be the same picture. 263 such frames in the 11 runs:
 
 ### Not verified on the fix build
 
+**Since completed (2026-11-11, branch `v111-final`):** the 14 unfinished
+job lines were run on `fix2.pce`, one session at a time. In SMS, HELL and
+GB DMG, over all 22 walks and 11 runs: no flash in any of the 37 black
+spans, no VCE entry lit at the load's lock in any of the 18 stage-end
+spans, the three SMS stage changes and HELL's 6-2 to 6-3 among them
+(numbers in
+[v111-final.md](v111-final.md#the-transition-survey-the-fix-record-left-open)).
+Deaths, Continue and Game Over are still not run. The rest of this section
+is the state the fix branch was left in.
+
 The second survey run (`jobs/trans-round2.txt`) was stopped by the host for
 low memory after 16 of its 30 jobs and was not started again. So the
 per-frame transition survey (`trans.py`) of the fix build is missing for:

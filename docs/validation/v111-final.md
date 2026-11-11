@@ -134,10 +134,10 @@ at a time.
   | SMS | 3 (0.15% and 0.12% of the playfield, the fade-out's last step; 1-3 a run on the fix build) | none | 0 | equal in every frame |
   | HELL | 0 (its HUD band two frames more, as on the fix build) | none | 0 | equal in every frame |
 
-  From frame 1728 (SMS) and 1727 (HELL) to the first step of 6-2's fade-in
-  every VCE entry due is black and the playfield and the HUD band are
-  black: six and seven frames before the stage changes at 1734 and the load
-  takes the lock at 1735. Against the fix build's seed-state recordings of
+  From frame 1728 (SMS) and 1727 (HELL) to the end of the span no VCE
+  entry that is behind its due colour holds anything but black, and the
+  playfield and the HUD band are black: six and seven frames before the
+  stage changes at 1734 and the load takes the lock at 1735. Against the fix build's seed-state recordings of
   the same run (`fx-sms-6-1`, `fx-hell-6-1`, `fx-orig-6-1`) the pictures are
   the same in every frame except the first 15 (SMS) and 5 (HELL) of the
   run, and in all of them for Original. Those first frames are the probes'
@@ -149,7 +149,84 @@ at a time.
   the pinned emulator (backup RAM always unlocked); the lock-modelling
   emulator was not used for a played run.
 
-PENDING
+## The transition survey the fix record left open
+
+[dark-lift.md](dark-lift.md#not-verified-on-the-fix-build) lists 14 job
+lines of the per-frame transition survey (`trans.py`) that the host stopped
+on the fix build. They were run here, on `fix2.pce` as listed (the palette
+code and tables of this build: see the union proof), one session at a time,
+with the recordings in `build/v111-final/trans` beside copies of the fix
+worker's (`build/v111-final/jobs/trans-rest-ordered.txt`; all 14 finished).
+The 18 recordings that the fix worker already had and that these lines
+made again are byte-identical to his.
+
+`transreport.py $W/trans old,new` (`old` = the dark-lift build, `new` = the
+fix build; `$W/trans-report.txt`, `trans-report.json`), 22 walks and 11
+runs a mode, 37 spans in which Original's playfield is black:
+
+| Fix build | Spans with a flash | Stage-end spans (11 walks, 7 runs) with VCE entries lit at the load's lock | Longest late arrival (frames) |
+| --- | --- | --- | --- |
+| SMS | 0 (7 spans, 62 frames on the dark-lift build) | 0 of 18 (18 of 18 before, 42-91 entries) | 9 (26 before) |
+| HELL | 0 (0 before) | 0 of 18 (18 of 18 before, 43-49 entries) | 8 (9 before) |
+| GB DMG | 0 (7 spans, 62 frames before) | 0 of 18 (18 of 18 before, 9-24 entries) | 9 (26 before) |
+
+The four stage changes the fix record names as not recorded:
+
+| Stage change | Mode | Dark-lift build | Fix build |
+| --- | --- | --- | --- |
+| 2-1 to 2-2 | SMS | black 13 frames late, flash 2 frames (1.4% of the playfield), 50 entries lit at the lock | 9 frames late (Original's dark area is black before the last step), no flash, 0 lit |
+| 4-3 to 4-4 | SMS | 5 late, flash 16 frames (10.8%), 80 lit | 1 late, no flash, 0 lit |
+| 5-1 to 5-2 | SMS | 22 late, flash 3 frames (0.08%), 74 lit | 1 late, no flash, 0 lit |
+| 6-2 to 6-3 | HELL | 7 late, no flash, 46 lit | 1 late, no flash, 0 lit |
+
+Unchanged by the fix, in all three modes, as its record says: the four
+spans that are not fade-outs still reach the lock with entries lit (the
+cut after the boss in 3-3 and 4-4, 130-162 entries; the area change in 5-2
+and 5-3, 183-209), without a flash. Gameplay against Original differs on
+the fix build only in the three forced-scroll walks the record lists (2-1
+frame 363, 6-2 frame 544, 5-2 seven single frames), as on the dark-lift
+build; the one-frame difference before each cinema is gone in all three
+modes. GB DMG's 5-3 run, the one run missing there, is among the
+recordings now (no flash, nothing lit).
+
+With this the fix build's transition survey is complete for SMS, HELL and
+GB DMG. Still not run in any mode: deaths, Continue and Game Over.
+
+## Rerunning
+
+From the repository root, `W=build/v111-final` holding `original.pce`,
+`seed.state`, `final.pce`, `fix2.pce`, `rec/fx-*` and `trans/*` (copies
+from `build/dark-lift-fix`), in the emulator environment of `run-check.sh`
+with `GB_WORK=$W NES_WORK=$W NG_DEBUGGER_FAST=1`; `B=build`:
+
+```sh
+D=research/tools/dark-lift; S=research/tools/sms-palette; V=research/tools/v111-final
+python3 -m unittest discover -s tests; python3 scripts/audit_public.py
+python3 scripts/project.py build --rom ORIGINAL --output $W/final.pce --assembler pceas --bps-output patch.bps
+python3 scripts/bps.py apply ORIGINAL patch.bps check.pce      # check.pce is final.pce
+python3 $V/unionproof.py $B/dark-lift-rom/dl.pce $B/v111/v111.pce $B/dark-lift-fix/fix2.pce $W/final.pce
+python3 scripts/check_boot.py --emulator $E --original $W/original.pce --candidate $W/final.pce --output $W/boot-absent
+python3 scripts/check_bram.py --emulator $E --candidate $W/final.pce --baseline $W/fix2.pce --output $W/cycle --only cycle
+python3 scripts/check_bram.py --emulator $L --candidate $W/final.pce --baseline $W/fix2.pce --output $W/lock-neg-lock --only lock --bram-model lock
+python3 scripts/check_bram.py --emulator $L --candidate $W/final.pce --baseline $W/fix2.pce --output $W/cycle-lock --only cycle --bram-model lock
+python3 scripts/check_menu.py --emulator $E --original $W/original.pce --candidate $W/final.pce --output $W/menu-options --only options
+MODES="sms:0xb8 hell:0x18" JOBS=1 sh $D/recall.sh $W $W/final.pce vf
+python3 $S/analyse.py $W/rec identity fx-sms vf-sms            # and fx-hell vf-hell
+python3 $V/savedboot.py $W/final.pce $W/saved saved-original 0x00 6-1   # and saved-sms 0xb8, saved-hell 0x18
+python3 $D/transreport.py $W/saved saved --modes sms,hell --all
+python3 $D/runjobs.py $W/jobs/trans-rest-ordered.txt 1 $W/jobs/log      # the 14 lines, on fix2.pce
+python3 $D/transreport.py $W/trans old,new --json $W/trans-report.json
+```
+
+## Not covered
+
+Real hardware (the saved settings have not been seen on any console; the
+checklist is
+[bram-save-hardware-checklist.md](bram-save-hardware-checklist.md)); the
+checks named under "What does not carry over" that were not repeated on
+this build; a played run on the lock-modelling emulator; a mode loaded
+from backup RAM in any run but 6-1, and in GB DMG and the NES modes;
+deaths, Continue and Game Over in the mapped modes; sound.
 
 ## Delivered
 

@@ -23,6 +23,25 @@
   [evidence](validation/nes-firewheel.md), emulator only). With it off the
   game plays as 1.10. Code: `src/nes-firewheel` in bank 3's unused tail;
   no fixed-bank bytes.
+- **The build to test on hardware** (1.11-dev, branch `v111-final` =
+  `v111` + `dark-lift-fix`, merged with conflicts in two documents only):
+  everything below in one ROM, `f3114ade…a0a0`, delivered in
+  `/workspace/roms/` as `Ninja Ryukenden - Enhanced v1.11-dev (all
+  palettes, dark lift 2, settings save).pce` with a patch for each
+  original. It is byte for byte the union of its parents (it differs from
+  each only in the other's bytes: `options` and `bram` against the fix
+  build, `palette` against `v111`), so their records carry over; the
+  interactions were checked on it: boot, power cycles (also on the
+  lock-modelling emulator, with its negative controls), the menu's options
+  part, the 11 stored runs in SMS and HELL equal to the fix build's in
+  every frame, and a cold boot with SMS or HELL loaded from backup RAM
+  played to a stage end (black before the load, no flash). The transition
+  survey the fix record had left open is finished: no flash and nothing
+  left unwritten at any stage change in SMS, HELL and GB DMG. Emulator
+  only; **waiting for the maintainer's hardware test**
+  ([record](validation/v111-final.md),
+  [test list](validation/bram-save-hardware-checklist.md)). Not merged
+  into `main`; `v111` and `dark-lift-fix` are both contained in it.
 - **Palette modes** (1.11-dev, branch `gb-palette`): `$2100` bits 3-4 (bits
   3-5 since the SMS palette, below),
   00 Original (default), 01 NES (reserved, shown as Original), 10 GB DMG
@@ -89,10 +108,9 @@
   identical to `dark-lift` in every frame; GB DMG, SMS and HELL differ only
   in the frames after each stage-end fade-out, gameplay equal to Original
   in every frame, no flash, nothing left unwritten at the load);
-  `check_boot.py` and `check_menu.py`; every stage exit in GB DMG. **Not
-  verified**: three stage changes in SMS (2-1, 4-3, 5-1 exits) and one in
-  HELL (6-2's) on the fix build, since the host stopped that survey run for
-  low memory; deaths, Continue, Game Over. The dark lift's own evidence
+  `check_boot.py` and `check_menu.py`; every stage exit in GB DMG, SMS and
+  HELL (the last four on `v111-final`, see above). **Not verified**:
+  deaths, Continue, Game Over. The dark lift's own evidence
   (brightness from captures, equal to the study's predictions; the sheets,
   looked at; the 22 Level Select entries; the NES checks) is complete.
   A change to know: the cinema after a stage now begins on Original's frame
@@ -185,8 +203,9 @@
   Read [validation/bram-save.md](validation/bram-save.md) first (results,
   rerun commands, the review, what is left); the maintainer's test list is
   [validation/bram-save-hardware-checklist.md](validation/bram-save-hardware-checklist.md)
-  (also copied to `/workspace/roms/settings-save-hardware-checklist.md`
-  beside the build). After the hardware report: fix what it shows, then
+  (copied beside the build as
+  `/workspace/roms/settings-save-hardware-checklist-dark-lift-2-build.md`;
+  the older copy there names the build before the merge). After the hardware report: fix what it shows, then
   the options guide's menu screenshots (they still show the old window)
   and the changelog. The emulator harness controls backup RAM per session
   (`scripts/emulator_session.py`: none unless `power_on(rom, bram=image)`);

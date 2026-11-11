@@ -1156,8 +1156,8 @@ state, colour by data.
 **Confidence/limits:** emulator (Geargrafx `78fc3d7`). The fault was
 measured over every stage and area exit of the 22 stages and the 11 stored
 runs in three modes; the fix over the 11 runs in all three and over every
-stage exit in GB DMG (three stage changes in SMS and one in HELL were not
-recorded on the fixed build,
-[validation/dark-lift.md](../validation/dark-lift.md)). The fade level
+stage exit in GB DMG, SMS and HELL
+([validation/dark-lift.md](../validation/dark-lift.md); the last SMS and
+HELL exits in [validation/v111-final.md](../validation/v111-final.md)). The fade level
 byte and the 8-tick wait are Ninja's. Cuts to black that are not fades
 (area changes, the cut after a boss) still arrive late in the mapped modes.
