@@ -885,6 +885,33 @@ flipped by testing earlier, a cinema path padded to its old length).
 already produces; an extra copy bit in the byte being masked can carry a
 mode split for free ([validation](../validation/sms-palette.md)).
 
+## A per-stage colour exception without RAM
+
+**Observed:** one input colour had to look different in one stage only
+(HELL: 1-1's sidewalk fleck is also 2-2's far ridge). The obvious design
+was a RAM key and value set by a stage-load hook and compared for every
+colour in the upload, costing RAM (with its lifecycle audit), a hook in
+code every mode runs, and a compare per colour in every stage.
+
+**Finding/fix:** the upload already runs a loop per chunk; it reads the
+visible stage there and, in the one stage with an exception, runs a copy of
+the loop with the compare (`cpx #key / beq`, the value as immediates from
+generated equates). Other stages pay one `lda/cmp/beq` per chunk; the other
+modes nothing, so their whole-run identity held frame for frame. The colour
+follows the stage variable from the first upload after it changes, so no
+load hook is needed ([validation](../validation/hell-1-1.md)).
+
+**Reusable lesson:** put a rare exception where the code already branches
+per batch, keyed on state the game keeps anyway, and specialise the inner
+loop for it rather than testing in the common loop. Separately: a per-frame
+VCE check in Geargrafx can catch an upload in progress (the frame boundary
+falls inside the vblank work), so a few cycles' shift can add a one-frame,
+one-entry "not yet due" that is gone the next frame; look at the PC at the
+boundary before calling it lag.
+
+**Confidence/limits:** emulator (Geargrafx `78fc3d7`); one stage, one
+colour.
+
 ## Code running in a mapped bank cannot unmap it
 
 **Observed:** the first HELL build crashed at the end of its first upload:

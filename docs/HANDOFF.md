@@ -41,12 +41,20 @@
   DMG paths are cycle-for-cycle unchanged; the menu queues all colours when
   it changes the live mode
   ([architecture](ARCHITECTURE.md#palette-modes),
-  [evidence](validation/hell-palette.md), emulator only). Retuned
-  candidates D and D2 (owner's choice pending) are a swap of
-  `src/palette/hell.json` for `build/hell-tune/gen/hell-D-ship.json` or
-  `hell-D2-ship.json`: `scripts/palette_tables.py` takes their optional
-  "steel" family (`all-palettes`); without it the shipped table is
-  reproduced exactly.
+  [evidence](validation/hell-palette.md), emulator only). **Since branch
+  `hell-1-1` (from `all-palettes`) HELL is the retuned candidate D** (the
+  owner, 2026-11-11: "1-1 hell should be more like 2-2"; 1-1's walls,
+  sidewalk and street and the indoor walls take 2-2's bridge and column
+  golds) **with one per-stage override**: in 1-1 colour `$094` (sidewalk
+  fleck, skyline shadow faces) shows 210 (R G B), 2-2's dark column gold,
+  where the table keeps crimson for 2-2's far ridge (`hell.json`
+  `stage_overrides`; the upload reads `$2E5F` where it picks its loop; no
+  RAM, 139 bytes in bank `$43`'s tail, +6 master clocks a low-half colour in
+  1-1 only, 9 cycles a mapped chunk elsewhere). Original, NES-A, NES-B, GB
+  DMG and SMS are identical to `all-palettes` frame for frame
+  ([architecture](ARCHITECTURE.md#palette-modes),
+  [evidence](validation/hell-1-1.md), emulator only). Open for the owner:
+  210 or 2-2's olive 110 for that colour (`build/hell-1-1/choose-094.png`).
 - **SMS palette** (1.11-dev, branch `sms-palette`, from `hell-palette`):
   `$2100` = `$38`, menu value `SMS` after HELL: everything on screen in the
   Sega Master System's 64 colours (each channel to the nearest SMS level,
@@ -107,7 +115,7 @@
   sound driver playing on had made the 8 sweep failures; with it held the
   sweep is exact except one opening that differs only by the timer
   interrupt's phase, listed apart (`--strict` fails it). HELL's retuned
-  candidates D/D2 need only a swap of `src/palette/hell.json`. Evidence:
+  candidate D and the 1-1 override followed on `hell-1-1` (above). Evidence:
   [validation/all-palettes.md](validation/all-palettes.md), emulator only.
 - **Popup menu** (1.11-dev, branch `popup-menu`): Select opens a 26 x 10
   window over the playfield (BAT rows 7-16) instead of covering the HUD:

@@ -123,9 +123,10 @@ default) keeps the PC Engine game's Fire Wheel.
   NES-A. Also a draft.
 - **GB DMG**: the four green shades of the original Game Boy.
 - **HELL**: the scenery turns to lava, fire and ash: skies and blues glow
-  red and orange, greens scorch to brown, greys and whites become embers and
-  ash. Ryu, the enemies and the status bar keep their own colours, so they
-  stand out.
+  red and orange, greens scorch to brown, stone, walls and pavements take
+  the dark golds of the 2-2 bridge columns, whites become embers and ash.
+  Ryu, the enemies and the status bar keep their own colours, so they stand
+  out.
 - **SMS**: everything on screen (scenery, status bar, Ryu, enemies, bosses)
   in the Sega Master System's 64 colours, with all of the PC Engine
   picture's detail: each colour is moved to the nearest Master System

@@ -388,17 +388,45 @@ The upload goes through the trampoline at `$FEC0` to bank `$46` `$5000`:
   entries: `$F350` may have dropped one) leaves all 512 colours over.
 - HELL in gameplay: the same queue and the same budget rules, but only VCE
   entries 0-239 (background palettes 0-14) are looked up, in the HELL table
-  (`src/palette/hell.json`: the owner's mock-up "Lava", ported operation for
-  operation). Each chunk stops at entry 240; from there on (the HUD palette
+  (`src/palette/hell.json`: the owner's mock-up "Lava" retuned as candidate
+  D, the owner's choice of 2026-11-11 "1-1 more like 2-2": cool greys and
+  dull teals take 2-2's column golds; ported operation for operation), with
+  one per-stage override (below). Each chunk stops at entry 240; from there on (the HUD palette
   15, the sprite palettes and the border, entry `$100`, which is sprite
   palette 0's transparent colour) the colours go unchanged by a TIA that the
   upload builds on the stack (`tia src,$0404,len / rts`) and calls, at the
   native 42 master clocks a colour; such a chunk of n colours is charged
   n/4 + n/32 + 3 colours of the budget (measured: about 0.27 n + 0.7 of a
   mapped colour's 156 clocks beyond the per-chunk work the mapped loop also
-  has). The code (848 bytes) and the table are in bank `$43` `$7800-$7FFF`,
-  mapped in MPR3 for the upload (pushed and restored; code running in MPR3
-  cannot unmap itself, so the exits that restore it are in bank `$46`).
+  has). The code (981 bytes, `$7800-$7BD4`) and the table are in bank `$43`
+  `$7800-$7FFF`, mapped in MPR3 for the upload (pushed and restored; code
+  running in MPR3 cannot unmap itself, so the exits that restore it are in
+  bank `$46`).
+- HELL's per-stage override (1.11-dev, `hell.json` `stage_overrides`): one
+  stage may show one low-half colour (`$001-$0FF`) as another colour than
+  the table's. Shipped: in 1-1, `$094` (R2 G2 B4: the sidewalk's fleck,
+  palette 3 entry 5, and the skyline's shadow faces, Enhanced palette 1
+  entry 2; also entries 1 and 181) shows `$050` (R2 G1 B0, the dark gold
+  of 2-2's columns) where the table keeps crimson (R6 G0 B1) for 2-2's far
+  ridge, which uses the same input colour. No RAM and no stage-load hook:
+  where the upload picks its loop (each mapped chunk in `hell_chunk`, and
+  `now_hell` for palette_now) it reads the visible stage `$2E5F` and
+  compares it with the generated `HELL_OVERRIDE_STAGE`; in that stage it
+  runs `hell_colour_ovr` / `now_hell_ovr`, the same loops with `cpx
+  #HELL_OVERRIDE_KEY / beq` on the low half (4 cycles a low-half colour;
+  a hit writes the immediate `HELL_OVERRIDE_LO/HI`, 4 cycles fewer than
+  the lookup). Elsewhere the choice costs 9 cycles a mapped chunk (`lda
+  $2E5F / cmp # / beq`). The table and the budget are unchanged, so
+  `$2E5F` alone decides which colour a frame's upload writes: the colour
+  follows the stage from the first upload after `$2E5F` changes (Level
+  Select, the stage's own load, the popup). Without an override the
+  stage equate is `$FF` (never visible). A further colour for the same
+  stage is one more `cpx/beq` and hit in each loop (+4 cycles a low-half
+  colour each); `scripts/palette_tables.py` (`HELL_OVERRIDES_MAX`) refuses
+  more than the loops compare. Another stage needs its own compare of
+  `$2E5F`. `palette_tables.hell_stage_table(stage)` gives the colours a
+  stage shows (the checks use it). Evidence:
+  [validation/hell-1-1.md](validation/hell-1-1.md).
 - SMS in gameplay: GB DMG's upload, instruction for instruction, with the
   SMS table (`src/palette/sms.json`: each channel to the nearest of the
   Master System's four levels 0/85/170/255 in linear terms, shown as PC
@@ -432,7 +460,11 @@ The upload goes through the trampoline at `$FEC0` to bank `$46` `$5000`:
   `vblank_cinema` (`tma/pha/pla/tam`, an `lda`, three `nop`s, so the stack
   sees the same byte); palette_now's HELL path drops a `sec` (the dispatch's
   compare leaves carry set) and, in a cinema, leaves by a 2-cycle shorter
-  exit.
+  exit. Since the per-stage override HELL's gameplay paths take 9 cycles
+  more per mapped chunk (and per palette_now with colours below 240), and
+  in 1-1 4 cycles more per low-half colour; the other modes' paths are
+  unchanged (only the operand of bank `$46`'s `jmp now_hell`, a HELL-only
+  instruction, and its copy in bank `$3B` moved with the HELL code).
 - `$2104` bit 7 records whether the VCE holds mapped colours; when the
   colours due differ (Original against a mapped mode, cinema started or
   ended) the upload queues all 512 first (`$F394`). The bit does not say

@@ -3,8 +3,9 @@ while replaying a stored run (fresh session, shared start state) or a cold
 boot through the title to 600 updates of 1-1 (RUN = boot). Reports every
 stop (PC and MPRs). Run it on the build before the change: the range must
 never be touched.
-usage: freewatch.py ROM RUN LO HI [LO HI ...]"""
+usage: freewatch.py ROM RUN LO HI [LO HI ...]   (FREEWATCH_FLAGS: $2100, default 0)"""
 import json
+import os
 import shutil
 import sys
 import tempfile
@@ -53,7 +54,7 @@ if run_name == 'boot':
         shutil.rmtree(work, ignore_errors=True)
 else:
     run = load_run(run_name)
-    with Session(rom, 0) as g:
+    with Session(rom, int(os.environ.get("FREEWATCH_FLAGS", "0"), 0)) as g:
         cv.start_stage(g, run['stage'])
         watch(g)
         for count, buttons in run['segments'] + [[60, []]]:

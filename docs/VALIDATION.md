@@ -95,6 +95,10 @@ switching between all six palette modes; the all-palettes build's evidence
 (identity of every mode with its single-mode build, NES-B, the menu's sound
 hold) is in [validation/all-palettes.md](validation/all-palettes.md), its
 probes in `research/tools/all-palettes/`.
+HELL's candidate D and its 1-1 override (identity of the other five modes
+with `all-palettes`, HELL's colours per stage, timing) are in
+[validation/hell-1-1.md](validation/hell-1-1.md), probes in
+`research/tools/hell-1-1/`.
 
 ## Outstanding
 
