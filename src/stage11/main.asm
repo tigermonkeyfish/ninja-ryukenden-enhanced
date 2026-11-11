@@ -99,12 +99,13 @@ initialize:
  ; fades and full re-queues keep it, and to the VCE at once, as the display
  ; shows the new backdrop in this frame (src/palette, palette_now at $FEBE,
  ; in the active palette mode's colours). The NES palette mode ($2100 bits
- ; 3-4 = 01, src/nes-palette) has its own version (nes-enhanced.inc).
+ ; 3-4 = 01, src/nes-palette) has its own versions, NES-A's and NES-B's
+ ; (nes-enhanced.inc).
  clx
  lda $2100
  and #$18
  cmp #$08
- beq nes_palette_loop
+ beq nes_palette
 palette_loop:
  lda extra_palette,x
  sta $22a6,x
@@ -112,6 +113,13 @@ palette_loop:
  cpx #32
  bne palette_loop
  bra palette_written
+nes_palette:
+ ; NES-B ($2100 bit 5 set) has its own versions (the re-lit data), copied
+ ; out of line (nes_b_palette_loop) to keep this block short.
+ lda $2100
+ and #$20
+ beq nes_palette_loop
+ jmp nes_b_palette_loop
 nes_palette_loop:
  lda extra_palette_nes,x
  sta $22a6,x
@@ -310,6 +318,14 @@ set_ports:
  rts
 copy_dispatch:
  jmp [$2029]
+ ; NES-B's copy loop (from initialize), back to palette_written.
+nes_b_palette_loop:
+ lda extra_palette_nes_b,x
+ sta $22a6,x
+ inx
+ cpx #32
+ bne nes_b_palette_loop
+ jmp palette_written
  ; The NES palette mode's merged palette 1 (scripts/nes_palette.py).
  .include "nes-enhanced.inc"
 renderer_end:

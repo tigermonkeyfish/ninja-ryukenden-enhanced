@@ -129,13 +129,13 @@ initialize:
  ; The merged palettes 13 and 14 go into the RAM palette and to the VCE at
  ; once, as the display shows the new backdrop in this frame (src/palette,
  ; palette_now at $FEBE, in the active palette mode's colours). The NES
- ; palette mode ($2100 bits 3-4 = 01, src/nes-palette) has its own versions
- ; (nes-enhanced.inc).
+ ; palette modes ($2100 bits 3-4 = 01, src/nes-palette) have their own
+ ; versions, NES-A's and NES-B's (nes-enhanced.inc).
  clx
  lda $2100
  and #$18
  cmp #$08
- beq nes_palette_loop
+ beq nes_palette
 palette_loop:
  lda palette13,x
  sta $2426,x
@@ -145,6 +145,13 @@ palette_loop:
  cpx #32
  bne palette_loop
  bra palette_written
+nes_palette:
+ ; NES-B ($2100 bit 5 set) has its own versions (the re-lit data), copied
+ ; out of line (nes_b_palette_loop) to keep this block short.
+ lda $2100
+ and #$20
+ beq nes_palette_loop
+ jmp nes_b_palette_loop
 nes_palette_loop:
  lda palette13_nes,x
  sta $2426,x
@@ -481,6 +488,16 @@ set_ports:
  adc #$ff
  sta <$2a
  rts
+ ; NES-B's copy loop (from initialize), back to palette_written.
+nes_b_palette_loop:
+ lda palette13_nes_b,x
+ sta $2426,x
+ lda palette14_nes_b,x
+ sta $2446,x
+ inx
+ cpx #32
+ bne nes_b_palette_loop
+ jmp palette_written
  ; The NES palette mode's palettes 13 and 14 (scripts/nes_palette.py).
  .include "nes-enhanced.inc"
 helpers_end:

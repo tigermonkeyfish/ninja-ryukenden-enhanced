@@ -60,6 +60,18 @@ Outputs (prepare steps, scripts/asset_transforms.py):
   loader's format ($F2BE: per 8 colours one byte of bit-8 values, most
   significant first, then the 8 low bytes), and the NES copy of bank 3's
   animation table (the original's records with NES lists).
+- NES-B (`$2100` = `$28`, the re-lit variant, `relit(data)`): from the
+  same role data, each role's dark PC Engine shades lifted into the
+  lightness range of its NES ramp codes (`relight_targets`), so the
+  picture reads lighter, like the NES stage, still in NES colours only
+  and with the same detail rules. `generate` also writes
+  `nes-b-tables.inc` (bank $45: per set and per stage the address of the
+  NES-B copy), `nes-b-sets.inc` (the packed NES-B sets and 3-2 variant,
+  bank $3B) and `nes-b-anim.inc` (bank 3: the NES-B animation table; lists
+  equal to an NES-A list are shared). Sprites, Ryu and the HUD are NES-A's
+  (the build checks that they do not differ). `lift` (an NES code: the
+  lift floor) and `lift_black` (lift a near-black role too) are optional
+  role keys for NES-B only; `lift: false` keeps a role as NES-A.
 - `enhanced(module, work, original)`: `nes-enhanced.inc` for stage11/stage22,
   the NES versions of their merged palettes (1-1 palette 1, 2-2 palettes
   13/14). Each merged colour is a native backdrop colour; it takes the NES
@@ -109,8 +121,14 @@ CHROMA = 0.15
 CHROMA_EXT = 0.6             # the same beyond the role's hue columns (detail)
 NEAR_GREY = 32.0              # chroma below which an NES colour counts as a near-grey (grey roles)
 NEAR_GREY_HUED = 22.0         # the same for roles with a hue
+# NES-B (re-lit): each role's dark PC Engine shades lift into the lightness
+# range of its NES ramp codes (the real NES stage's colours for the role).
+RELIGHT_MIN_SPAN = 16.0       # the lift range is at least this wide (a one-code ramp)
+FLOOR_TOL = 2.0               # candidates darker than the lift floor minus this ...
+FLOOR_PRICE = 2 * MERGE       # ... cost more than a merge (the row merges before it darkens)
 ENTRY_KEYS = {'index', 'row', 'entry', 'pce', 'role', 'nes', 'out', 'override'}
-ROLE_KEYS = {'ramp', 'mode', 'strict', 'chroma', 'black_l', 'extra', 'exclude', 'note', 'detail', 'chroma_ext'}
+ROLE_KEYS = {'ramp', 'mode', 'strict', 'chroma', 'black_l', 'extra', 'exclude', 'note', 'detail', 'chroma_ext',
+             'lift', 'lift_black'}
 
 NES_2C02G = """
 575757,000C8E,0800A6,340096,550061,630015,5A0000,3C0E00,112800,003B00,004200,003A05,002652,000000,000000,000000,
@@ -229,17 +247,60 @@ def _hue_penalty(n, ramp, fam):
     return EXT_FAR if not grey_role else EXT_FAR
 
 
+def _is_black(role, c):
+    L, a, b = lab(rgb8(c))
+    return L < 2 or (L < role.get('black_l', BLACK_L) and (a * a + b * b) ** 0.5 < BLACK_CHROMA)
+
+
+def relight_targets(role, colours, span, floor=None):
+    """NES-B: {colour: (target L*, floor L*)} for one role's colours.
+
+    `span` = (lo, hi): the role's PC Engine L* range over its whole file (set
+    entries and animation lists, near-blacks left out). The lift range is
+    [n0, n1]: n0 the L* of the role's darkest NES ramp code (or of its `lift`
+    code), n1 its lightest (at least n0 + RELIGHT_MIN_SPAN). Shades from the
+    role's darkest (lo -> n0) up to n1 are lifted linearly, never darkened;
+    shades above n1 keep their own L*. The floor n0 makes candidates darker
+    than n0 - FLOOR_TOL cost FLOOR_PRICE. Near-blacks keep their own L* and
+    no floor (they stay 0F) unless the role has `lift_black` (a near-black
+    backdrop that is the NES stage's sky). `lift: false` turns NES-B off for
+    the role."""
+    lift = role.get('lift')
+    if lift is False or span is None:
+        return None
+    ls = [lightness(nes9(int(x, 16))) for x in role['ramp'] if int(x, 16) != 0x0F]
+    if not ls:
+        return None
+    n0 = lightness(nes9(int(lift, 16))) if lift else min(ls)
+    if floor is not None:
+        n0 = max(n0, floor)           # the pale variant: nothing below the NES 1x row
+    n1 = max(max(ls), n0 + RELIGHT_MIN_SPAN)
+    p0 = span[0]
+    out = {}
+    for c in colours:
+        L = lightness(c)
+        if _is_black(role, c) and not role.get('lift_black'):
+            out[c] = (L, None)
+        elif L >= n1 or p0 >= n0:
+            out[c] = (L, n0 if p0 < n0 else None)
+        else:
+            t = n0 + (L - p0) * (n1 - n0) / (n1 - p0)
+            out[c] = (max(t, L), n0)
+    return out
+
+
 def _ab2(p, q):
     return (p[1] - q[1]) ** 2 + (p[2] - q[2]) ** 2
 
 
-def _cost(role, c, n, ramp, fam):
+def _cost(role, c, n, ramp, fam, target=None):
     """Lightness distance, the colour's own hue only to choose among the
     role's hues (its distance to a candidate beyond its distance to the
     nearest role colour), and the candidate's distance from the role's hues
     (its tier and its a*b* distance to the nearest role colour)."""
     pc = lab(rgb8(c))
     L, a, b = pc
+    tl, floor = (L, None) if target is None else target
     if n == 0x0F and 0x0F not in ramp and not (
             L < 2 or (L < role.get('black_l', BLACK_L) and (a * a + b * b) ** 0.5 < BLACK_CHROMA)):
         return INFEASIBLE        # black only for (near-)black, near-neutral colours
@@ -250,7 +311,8 @@ def _cost(role, c, n, ramp, fam):
     weight = role.get('chroma', CHROMA) if n in ramp or n in fam else role.get('chroma_ext', CHROMA_EXT)
     own = max(0.0, _ab2(pc, nc) - min(_ab2(pc, x) for x in core))
     away = min(_ab2(nc, x) for x in core)
-    return (L - nc[0]) ** 2 + weight * own + ROLE_HUE * away + _hue_penalty(n, ramp, fam)
+    lift = FLOOR_PRICE if floor is not None and n != 0x0F and nc[0] < floor - FLOOR_TOL else 0.0
+    return (tl - nc[0]) ** 2 + lift + weight * own + ROLE_HUE * away + _hue_penalty(n, ramp, fam)
 
 
 def _candidates(role):
@@ -267,7 +329,7 @@ def _candidates(role):
     return ramp, fam, out
 
 
-def resolve_role(role, colours, taken=frozenset()):
+def resolve_role(role, colours, taken=frozenset(), targets=None):
     """{PC Engine colour: NES code} for the colours of one role in one
     palette row. 'match' roles keep detail: distinct colours get distinct NES
     colours in their lightness order (a dynamic programme over the colours
@@ -294,10 +356,10 @@ def resolve_role(role, colours, taken=frozenset()):
     if not cols:
         return {}
     if not role.get('detail', True):
-        return {c: min(cands, key=lambda n: _cost(role, c, n, ramp, fam)) for c in cols}
+        return {c: min(cands, key=lambda n: _cost(role, c, n, ramp, fam, targets[c] if targets else None)) for c in cols}
     cands = sorted(cands, key=lambda n: (lightness(nes9(n)), n))
     k, m = len(cols), len(cands)
-    cost = [[_cost(role, c, n, ramp, fam) + (MERGE if nes9(n) in taken else 0) for n in cands] for c in cols]
+    cost = [[_cost(role, c, n, ramp, fam, targets[c] if targets else None) + (MERGE if nes9(n) in taken else 0) for n in cands] for c in cols]
     inf = float('inf')
     dp = [cost[0][:]]
     back = [[None] * m]
@@ -326,11 +388,12 @@ def _row_key(e):
     return e.get('row')
 
 
-def resolve(entries, roles):
+def resolve(entries, roles, spans=None, floor=None):
     """[(nes code, out colour)] for colour records (dicts with pce, role,
     optional override and row) under roles. Roles resolve per row, the
     larger first, each avoiding the colours the row's earlier roles took;
-    `unused` / `keep` records take the nearest NES colour."""
+    `unused` / `keep` records take the nearest NES colour. `spans`
+    ({role: (lo, hi)} PC Engine L* ranges) selects NES-B (re-lit)."""
     groups = collections.defaultdict(set)
     for e in entries:
         if e['role'] not in ('unused', 'keep'):
@@ -345,7 +408,10 @@ def resolve(entries, roles):
     for row, items in rows.items():
         taken = {nes9(int(e['override'], 16)) for e in entries if _row_key(e) == row and e.get('override')}
         for role, cs in sorted(items, key=lambda x: (-len(x[1]), x[0])):
-            r = resolve_role(roles[role], cs, frozenset(taken))
+            tg = None
+            if spans is not None and roles[role].get('mode', 'match') == 'match':
+                tg = relight_targets(roles[role], cs, spans.get(role), floor)
+            r = resolve_role(roles[role], cs, frozenset(taken), tg)
             maps[(row, role)] = r
             taken |= {nes9(n) for n in r.values()}
     out = []
@@ -408,7 +474,7 @@ def anim_entries(a):
             for i, p in enumerate(a['pce'])]
 
 
-def anim_resolve(s, roles):
+def anim_resolve(s, roles, light=None, floor=None):
     """{entry: [(code, out)]}: all lists of one animation set resolve as one
     row, so a colour that travels from entry to entry keeps its NES colour."""
     recs, spans = [], []
@@ -416,8 +482,46 @@ def anim_resolve(s, roles):
         e = anim_entries(a)
         spans.append((a['entry'], len(recs), len(recs) + len(e)))
         recs += e
-    res = resolve(recs, roles)
+    res = resolve(recs, roles, light, floor)
     return {entry: res[i:j] for entry, i, j in spans}
+
+
+def role_spans(data):
+    """NES-B: {stage file: {role: (lo, hi)}}, the PC Engine L* range of each
+    role over the file's set entries and its animation lists (near-blacks
+    left out), so a colour gets one NES-B colour wherever it appears."""
+    out = {}
+    lists = collections.defaultdict(list)
+    for s, a, _ in anim_records(data):
+        if s.get('file'):
+            lists[s['file']] += [(a['role'], int(p, 16)) for p in a['pce']]
+    for d in data['stages']:
+        ls = collections.defaultdict(list)
+        for role, c in [(e['role'], int(e['pce'], 16)) for e in d['entries']] + lists[d['_file']]:
+            if role in d['roles'] and (d['roles'][role].get('lift_black') or not _is_black(d['roles'][role], c)):
+                ls[role].append(lightness(c))
+        out[d['_file']] = {r: (min(v), max(v)) for r, v in ls.items()}
+    return out
+
+
+def relit(data, floor=None):
+    """NES-B: a copy of `data` whose stage files and animation lists store
+    the re-lit results (sprites, Ryu and the HUD keep NES-A's)."""
+    import copy
+    b = copy.deepcopy(data)
+    spans = role_spans(data)
+    for d in b['stages']:
+        for e, (code, o) in zip(d['entries'], resolve(d['entries'], d['roles'], spans[d['_file']], floor)):
+            e['nes'], e['out'] = f'{code:02X}', f'{o:03X}'
+    if b.get('animations'):
+        files = {d['_file']: d for d in b['stages']}
+        for s in b['animations']['sets']:
+            roles = {**files[s['file']]['roles'], **s.get('roles', {})} if s.get('file') else dict(s.get('roles', {}))
+            res = anim_resolve(s, roles, spans.get(s.get('file')), floor)
+            for a in s['animators']:
+                a['nes'] = [f'{c:02X}' for c, _ in res[a['entry']]]
+                a['out'] = [f'{o:03X}' for _, o in res[a['entry']]]
+    return b
 
 
 def check(data):
@@ -673,29 +777,86 @@ def includes(data, original=None):
     return out
 
 
-def anim_include(lay, original):
+def anim_lists(lay, original, prefix='nes_anim'):
+    """{(colours, end word): label} of the lists anim_include writes."""
+    rom = original_animations(original)
+    out = {}
+    for s in range(ANIM_SETS):
+        nes = dict(lay['animations'].get(s, []))
+        for k, (d, f, e, cols, end) in enumerate(rom[s]):
+            out.setdefault((tuple(nes.get(e) or ()), end), f'{prefix}_list_{s}_{k}')
+    return out
+
+
+def anim_include(lay, original, prefix='nes_anim', shared=None):
     """The NES copy of bank 3's animation table: pointer table, records with
     the original delays, flags and entries, NES lists (same lengths and end
-    words, so every tick costs what the original's does)."""
+    words, so every tick costs what the original's does). `prefix` names
+    the labels; a list equal to one in `shared` ({(colours, end): label},
+    anim_lists of a table assembled with this one) points there instead of
+    being stored again, and equal lists within the table are stored once
+    (without `shared`, NES-A's table, every list is stored, as before)."""
     rom = original_animations(original)
-    t = ['; Generated by scripts/nes_palette.py: the NES animation table (bank 3, original layout).',
-         'nes_anim:',
-         ' .dw ' + ','.join(f'nes_anim_set_{s}' for s in range(ANIM_SETS))]
+    name = 'the NES' if shared is None else 'the NES-B'
+    t = [f'; Generated by scripts/nes_palette.py: {name} animation table (bank 3, original layout).',
+         f'{prefix}:',
+         ' .dw ' + ','.join(f'{prefix}_set_{s}' for s in range(ANIM_SETS))]
+    own = dict(shared or {})
     for s in range(ANIM_SETS):
         recs = rom[s]
         nes = dict(lay['animations'].get(s, []))
-        t.append(f'nes_anim_set_{s}:')
+        t.append(f'{prefix}_set_{s}:')
         t.append(f' .db {len(recs)}')
-        for k, (d, f, e, cols, end) in enumerate(recs):
-            t.append(f' .db {d},{f},{e}')
-            t.append(f' .dw nes_anim_list_{s}_{k}')
+        lists = []
         for k, (d, f, e, cols, end) in enumerate(recs):
             new = nes.get(e)
             if new is None or len(new) != len(cols):
                 raise NesPaletteError(f'animation set {s} entry {e}: no NES list of {len(cols)} colours')
-            t.append(f'nes_anim_list_{s}_{k}:')
+            key = (tuple(new), end) if shared is not None else (s, k)
+            if key not in own:
+                own[key] = f'{prefix}_list_{s}_{k}'
+                lists.append((own[key], new, end))
+            t.append(f' .db {d},{f},{e}')
+            t.append(f' .dw {own[key]}')
+        for label, new, end in lists:
+            t.append(f'{label}:')
             t.append(' .dw ' + ','.join(f'${c:03x}' for c in new) + f',${end:04x}')
     return '\n'.join(t) + '\n'
+
+
+def includes_b(data_a, data_b, original):
+    """{file name: text} for NES-B: nes-b-tables.inc (bank $45: set and
+    variant addresses in the $6000 window of bank NES_B_BANK), nes-b-sets.inc
+    (the packed sets and variants, assembled in that bank) and
+    nes-b-anim.inc (bank 3, assembled after NES-A's nes-anim.inc, whose
+    lists it shares where equal; needs the original ROM, else left out).
+    Sprites and the HUD must be NES-A's."""
+    la, lb = layout(data_a), layout(data_b)
+    if lb['sprites'] != la['sprites'] or lb['hud'] != la['hud']:
+        raise NesPaletteError('NES-B: sprite palettes and HUD must be NES-A\'s (shared)')
+    if set(lb['sets']) != set(la['sets']) or set(lb['variants']) != set(la['variants']):
+        raise NesPaletteError('NES-B: the same sets and variants as NES-A')
+    win = lambda label: f'{label}+${WINDOW:04x}'
+    t = ['; Generated by scripts/nes_palette.py: NES-B (re-lit) set addresses, bank NES_B_BANK in the $6000 window.']
+    t.append('nes_b_set_lo:')
+    t.append(' .db ' + ','.join(f'LOW({win(f"nes_b_set_{s}")})' if s in lb['sets'] else '0' for s in range(SETS)))
+    t.append('nes_b_set_hi:')
+    t.append(' .db ' + ','.join(f'HIGH({win(f"nes_b_set_{s}")})' if s in lb['sets'] else '0' for s in range(SETS)))
+    t.append('nes_b_variant_lo:')
+    t.append(' .db ' + ','.join(f'LOW({win(f"nes_b_variant_{st}")})' if st in lb['variants'] else '0' for st in range(SETS)))
+    t.append('nes_b_variant_hi:')
+    t.append(' .db ' + ','.join(f'HIGH({win(f"nes_b_variant_{st}")})' if st in lb['variants'] else '0' for st in range(SETS)))
+    sets = ['; Generated by scripts/nes_palette.py: the NES-B (re-lit) colour sets and variants.']
+    for s, cols in sorted(lb['sets'].items()):
+        sets.append(f'nes_b_set_{s}:   ; {len(cols)} colours')
+        sets += _db(pack(cols), 9)
+    for st, (s, cols) in sorted(lb['variants'].items()):
+        sets.append(f'nes_b_variant_{st}:   ; {STAGE_NAMES[st]}: set {s}')
+        sets += _db(pack(cols), 9)
+    out = {'nes-b-tables.inc': '\n'.join(t) + '\n', 'nes-b-sets.inc': '\n'.join(sets) + '\n'}
+    if original is not None:
+        out['nes-b-anim.inc'] = anim_include(lb, original, 'nes_anim_b', anim_lists(la, original))
+    return out
 
 
 def nes_problems(lay):
@@ -747,6 +908,13 @@ def generate(work, original, path=DATA):
         raise NesPaletteError('NES palette data:\n  ' + '\n  '.join(problems))
     for name, text in includes(data, original).items():
         (Path(work) / name).write_text(text)
+    # NES-B: the re-lit variant of the same role data.
+    data_b = relit(data)
+    bad = nes_problems(layout(data_b))
+    if bad:
+        raise NesPaletteError('NES-B palette data:\n  ' + '\n  '.join(bad))
+    for name, text in includes_b(data, data_b, original).items():
+        (Path(work) / name).write_text(text)
     rows = detail_report(data)
     lost = [r for r in rows if r[3] < r[2]]
     if lost:
@@ -767,12 +935,15 @@ ENHANCED = {
 }
 
 
-def enhanced_palettes(module, original, path=DATA):
-    """{label: (merged PC Engine palette, NES palette)} for an Enhanced module."""
+def enhanced_palettes(module, original, path=DATA, variant='a'):
+    """{label: (merged PC Engine palette, NES palette)} for an Enhanced module
+    (`variant` 'b': from NES-B's re-lit results)."""
     import native_backdrops as NB
     import native_gfx as NG
     profile, setn, labels = ENHANCED[module]
     data = load(path)
+    if variant == 'b':
+        data = relit(data)
     d = next(x for x in data['stages'] if x['set'] == setn and not x.get('variant_of'))
     out_of = {e['index']: int(e['out'], 16) for e in d['entries']}
     backdrop = NG.Backdrop(original, profile)
@@ -801,12 +972,15 @@ def enhanced_palettes(module, original, path=DATA):
 
 
 def enhanced(module, work, original, path=DATA):
+    """nes-enhanced.inc: each merged palette's NES-A version under its
+    label and NES-B's under label + '_b'."""
     lines = [f'; Generated by scripts/nes_palette.py: NES-mode versions of {module}\'s merged palettes.']
-    for label, (merged, nes) in enhanced_palettes(module, original, path).items():
-        bad = [c for c in nes if c not in NES_COLOURS]
-        if bad:
-            raise NesPaletteError(f'{module} {label}: colours outside the NES set {bad}')
-        lines += [f'{label}:', ' .dw ' + ','.join(f'${c:03x}' for c in nes)]
+    for variant, suffix in (('a', ''), ('b', '_b')):
+        for label, (merged, nes) in enhanced_palettes(module, original, path, variant).items():
+            bad = [c for c in nes if c not in NES_COLOURS]
+            if bad:
+                raise NesPaletteError(f'{module} {label}{suffix}: colours outside the NES set {bad}')
+            lines += [f'{label}{suffix}:', ' .dw ' + ','.join(f'${c:03x}' for c in nes)]
     (Path(work) / 'nes-enhanced.inc').write_text('\n'.join(lines) + '\n')
 
 

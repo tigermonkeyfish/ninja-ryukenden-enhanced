@@ -1,7 +1,13 @@
-; NES palette mode ($2100 bits 3-4 = 01): the game in NES master-palette
-; colours, read as NES Ninja Gaiden. The colours are data (src/nes-palette/
-; *.json; scripts/nes_palette.py generates the nes-*.inc files at build
-; time); this module only chooses them.
+; NES palette modes ($2100 bits 3-4 = 01; bit 5 clear NES-A, set NES-B):
+; the game in NES master-palette colours, read as NES Ninja Gaiden. The
+; colours are data (src/nes-palette/*.json; scripts/nes_palette.py
+; generates the nes-*.inc files at build time); this module only chooses
+; them. NES-B is the re-lit variant of the same role data (each role's dark
+; shades lifted into its NES ramp's lightness): its own colour sets, 3-2
+; variant, animation table and 1-1 / 2-2 Enhanced palettes; sprite
+; palettes, Ryu and the HUD are NES-A's. Every NES-B test comes after the
+; NES family test, so Original, GB DMG, HELL and SMS run exactly the code
+; they ran before NES-B.
 ;
 ; All the game's palette data is in bank $37: the colour sets (table at
 ; $6000, loader $F211, A = set) and the sprite palettes ($7180 + 18n, loader
@@ -21,11 +27,13 @@
 ; A set may have a variant for one stage ($2E5F): 3-2 shares set 6 with 3-1.
 
 OPTIONS = $2100
-PALETTE_BITS = $18
+PALETTE_BITS = $18          ; the upload family: $08 for NES-A ($08) and NES-B ($28)
 PALETTE_NES = $08
+PALETTE_VARIANT = $20       ; set: NES-B
 MASTER_STATE = $2240        ; 0 gameplay, 1 cinema or title, 2 ending
 STAGE = $2e5f               ; Level Select numbering, 0-21
 NES_BANK = $45
+NES_B_BANK = $3b            ; NES-B's colour sets and variant ($4200-$4FFF, unused in the original)
 DATA_BANK = $37             ; the original palette data
 UNPACK = $f2be              ; native: unpack colours from [<$19] (MPR3)
 SET_COLOUR = $f23c          ; native: RAM palette entry A = $2284/$2285, queued
@@ -116,6 +124,9 @@ nes_anim_table:
  bne anim_original
  lda MASTER_STATE
  bne anim_original
+ lda OPTIONS
+ and #PALETTE_VARIANT
+ bne anim_nes_b
  lda #LOW(nes_anim)
  ldy #HIGH(nes_anim)
  rts
@@ -123,9 +134,15 @@ anim_original:
  lda #LOW(ANIM_TABLE)
  ldy #HIGH(ANIM_TABLE)
  rts
+anim_nes_b:
+ lda #LOW(nes_anim_b)
+ ldy #HIGH(nes_anim_b)
+ rts
  .include "nes-anim.inc"
+ ; NES-B's table: its own records, lists equal to NES-A's shared.
+ .include "nes-b-anim.inc"
 nes_anim_end:
- .if (nes_anim_end > $da00)
+ .if (nes_anim_end > $dc00)
  .fail
  .endif
 
@@ -179,8 +196,12 @@ set_lookup:
  lda $6001,x
  cmp <$1a
  bne unpack_original_pop
- ; A variant of this set for the stage being loaded (3-2)?
+ ; NES-B takes its own copies (set_lookup_b).
  ldx <$21
+ lda OPTIONS
+ and #PALETTE_VARIANT
+ bne set_lookup_b
+ ; A variant of this set for the stage being loaded (3-2)?
  ldy STAGE
  cpy #SETS
  bcs set_copy
@@ -233,6 +254,40 @@ unpack_original_pop:
 unpack_original:
  jmp UNPACK
 
+ ; NES-B (X = the set): the variant for this stage or the set's copy, all
+ ; in bank NES_B_BANK, unpacked as unpack_nes does for bank $45.
+set_lookup_b:
+ ldy STAGE
+ cpy #SETS
+ bcs set_copy_b
+ txa
+ cmp nes_variant_set,y
+ bne set_copy_b
+ lda nes_b_variant_lo,y
+ pha
+ lda nes_b_variant_hi,y
+ tay
+ pla
+ bra unpack_b
+set_copy_b:
+ ldy nes_b_set_hi,x
+ beq unpack_original_pop    ; no NES copy: title and cinema sets
+ lda nes_b_set_lo,x
+unpack_b:
+ tax
+ lda <$19
+ pha
+ lda <$1a
+ pha
+ stx <$19
+ sty <$1a
+ lda #NES_B_BANK
+ tam #3
+ jsr UNPACK
+ lda #DATA_BANK
+ tam #3
+ bra unpack_done
+
  ; The HUD colours, in NES gameplay from nes_hud_colours, else from bank 1
  ; $83E5, written as the native routine does.
 nes_hud:
@@ -273,8 +328,9 @@ hud_native:
  rts
 nes_code_end:
 
- ; Tables, the HUD words and variant sets.
+ ; Tables, the HUD words and variant sets; NES-B's set addresses.
  .include "nes-tables.inc"
+ .include "nes-b-tables.inc"
 nes_tables_end:
  .if (nes_tables_end > $4400)
  .fail
@@ -291,5 +347,17 @@ nes_sets_end:
  .include "nes-sprites-45.inc"
 nes_bank45_end:
  .if (nes_bank45_end > $6000)
+ .fail
+ .endif
+
+ ; NES-B's colour sets and 3-2 variant: bank $3B $4200-$4FFF (file
+ ; $76200-$76FFF), $FF and never read in the original (the bank's data end
+ ; at $41CE; docs/validation/all-palettes.md); read through MPR3 ($6200 up)
+ ; by set_lookup_b. The SMS palette's copy follows at $5000 (src/palette).
+ .bank NES_B_BANK
+ .org $4200
+ .include "nes-b-sets.inc"
+nes_b_sets_end:
+ .if (nes_b_sets_end > $5000)
  .fail
  .endif

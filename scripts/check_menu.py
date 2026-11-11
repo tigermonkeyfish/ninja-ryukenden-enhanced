@@ -618,7 +618,7 @@ def nes_data(variant):
     version of the same role data: scripts/nes_palette.py)."""
     import nes_palette as NP
     data = NP.load()
-    return NP.relit(data) if variant == 'b' and hasattr(NP, 'relit') else data
+    return NP.relit(data) if variant == 'b' else data
 
 
 def nes_expected(original, variant='a'):
@@ -642,8 +642,7 @@ def nes_expected(original, variant='a'):
     want.update({256 + k: c for k, c in enumerate(dict(lay['sprites'])[96]) if k})
     orig.update({256 + e['entry']: int(e['pce'], 16) for e in data['shared']['sprites'][0]['entries']})
     if original is not None:
-        kw = {'variant': variant} if variant == 'b' and hasattr(NP, 'relit') else {}
-        m, n = NP.enhanced_palettes('stage11', original, **kw)['extra_palette_nes']
+        m, n = NP.enhanced_palettes('stage11', original, variant=variant)['extra_palette_nes']
         want.update({16 + k: n[k] for k in range(1, 16)})
         orig.update({16 + k: m[k] for k in range(1, 16)})
     return want, {i: orig[i] for i in want if orig[i] != want[i]}

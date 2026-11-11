@@ -190,6 +190,33 @@ class PaletteTableTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     hell_table(path)
 
+    def test_hell_steel_family_is_optional(self):
+        # The retuned HELL candidates add a "steel" family (steel_ramp,
+        # steel_windows, steel_mix); without those keys the table is the
+        # shipped one (test_hell_table_is_the_owners_mockup pins it).
+        import tempfile
+        from palette_tables import HELL_PARAMETERS, hell_table
+        spec = json.loads(HELL_PARAMETERS.read_text())
+        self.assertNotIn('steel_ramp', spec)
+        shipped = hell_table()
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'hell.json'
+            # One window over every hue (degrees), saturation, chroma and value:
+            # every coloured (non-grey) colour goes to the steel ramp by value.
+            steel = dict(spec, steel_ramp=[[0.0, 0, 0, 1], [1.0, 3, 3, 7]], steel_windows=[[0, 360, 1.0, 1.0, 1.0]],
+                         steel_mix=[1.0, 0.0])
+            path.write_text(json.dumps(steel))
+            table = hell_table(path)
+            self.assertNotEqual(table, shipped)
+            self.assertEqual(table[0x007], 0x0df)                    # pure blue: the ramp's top (G3 R3 B7)
+            self.assertEqual(table[0x1ff], shipped[0x1ff])           # white is grey: unchanged
+            for key in ('steel_windows', 'steel_mix'):
+                broken = dict(steel)
+                del broken[key]
+                path.write_text(json.dumps(broken))
+                with self.assertRaises(ValueError):
+                    hell_table(path)
+
 
 def pack_half(words):
     """Inverse of the native $F13F packing for one 16-byte half tile: per
@@ -295,6 +322,44 @@ class NesPaletteTests(unittest.TestCase):
         self.assertTrue(NP.nes_problems(lay))
         rec = {'pce': '123', 'role': 'unused', 'nes': '00', 'out': '123', 'entry': 1}
         self.assertTrue(any('not an NES colour' in p for p in NP._check_results('x', [rec], {})))
+
+    def test_nes_b_is_a_relit_variant_of_the_same_roles(self):
+        import nes_palette as NP
+        data = NP.load()
+        a, b = NP.layout(data), NP.layout(NP.relit(data))
+        # NES colours only, the same sets and variant; sprites and HUD shared.
+        self.assertEqual(NP.nes_problems(b), [])
+        self.assertEqual((set(b['sets']), set(b['variants'])), (set(a['sets']), set(a['variants'])))
+        self.assertEqual((b['sprites'], b['hud']), (a['sprites'], a['hud']))
+        self.assertEqual({s: len(c) for s, c in b['sets'].items()}, {s: len(c) for s, c in a['sets'].items()})
+        self.assertTrue(all(b['sets'][s] != a['sets'][s] for s in a['sets']))
+        # Re-lit: lighter on average in every set, never a near-black that NES-A lifted to colour.
+        for s in a['sets']:
+            mean = lambda cols: sum(NP.lightness(c) for c in cols) / len(cols)
+            self.assertGreaterEqual(mean(b['sets'][s]), mean(a['sets'][s]), s)
+        # The variant keys are optional and known to the checker; lift: false keeps NES-A.
+        self.assertIn('lift', NP.ROLE_KEYS)
+        self.assertIn('lift_black', NP.ROLE_KEYS)
+        flat = NP.load()
+        for d in flat['stages']:
+            for r in d['roles'].values():
+                r['lift'] = False
+        off = NP.layout(NP.relit(flat))
+        self.assertEqual(off['sets'], a['sets'])
+        # The NES-B tables: every set and the 3-2 variant from NES_B_BANK's
+        # window (no bank-$45 mark), packed as the loader reads them.
+        inc = NP.includes_b(data, NP.relit(data), None)
+        t, s = self.labelled_bytes(inc['nes-b-tables.inc']), self.labelled_bytes(inc['nes-b-sets.inc'])
+        for n in range(NP.SETS):
+            if n in b['sets']:
+                self.assertEqual(t['nes_b_set_hi'][n], f'HIGH(nes_b_set_{n}+$2000)')
+                self.assertEqual(NP.unpack(bytes(s[f'nes_b_set_{n}']), len(b['sets'][n])), b['sets'][n])
+            else:
+                self.assertEqual((t['nes_b_set_lo'][n], t['nes_b_set_hi'][n]), (0, 0))
+        self.assertEqual(NP.unpack(bytes(s['nes_b_variant_6']), 192), b['variants'][6][1])
+        self.assertEqual(t['nes_b_variant_hi'][6], 'HIGH(nes_b_variant_6+$2000)')
+        # They fit bank $3B $4200-$4FFF.
+        self.assertLessEqual(sum(len(v) for v in s.values()), 0x5000 - 0x4200)
 
     def test_detail_keeps_distinct_colours_distinct_in_lightness_order(self):
         import nes_palette as NP
