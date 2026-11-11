@@ -841,3 +841,52 @@ and take pictures only of completed frames.
 
 **Confidence/limits:** Geargrafx `78fc3d7` behaviour of the debugger; the
 interrupt-time differences are Ninja's sound driver.
+
+## Adding a mode without moving the old modes by a cycle
+
+**Observed:** the HELL palette mode needed a third branch in the vblank
+palette upload and in palette_now, which the Original and GB DMG modes also
+run every frame. Two added cycles in an interrupt can shift the next timer
+interrupt's service, and with it the music driver's RAM at frame boundaries
+(the GB DMG work saw exactly that), so whole-run identity checks (picture,
+RAM, sprite table, VCE every frame) could fail for modes that did not change.
+
+**Finding/fix:** the new test rides on branches the old paths already took.
+The `bne` that sends Original away now lands on a `bcs` that Original falls
+through (2 cycles), paid for by turning the following taken `bpl` into a
+not-taken `bmi` (2 cycles less). palette_now's entry became one taken `bcs`
+instead of a not-taken `bcc` and a `jmp` (2 cycles less); Original spends
+them on its `bcs`, GB DMG on a `nop`. A `bra` that had to become a `jmp`
+for range costs the same 4 cycles. The HuC6280 has no page-crossing
+penalties, so moved code keeps its timing. The new mode's state needs went
+to the writer instead: the old paths cannot test which mapped table the VCE
+holds, so whoever changes the mode queues a full re-upload.
+
+**Reusable lesson:** when old behaviour must stay frame-identical, count
+cycles per path and per branch outcome, not just totals: rearrange so each
+old path executes the same number of cycles in the same order up to its
+first observable write, and push work the old paths cannot afford to the
+rare event that needs it. Verify with the same whole-run identity check.
+
+**Confidence/limits:** emulator (Geargrafx `78fc3d7`), all 11 stored runs in
+Original and GB DMG ([validation](../validation/hell-palette.md)); cycle
+counts from the HuC6280 tables and the trace log.
+
+## Code running in a mapped bank cannot unmap it
+
+**Observed:** the first HELL build crashed at the end of its first upload:
+the code in bank `$43`, mapped at MPR3 (`$6000-$7FFF`) by a stub in bank
+`$46`, restored MPR3 with `pla / tam #3` and then executed its `rts` from
+whatever bank the interrupted code had there.
+
+**Finding/fix:** every exit that restores MPR3 is in bank `$46` (MPR2),
+which stays mapped; the HELL code jumps there. A single-step trace from the
+mapped code's entry showed the jump into the wrong bank at once.
+
+**Reusable lesson:** a bank switch takes effect at the next instruction
+fetch. Keep the switch-back, and anything after it, in a region the switch
+does not touch (the fixed bank or another MPR), and unit-test new banked
+code in place with the MPR it must restore checked afterwards.
+
+**Confidence/limits:** HuC6280 behaviour, general to any banked 6502-family
+code; seen in the emulator.

@@ -32,6 +32,20 @@
   native palette 1 after the re-queue there
   ([architecture](ARCHITECTURE.md#palette-modes),
   [evidence](validation/gb-palette.md), emulator only).
+- **HELL palette** (1.11-dev, branch `hell-palette`): bits 3-4 = 11, menu
+  value `HELL`; the owner's mock-up "Lava" (candidate C,
+  `src/palette/hell.json`) applied to background palettes 0-14 only, so Ryu,
+  enemies and the HUD keep their colours. Code and table in bank `$43`
+  `$7800-$7FFF` (stage11's unreachable tail) via MPR3; the Original and GB
+  DMG paths are cycle-for-cycle unchanged; the menu queues all colours when
+  it changes the live mode
+  ([architecture](ARCHITECTURE.md#palette-modes),
+  [evidence](validation/hell-palette.md), emulator only). The NES palette
+  (`nes-palette`, value 01) is a parallel branch from the same base: merging
+  touches the PALETTE line of `menu.txt` (make it
+  `@ $18 $00=ORIGINAL $08=NES $10=GB_DMG $18=HELL`), the vblank dispatch in
+  `src/palette/main.asm` (keep the Original and GB DMG cycle counts; HELL
+  enters from `vblank_other` with carry set) and `modules.json`.
 - **Popup menu** (1.11-dev, branch `popup-menu`): Select opens a 26 x 10
   window over the playfield (BAT rows 7-16) instead of covering the HUD:
   STAGE, SMOOTH PARALLAX, NO DAMAGE, NES FIREWHEEL, PALETTE, LANGUAGE, then
