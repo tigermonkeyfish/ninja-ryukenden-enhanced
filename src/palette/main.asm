@@ -48,7 +48,7 @@ PALETTE_BANK = $46
 
 PALETTE_CAP = 168           ; colours per vblank (measured: docs/validation/gb-palette.md)
 ENTRY_COST = 6              ; colours' worth of time per further queue entry
-LEFTOVER_CAP = 32           ; colours a vblank for a left-over entry alone
+LEFTOVER_CAP = 16           ; colours a vblank for a left-over entry alone
 NATIVE_PLUS = 0             ; colours beyond the native upload's time
 BUDGET_MIN = 16
 
@@ -244,6 +244,7 @@ sum_bytes:
  bra sum_bytes
 bytes_summed:
  lda <PTR+1
+ sta <TMP                   ; 4 or more: the new entries cover 512 colours
  cmp #8
  bcs budget_large           ; 2048 bytes or more
  ; colours x 0.266 = bytes / 8 + bytes / 128
@@ -281,6 +282,47 @@ budget_min:
  lda #BUDGET_MIN
 budget_set:
  sta <BUDGET
+ ; Small new entries (a palette animation) go before an entry left over in
+ ; slot 0, which moves to the end, so they are not held up behind it. New
+ ; entries of 512 colours or more (a fade step) go after it: the left-over
+ ; entry then carries on from where it stopped and every colour comes in
+ ; turn.
+ lda OPTIONS
+ and #LEFTOVER
+ beq budget_done
+ lda <TMP
+ cmp #4
+ bcs budget_done
+ lda QUEUE_BYTES_LO
+ pha
+ lda QUEUE_BYTES_HI
+ pha
+ lda QUEUE_INDEX_LO
+ pha
+ lda QUEUE_INDEX_HI
+ pha
+ ldx #0
+rotate_entry:
+ lda QUEUE_BYTES_LO+1,x
+ sta QUEUE_BYTES_LO,x
+ lda QUEUE_BYTES_HI+1,x
+ sta QUEUE_BYTES_HI,x
+ lda QUEUE_INDEX_LO+1,x
+ sta QUEUE_INDEX_LO,x
+ lda QUEUE_INDEX_HI+1,x
+ sta QUEUE_INDEX_HI,x
+ inx
+ cpx QUEUE_COUNT
+ bcc rotate_entry
+ ldx QUEUE_COUNT
+ pla
+ sta QUEUE_INDEX_HI-1,x
+ pla
+ sta QUEUE_INDEX_LO-1,x
+ pla
+ sta QUEUE_BYTES_HI-1,x
+ pla
+ sta QUEUE_BYTES_LO-1,x
 budget_done:
  lda OPTIONS
  and #$ff - LEFTOVER

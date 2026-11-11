@@ -34,12 +34,14 @@ def main():
                 bad = [i for i in range(512) if vce[i] != f(pal[i]) and not (i == 256 and vce[i] == border)]
                 if bad:
                     bad_frames.append((n, len(bad), ram[0x260]))
+                last = [(i, hex(pal[i]), hex(vce[i])) for i in bad[:8]]
             if shots and stage in shot_stages:
                 shots.mkdir(parents=True, exist_ok=True)
                 name = cv.STAGE_NAMES[stage]
                 (shots / f'start-{name}-{tag}.png').write_bytes(g.screenshot())
         print(json.dumps({'stage': cv.STAGE_NAMES[stage], 'flags': flags, 'frames': frames,
-                          'mismatch_frames': bad_frames[:20], 'count': len(bad_frames)}), flush=True)
+                          'count': len(bad_frames), 'last_frame_bad': last,
+                          'mismatch_frames': bad_frames[:20]}), flush=True)
 
 
 if __name__ == '__main__':

@@ -111,3 +111,20 @@ Run them with `NG_EMULATOR` (Geargrafx), `LD_LIBRARY_PATH` for its SDL,
 | `boxtest.py`, `pause.py` | The wheel box in place (unit test); the wheel counter during pause |
 | `ramdiff.py` | Which RAM bytes differ between two builds over a stored run |
 | `dis.py` | Small HuC6280 disassembler for a ROM bank |
+
+## Palette-mode probes (1.11-dev)
+
+`gb-palette/`: the probes behind
+[docs/validation/gb-palette.md](../../docs/validation/gb-palette.md). They
+need `NG_EMULATOR` (or the default toolchain path) and `GB_WORK` (default
+`/workspace/build/gb-palette`, holding `original.pce`; the shared start state
+is `GB_WORK/seed.state`, made on first use). `gbtools.py` holds the shared
+session, queue and palette helpers; each script's docstring gives its usage.
+
+| Tool | What it does |
+| --- | --- |
+| `record.py`, `runall.py`, `runsome.py`, `analyse.py`, `lag.py`, `diverge.py` | Replay stored runs with per-frame picture/VCE/RAM hashes and VCE-against-RAM checks; compare builds and modes; per-entry lag |
+| `timing_trace.py`, `updates.py`, `split.py`, `entry_timing.py`, `upload_cost.py`, `slack.py`, `profile_diff.py` | Hardware-event and instruction traces: upload end lines, HUD-split entries, update counts, load lengths, main-loop slack, clocks per code page |
+| `unittest_upload.py` | In-place test of the vblank upload and `palette_now` against a Python model |
+| `switch.py`, `stagestarts.py`, `cinema.py`, `menu_shot.py`, `capture.py`, `pngdiff.py` | Mode switching, Level Select entries, cinemas, the menu, screenshots |
+| `guard.py`, `freewatch.py`, `readers.py`, `ramdiff.py`, `qwatch.py`, `idlepc.py`, `pausepc.py`, `bootstates.py`, `traceprobe.py`, `vdcregs.py` | Stack low-water mark, free-ROM watch, RAM readers and differences, queue watch, interrupted PCs, boot states |

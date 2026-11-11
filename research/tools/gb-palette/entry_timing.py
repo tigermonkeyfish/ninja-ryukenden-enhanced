@@ -4,7 +4,7 @@ on, enter each stage from the 1-1 main-loop hook as Level Select does
 FRAMES more frames. Reports the number of vblanks from the hook to the first
 update (the load's length), and the worst vblank upload end, upload count
 and HUD-split CPU entry (lines after vblank) over the load and the frames.
-usage: entry_timing.py ROM FLAGS FRAMES STAGES(comma) OUT.json"""
+usage: entry_timing.py ROM FLAGS FRAMES STAGES(comma) OUT.json [SETTLE_FRAMES]"""
 import json
 import re
 import sys
@@ -50,9 +50,20 @@ def windows(events):
 def main():
     rom, flags, frames = sys.argv[1], int(sys.argv[2], 0), int(sys.argv[3])
     stages = [int(s) for s in sys.argv[4].split(',')]
+    settle = int(sys.argv[6]) if len(sys.argv) > 6 else 0
     result = {}
     for stage in stages:
         with Session(rom, flags) as g:
+            if settle:
+                # Let the mode settle (its first vblank re-uploads all 512
+                # colours) before the load, then back to the main-loop hook.
+                g.checked_step(settle)
+                g.call('set_breakpoint', {'address': '23f3', 'memory_area': 'rom', 'execute': True})
+                g.run_to('83F3', polls=20000)
+                g.call('remove_breakpoint', {'address': '23f3', 'memory_area': 'rom'})
+                state = g.logdir / 'settled.state'
+                g.call('save_state_file', {'file_path': str(state)})
+                g.call('load_state_file', {'file_path': str(state)})
             g.call('set_trace_log', {'enabled': True, 'output': 'memory', 'memory_size': '1M',
                                      'filters': ['cpu.irqs', 'vdc.irqs', 'vce.registers']})
             pos = g.call('get_trace_log', {'count': 1}).get('total_logged', 0)

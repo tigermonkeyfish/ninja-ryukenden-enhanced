@@ -22,7 +22,7 @@ GB = gb_dmg_table()
 # MODEL_CAP set to a wrong value is the negative control: cases must fail.
 CAP = int(os.environ.get('MODEL_CAP', 168))
 ENTRY_COST = int(os.environ.get('MODEL_ENTRY_COST', 6))
-LEFTOVER_CAP = 32
+LEFTOVER_CAP = 16
 NATIVE_PLUS = 0
 BUDGET_MIN = 16
 SENTINEL = 0x1ff ^ 0x0aa
@@ -71,6 +71,8 @@ def model(case):
             b = min((total >> 3) + (total >> 7) + NATIVE_PLUS, 255) if total < 2048 else 255
             b = min(b, CAP) - ENTRY_COST * (len(queue) - 1)
             budget = max(b, BUDGET_MIN)
+            if opts & 0x20 and total < 1024:
+                queue = queue[1:] + queue[:1]   # small new entries before the left-over one
             opts &= ~0x20
     kept = []
     for idx, n in queue:

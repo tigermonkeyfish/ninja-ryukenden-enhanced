@@ -752,3 +752,48 @@ native sequences rather than editing them. Measure power-on to first control
 calling a patch speedrun-safe. `research/tools/starttiming.py` does this.
 
 **Confidence/limits:** emulator measurement.
+
+## A palette written only to the VCE came undone at the next re-queue
+
+**Observed:** while adding palette modes, the stored 1-1 run showed the
+Enhanced skyline in red and white instead of blue from the area-1 fade-in to
+the end of the stage, in 1.10 and 1.11-dev alike.
+
+**Finding/fix:** the 1-1 renderer wrote its merged backdrop palette straight
+to the VCE; the game's RAM palette (`$2286`), the source of every upload,
+kept the native colours, so the first full re-queue (a fade) put them back.
+1-1 and 2-2 now write their palettes into the RAM palette and to the VCE at
+once.
+
+**Reusable lesson:** in a game that keeps a RAM palette and queues uploads,
+every added colour belongs in the RAM palette; a VCE-only write lasts until
+the next fade, pause effect or palette reload. Test the frames after a
+re-queue, not just the frame the colour was written.
+
+**Confidence/limits:** emulator, all 11 stored runs; the RAM-palette design is
+Ninja's.
+
+## Mapping colours in the vblank upload costs the main loop its slack
+
+**Observed:** the GB DMG mode maps each queued colour through a table in the
+vblank interrupt (about 156 master clocks a colour against the native TIA's
+42). Kept before the display start (about 22.8 lines after vblank), it still
+made area changes in 2-2, 5-3 and 6-3 a frame late: the frames around an area
+change leave the native main loop under a line to spare.
+
+**Finding/fix:** the upload may take no more time than the native one would
+for the same entries; what is left waits for vblanks in which the main loop
+was idle (the interrupted PC in the vblank wait) and goes a little at a time.
+Every frame of the 11 stored runs then kept the Original mode's updates; the
+price is palettes lagging up to about 45 frames in fades.
+
+**Reusable lesson:** interrupt-time work competes with the main loop even
+when it ends long before any raster deadline. Budget added interrupt work
+against what the original does in the same frame, measure update counts over
+whole runs (stage timer per frame), and use the hardware-event trace (VDC and
+CPU interrupts, VCE writes, master clocks) rather than instruction traces to
+time it.
+
+**Confidence/limits:** emulator (Geargrafx), deterministic replays; the
+slack figures are Ninja's. The cinema after 4-1, 5-3 and 6-3 still starts one
+frame later in GB DMG mode, and so does the Level Select load of 4-4.
