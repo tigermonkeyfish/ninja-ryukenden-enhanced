@@ -318,8 +318,9 @@ bit 7 set (`$FF`: a fade-out has ended on black and no fade has begun
 since), a left-over entry gets `FADE_CAP` = 136 colours a vblank instead of
 16, under the same condition as before (the main loop idle at this vblank
 and at the last one with work). 136 is what a fade step's 512 colours get
-in their first vblank, so these vblanks are no longer than every fade
-step's first already was. With that first vblank three more complete the
+in their first vblank, so in GB DMG and SMS these vblanks are no longer
+than every fade step's first already was (in HELL up to 0.4 line longer,
+[timing](#a-timing-over-the-11-runs)). With that first vblank three more complete the
 black: four ticks before the load. The colours still come from the RAM
 palette through the table; the game's state only sets the pace.
 
@@ -340,8 +341,10 @@ to 22.45 lines after the interrupt in HELL (21.5 in SMS), too close to the
 display (22.8), so it was not kept.
 
 Cost: in the three or four vblanks after a stage-end fade-out the upload
-runs to about line 18 instead of line 4, while the main loop only counts
-ticks. Nothing else changes. Not fixed by it: the cut after a boss, area
+runs to about line 18 (19.3 in HELL, 19.75 in its 1-1) instead of line 4,
+while the main loop only counts ticks; and the cinema after a stage begins
+one frame earlier than on the dark-lift build, on Original's frame.
+Nothing else changes. Not fixed by it: the cut after a boss, area
 changes, the fade steps before the last (they still run behind), the grey
 step of 6-3's fade-in.
 

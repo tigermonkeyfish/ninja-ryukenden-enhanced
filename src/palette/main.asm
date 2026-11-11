@@ -81,8 +81,10 @@
 ; has ended on black and no fade has begun since) a left-over entry gets
 ; FADE_CAP colours a vblank, still only with the main loop idle at this
 ; vblank and the last one with work. FADE_CAP is what a fade step's 512
-; colours get in their first vblank (0.266 x 512), so those vblanks are no
-; longer than every fade step's first already is; with that first vblank
+; colours get in their first vblank (0.266 x 512), so in GB DMG and SMS
+; those vblanks are no longer than every fade step's first already is (in
+; HELL, where the budget also buys unmapped colours, up to 0.4 line longer:
+; 19.75 lines after the interrupt at the worst); with that first vblank
 ; (130 or 136 colours) three more complete the black, at the fourth vblank
 ; after the step, four ticks before the load (BUDGET_MIN + 4 x FADE_CAP is
 ; more than 512: the fifth at the latest; docs/validation/dark-lift.md).
