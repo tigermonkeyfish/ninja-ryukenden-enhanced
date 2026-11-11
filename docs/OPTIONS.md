@@ -138,12 +138,15 @@ default) keeps the PC Engine game's Fire Wheel.
 - **HELL**: the scenery turns to lava, fire and ash: skies and blues glow
   red and orange, greens scorch to brown, stone, walls and pavements take
   the dark golds of the 2-2 bridge columns, whites become embers and ash.
-  Ryu, the enemies and the status bar keep their own colours, so they stand
-  out.
+  The darkest greens and greys stay dark brown instead of turning black, so
+  the night stages (4-1's trees, 5-1, 6-2) keep their detail. Ryu, the
+  enemies and the status bar keep their own colours, so they stand out.
 - **SMS**: everything on screen (scenery, status bar, Ryu, enemies, bosses)
   in the Sega Master System's 64 colours, with all of the PC Engine
   picture's detail: each colour is moved to the nearest Master System
-  shade, channel by channel.
+  shade, channel by channel. The darkest greens and greys take the darkest
+  Master System green, olive or grey instead of black, so the night stages
+  keep their detail.
 
 ORIGINAL, GB DMG, HELL and SMS change at once while the window is open, so
 you can look at the choice before you accept it; **Select** (cancel) puts
