@@ -290,7 +290,8 @@ def check_case(emulator, rom, name, image, output, reference, dead=False, locked
             files = None if image is None else others(image)
             # Every entry counts, ours too; exactly MANY_ENTRIES is still compared.
             entries = 0 if files is None else len(bi.Directory(image).files())
-            slow = entries > (MANY_ENTRIES if entries == len(files) else MANY_WITH_OURS) and not unreachable
+            ours = files is not None and entries > len(files)
+            slow = entries > (MANY_WITH_OURS if ours else MANY_ENTRIES) and not unreachable
             if not slow:
                 expect('first update frame', started['first_update_frame'], reference(options, language))
             expect('backup RAM after the boot', game.backup_ram(), image)
