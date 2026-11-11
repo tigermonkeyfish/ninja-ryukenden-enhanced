@@ -93,6 +93,9 @@ PLAYFIELD_Y = $2e4d         ; and $2E4E: its BYR (0 in gameplay)
 PAD_NEW = $2e57             ; newly pressed: 1 I, 2 II, 4 Select, 8 Run,
                             ; $10 Up, $20 Right, $40 Down, $80 Left
 PAD_HELD = $2e55
+RYU_STATE = $2eab           ; native: Ryu's state, 10 from his death on
+RYU_DEAD = 10
+RYU_HEALTH = $2ead
 QUEUE_COUNT = $2260         ; native palette upload queue: entries
 WAIT_VBLANK = $fd67
 SET_WRITE = $fc34           ; native: VRAM write address = X:A, register 2
@@ -112,11 +115,21 @@ ZP_LAST = $2c
  .bank $46
  .org MENU_ENTRY
 menu:
- ; Refused (nothing touched) unless the playfield is at vertical scroll 0:
- ; the window's rows must stay clear of the HUD's rows 28-31.
+ ; Refused (A = $FF, nothing touched) while Ryu is dead: from the death
+ ; (native $8E57: state 10, health 0) through the respawn or continue,
+ ; whose stage reload rewrites both sprite-table buffers. The hook's own
+ ; conditions ($2E63 = 0, $2201 != 0) let the death animation through.
+ lda RYU_STATE
+ cmp #RYU_DEAD
+ beq menu_refused
+ lda RYU_HEALTH
+ beq menu_refused
+ ; ... and unless the playfield is at vertical scroll 0: the window's rows
+ ; must stay clear of the HUD's rows 28-31.
  lda PLAYFIELD_Y
  ora PLAYFIELD_Y+1
  beq menu_open
+menu_refused:
  lda #$ff
  rts
 menu_open:

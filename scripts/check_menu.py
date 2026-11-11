@@ -13,8 +13,8 @@ runs    In each stored comparison run (research/comparison-runs/), every
         then Select. At the moment the menu returns, VRAM must equal the
         moment it was entered except the sprite-table buffer being built
         (the backup) and RAM except ALLOWED; then the game runs UPDATES more
-        updates and is compared with the same state run without the menu:
-        every update's picture, and at the end all of VRAM (the backup buffer
+        frames and is compared with the same state run without the menu:
+        every frame's picture, and at the end all of VRAM (the backup buffer
         included: the game rewrote it), the sprite table, the palette and
         RAM except ALLOWED. The stack's low-water mark is measured from a
         $A5 fill below the stack pointer.
@@ -55,7 +55,7 @@ HOOK_AFTER_DRAW = '1f73'     # $FF73: Select hook, after the pending-draw call
 HOOK_RETURN = '23f6'         # bank 1 $83F6: main loop, after the Select hook
 FIRST_UPDATE = '2457'        # bank 1 $8457: gameplay loop (a stage's first update)
 MENU_ENTRY = 0x46 * 0x2000 + 0x400                 # bank $46 $4400
-MENU_PREFIX = bytes.fromhex('ad4d2e0d4e2ef003a9ff60')   # the scroll refusal
+MENU_PREFIX = bytes.fromhex('adab2ec90af00dadad2ef008ad4d2e0d4e2ef003a9ff60')   # the refusals
 MENU_OPEN = f'{MENU_ENTRY + len(MENU_PREFIX):x}'   # after it: the menu opens
 MENU_OPEN_PC = f'{0x4400 + len(MENU_PREFIX):04X}'
 CPU = {HOOK_AFTER_DRAW: 'FF73', HOOK_RETURN: '83F6', FIRST_UPDATE: '8457', MENU_OPEN: MENU_OPEN_PC}
@@ -82,9 +82,9 @@ def allowed(offset, stack_pointer):
 
 
 # Palette upload scratch, rewritten before it is read: the RAM TIA's operands
-# ($2206-$220B), $2284-$2285 and queue entries past the count. A cancelled
+# ($2205-$220C, written before every call), $2284-$2285 and queue entries past the count. A cancelled
 # palette preview leaves them as the restoring upload wrote them.
-PREVIEW_SCRATCH = set(range(0x206, 0x20c)) | {0x284, 0x285} | set(range(0x261, 0x281))
+PREVIEW_SCRATCH = set(range(0x205, 0x20d)) | {0x284, 0x285} | set(range(0x261, 0x281))
 
 
 def snapshot(game):
@@ -179,13 +179,17 @@ def opens(game):
     return run_until(game, [MENU_OPEN, HOOK_RETURN]) == MENU_OPEN_PC
 
 
-def updates(game, count):
-    """Run `count` updates; the picture at each update's hook."""
+def frames(game, count, state_dir):
+    """From a breakpoint stop: normalize (save and reload the state, so frame
+    steps have a defined length), then `count` whole frames; each completed
+    frame's picture. A screenshot taken at a breakpoint can show a frame in
+    progress, so pictures are only taken after whole frame steps."""
+    state = Path(state_dir) / 'normal.state'
+    game.call('save_state_file', {'file_path': str(state)})
+    game.call('load_state_file', {'file_path': str(state)})
     shots = []
     for _ in range(count):
-        if not stop_at(game, HOOK_AFTER_DRAW, 30):
-            shots.append('no update')
-            break
+        game.checked_step(1)
         shots.append(hashlib.sha256(game.screenshot()).hexdigest()[:16])
     return shots
 
@@ -268,7 +272,7 @@ def exact_cycle(game, state_dir, actions=None, n=UPDATES, shots=None, blink=True
     if bad:
         found['problems'].append('RAM changed at ' + ', '.join(f'${0x2000 + i:04x}' for i in bad[:16]))
     pad = after['ram'][0xe55:0xe5f]
-    menu_shots = updates(game, n)
+    menu_shots = frames(game, n, state_dir)
     menu_end = snapshot(game)
     # The same state without the menu: the pad bytes as the menu left them.
     game.call('load_state_file', {'file_path': str(state)})
@@ -281,10 +285,10 @@ def exact_cycle(game, state_dir, actions=None, n=UPDATES, shots=None, blink=True
            if a != b and not allowed(i, 0x2000 + sp) and i not in PREVIEW_SCRATCH]
     if bad:
         found['problems'].append('RAM differs from the run without the menu at ' + ', '.join(f'${0x2000 + i:04x}' for i in bad[:16]))
-    reference_shots = updates(game, n)
+    reference_shots = frames(game, n, state_dir)
     reference_end = snapshot(game)
     if menu_shots != reference_shots:
-        found['problems'].append(f'pictures differ in updates {[k for k, (a, b) in enumerate(zip(menu_shots, reference_shots)) if a != b]}')
+        found['problems'].append(f'pictures differ in frames {[k for k, (a, b) in enumerate(zip(menu_shots, reference_shots)) if a != b]}')
     for area in ('vram', 'sat', 'vce'):
         if menu_end[area] != reference_end[area]:
             words = [i // 2 for i in range(0, len(menu_end[area]), 2) if menu_end[area][i:i + 2] != reference_end[area][i:i + 2]]
