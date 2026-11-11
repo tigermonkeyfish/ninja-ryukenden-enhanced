@@ -35,13 +35,14 @@ select  From a cold boot: exact_cycle in each of the 22 Level Select entries,
 options Each option row changed and accepted with Run, from 1-1: $2100 and
         $3227 afterwards; GB DMG shows the GB table's colours for the whole
         RAM palette, HELL the HELL table's for entries 0-239 and the RAM
-        colours for the rest; paths through the palette values (GB DMG then
-        ORIGINAL, HELL then ORIGINAL, HELL, GB DMG, ORIGINAL and the
-        reverse), each accepted with Run, show each mapped mode's table
-        exactly and end with the same VCE as a stage start that never left
-        Original. Cancel after changing everything (from Original with GB
-        DMG or HELL previewed, from GB DMG previewing HELL, from HELL
-        previewing ORIGINAL) leaves the options and $3227 unchanged and is
+        colours for the rest, SMS the SMS table's for the whole RAM palette;
+        paths through the palette values (each mapped mode then ORIGINAL;
+        every mode in Left order and in Right order; GB DMG and SMS straight
+        after each other), each accepted with Run, show each mapped mode's
+        table exactly and end with the same VCE as a stage start that never
+        left Original. Cancel after changing everything (from Original with
+        GB DMG, HELL or SMS previewed, from GB DMG, HELL and SMS previewing
+        another value) leaves the options and $3227 unchanged and is
         compared with the run without the menu for LONG frames.
 select  also checks, after a cold boot, that the LANGUAGE row reads
         ENGLISH with $3227 = 1.
@@ -59,7 +60,7 @@ import tempfile
 from comparison_video import Game, make_seed, start_point, start_stage
 from guide_screenshots import to_gameplay, to_title
 from menu_text import BOX_ROWS, BOX_WIDTH, CODES, layout
-from palette_tables import gb_dmg_table, hell_table, load_hell
+from palette_tables import gb_dmg_table, hell_table, load_hell, sms_table
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNS = ROOT / 'research/comparison-runs'
@@ -104,12 +105,17 @@ def allowed(offset, stack_pointer):
 PREVIEW_SCRATCH = set(range(0x205, 0x20d)) | {0x284, 0x285} | set(range(0x261, 0x281))
 
 
+STATE_IN_2104 = True        # main(): False for builds before the SMS palette
+
+
 def module_state_only(i, a, b):
-    """$2100 differing only in bits 5-6: the palette module's left-over and
-    busy-history state, which a cancelled palette preview leaves as the
-    restoring upload set it (the menu never writes bits 5-7; in Original
-    mode the module neither reads nor writes bits 5-6)."""
-    return i == 0x100 and not (a ^ b) & ~0x60
+    """Before the SMS palette (1.11-dev), $2100 differing only in bits 5-6:
+    the palette module's left-over and busy-history state, which a cancelled
+    palette preview leaves as the restoring upload set it (the menu never
+    writes bits 5-7; in Original mode the module neither reads nor writes
+    bits 5-6). Since then that state is in $2104 (with the stack's bytes in
+    `allowed`) and $2100 is options only: no difference is the module's."""
+    return not STATE_IN_2104 and i == 0x100 and not (a ^ b) & ~0x60
 
 
 def snapshot(game):
@@ -534,7 +540,7 @@ def check_level_select(emulator, candidate, output):
             if not stop_at(game, FIRST_UPDATE, 600):
                 entry['problems'].append('chosen stage did not start')
             ram = game.read(0, 0x2000)
-            if ram[0xe5f] != stage + 1 or ram[0xead] != 16 or ram[0x100] & 0x1f != 0:
+            if ram[0xe5f] != stage + 1 or ram[0xead] != 16 or ram[0x100] & 0x3f != 0:
                 entry['problems'].append(f'after accept: stage {ram[0xe5f]}, health {ram[0xead]}, options {ram[0x100]:#04x}')
             if (game.read(0x7c0, 64, area=4) != SPACE_WORD * 32 or any(game.read(0x7aa0, 128, area=4))
                     or any(game.read(0x7b90, 32, area=4))):
@@ -575,13 +581,13 @@ def mode_expected(game, mode):
     table applied to the RAM palette ($2286) and to the border colour
     ($2281) at entry $100; HELL ($18) the HELL table applied to entries
     below its mapped_entries only (the HUD and sprite palettes and the
-    border unchanged)."""
+    border unchanged); SMS ($38) the SMS table, as GB DMG."""
     ram = game.read(0x286, 1024)
     colours = [ram[2 * i] | ram[2 * i + 1] << 8 for i in range(512)]
     border = game.read(0x281, 2)
     colours[0x100] = border[0] | border[1] << 8
-    if mode == 0x10:
-        table = gb_dmg_table()
+    if mode in (0x10, 0x38):
+        table = gb_dmg_table() if mode == 0x10 else sms_table()
         words = [table[c & 0x1ff] for c in colours]
     else:
         table, mapped = hell_table(), load_hell()['mapped_entries']
@@ -599,24 +605,25 @@ def to_level(game, candidate, seed):
 def check_options(emulator, candidate, seed, output):
     work = Path(tempfile.mkdtemp(prefix='menu-options-', dir=output))
     results = {}
-    # PALETTE values in Left/Right order: ORIGINAL, GB_DMG, HELL.
+    # PALETTE values in Left/Right order: ORIGINAL, GB_DMG, HELL, SMS.
     cases = [('parallax off', 1, ['right'], 0x01, None), ('no damage on', 2, ['right'], 0x02, None),
              ('nes firewheel on', 3, ['right'], 0x04, None), ('palette gb dmg', 4, ['right'], 0x10, None),
              ('palette hell', 4, ['right', 'right'], 0x18, None),
-             ('palette wraps left to hell', 4, ['left'], 0x18, None),
+             ('palette sms', 4, ['right', 'right', 'right'], 0x38, None),
+             ('palette wraps left to sms', 4, ['left'], 0x38, None),
              ('language japanese', 5, ['right'], 0x00, 0), ('language chinese', 5, ['left'], 0x00, 2)]
     for name, row, presses, bits, language in cases:
         with Game(emulator, work) as game:
             to_level(game, candidate, seed)
             ram = menu_to(game, row, presses)
             entry = {'options': f'{ram[0x100]:#04x}', 'language': ram[0x1227], 'stage': ram[0xe5f]}
-            entry['ok'] = (ram[0x100] & 0x1f == bits and ram[0x1227] == (1 if language is None else language)
+            entry['ok'] = (ram[0x100] & 0x3f == bits and ram[0x1227] == (1 if language is None else language)
                            and ram[0xe5f] == 0)
-            if bits in (0x10, 0x18):
+            if bits in (0x10, 0x18, 0x38):
                 vce = game.read(0, 1024, area=8)
                 expected = mode_expected(game, bits)
                 entry['vce_is_mode_table'] = vce == expected
-                entry['ok'] = entry['ok'] and vce == expected and ram[0x100] & 0x80 == 0x80
+                entry['ok'] = entry['ok'] and vce == expected and ram[0x104] & 0x80 == 0x80
                 (Path(output) / f'options-{name.replace(" ", "-")}.png').write_bytes(game.screenshot())
             results[name] = entry
             print('option', name, entry, flush=True)
@@ -624,12 +631,16 @@ def check_options(emulator, candidate, seed, output):
     # path through the mapped modes must end with exactly its VCE; each
     # accepted mapped mode on the way must show exactly its table.
     paths = {'original restored exactly (gb dmg, original)': [['right'], ['left']],
-             'original restored exactly (hell, original)': [['left'], ['right']],
-             'hell, gb dmg, original': [['left'], ['left'], ['left']],
-             'gb dmg, hell, original': [['right'], ['right'], ['right']]}
+             'original restored exactly (hell, original)': [['right', 'right'], ['left', 'left']],
+             'original restored exactly (sms, original)': [['left'], ['right']],
+             'sms, hell, gb dmg, original': [['left'], ['left'], ['left'], ['left']],
+             'gb dmg, hell, sms, original': [['right'], ['right'], ['right'], ['right']],
+             'sms, gb dmg, original': [['left'], ['left', 'left'], ['left']],
+             'gb dmg, sms, original': [['right'], ['right', 'right'], ['right']]}
+    runs = max(len(steps) for steps in paths.values())
     with Game(emulator, work) as game:
         to_level(game, candidate, seed)
-        for _ in range(3):
+        for _ in range(runs):
             menu_to(game, 0, [])
         plain = game.read(0, 1024, area=8)
     for name, steps in paths.items():
@@ -638,27 +649,34 @@ def check_options(emulator, candidate, seed, output):
             on_the_way = []
             for presses in steps:
                 ram = menu_to(game, 4, presses)
-                mode = ram[0x100] & 0x18
+                mode = ram[0x100] & 0x38
                 if mode:
                     on_the_way.append((f'{mode:#04x}', game.read(0, 1024, area=8) == mode_expected(game, mode)))
-            for _ in range(3 - len(steps)):
+            for _ in range(runs - len(steps)):
                 menu_to(game, 0, [])
             back = game.read(0, 1024, area=8)
             ram = game.read(0, 0x2000)
-        results[name] = {'ok': back == plain and ram[0x100] & 0x9f == 0 and all(ok for _, ok in on_the_way),
+        results[name] = {'ok': back == plain and ram[0x100] & 0x3f == 0 and ram[0x104] & 0x80 == 0
+                         and all(ok for _, ok in on_the_way),
                          'mapped_modes_exact': on_the_way}
         print(name, results[name], flush=True)
     # Cancel after changing everything: nothing changes. Long comparisons
     # (LONG frames, the stage timer included) show whether the palette
-    # module's state bits a cancelled preview may leave have any effect:
-    # from Original (preview GB DMG, or HELL), from GB DMG (preview HELL)
-    # and from HELL (preview ORIGINAL).
+    # module's state a cancelled preview may leave has any effect: from
+    # Original (preview GB DMG, HELL or SMS), from GB DMG (preview HELL),
+    # from HELL (preview SMS), from SMS (preview ORIGINAL) and from SMS
+    # (preview GB DMG: the same code, another table).
     everything = ['right', 'down', 'right', 'down', 'right', 'down', 'right', 'down', 'right', 'down', 'right']
     leftwards = everything[:8] + ['left'] + everything[9:]
+    hell = everything[:8] + ['right', 'right'] + everything[9:]
+    sms_to_gb = everything[:8] + ['left', 'left'] + everything[9:]
     for name, first, actions in (('cancel after changing everything', None, everything),
-                                 ('cancel after changing everything, palette hell', None, leftwards),
+                                 ('cancel after changing everything, palette hell', None, hell),
+                                 ('cancel after changing everything, palette sms', None, leftwards),
                                  ('cancel after changing everything, from GB DMG', ['right'], everything),
-                                 ('cancel after changing everything, from HELL', ['left'], everything)):
+                                 ('cancel after changing everything, from HELL', ['right', 'right'], everything),
+                                 ('cancel after changing everything, from SMS', ['left'], everything),
+                                 ('cancel after changing everything, from SMS to GB DMG', ['left'], sms_to_gb)):
         with Game(emulator, work) as game:
             to_level(game, candidate, seed)
             if first:
@@ -667,7 +685,7 @@ def check_options(emulator, candidate, seed, output):
             found = exact_cycle(game, work, actions=actions, n=LONG) \
                 if select_at_hook(game) else {'ok': False, 'problems': ['menu not available']}
             after = game.read(0, 0x2000)
-            found['options_and_language_kept'] = after[0x100] & 0x1f == before[0x100] & 0x1f and after[0x1227] == 1
+            found['options_and_language_kept'] = after[0x100] & 0x3f == before[0x100] & 0x3f and after[0x1227] == 1
             found['ok'] = found['ok'] and found['options_and_language_kept']
             results[name] = found
             print(name, found, flush=True)
@@ -694,10 +712,15 @@ def main():
     args.output = args.output.resolve()
     args.output.mkdir(parents=True, exist_ok=True)
     parts = set(args.only or ('runs', 'sweep', 'select', 'options'))
-    global SAME_MUSIC
+    global SAME_MUSIC, STATE_IN_2104
     SAME_MUSIC = args.same_music
-    if MENU_PREFIX != args.candidate.read_bytes()[MENU_ENTRY:MENU_ENTRY + len(MENU_PREFIX)]:
+    rom = args.candidate.read_bytes()
+    if MENU_PREFIX != rom[MENU_ENTRY:MENU_ENTRY + len(MENU_PREFIX)]:
         raise SystemExit('The menu entry is not where this check expects it')
+    # The palette module's state: $2104 since the SMS palette (its code in
+    # bank $46 $5000-$53FF reads lda $2104), $2100 bits 5-7 before.
+    STATE_IN_2104 = bytes.fromhex('ad0421') in rom[0x46 * 0x2000 + 0x1000:0x46 * 0x2000 + 0x1400]
+    print('palette module state in', '$2104' if STATE_IN_2104 else '$2100 bits 5-7', flush=True)
     report = {
         'rom_sha256': hashlib.sha256(args.candidate.read_bytes()).hexdigest(),
         'emulator_sha256': hashlib.sha256(args.emulator.read_bytes()).hexdigest(),
