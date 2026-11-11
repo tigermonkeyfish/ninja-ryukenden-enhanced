@@ -50,8 +50,9 @@ against the VCE (docs/validation).
 | Tile packing | `$F13F`: per 16-byte half tile both byte lanes restart at 0; a control byte per 8 bytes, MSB first, alternating low/high lane; 1 = literal, 0 = repeat the lane's last byte. Modes 2/4/6 (`$F05F`/`$F07C`/`$F09C`) pack fewer planes |
 | Backdrop maps | Profile table `0x221F` (height, cutoff, address); 34 words a row at ROM `0x7A000 + address - 0xA000` |
 | Backdrop tile sets | Two requests per stage, to VRAM `$1000` and `$2000` (e.g. 2-2: `$64`, `$65` in bank 1 `$87E8`) |
-| Palettes | Set table bank `$37:$6000` (address, colour count); loader `$F211` (A = set) unpacks into the RAM palette `$2286`: per 8 colours a byte of bit-8 values (MSB first), then 8 low bytes |
+| Palettes | Set table bank `$37:$6000` (address, colour count; 22 sets, data to `$717F`); loader `$F211` (A = set) unpacks into the RAM palette `$2286`: per 8 colours a byte of bit-8 values (MSB first), then 8 low bytes. Sprite palettes: `$F1C0` (A = palette n, X = sprite row) unpacks 16 colours from `$37:$7180 + 18n` (Ryu: 96 at `$7840`; the highest used, 151, ends at `$7C2F`). Both map bank `$37` in MPR3 and unpack with `$F2BE` (source `<$19/<$1A`, first colour `<$15/<$16`, count `<$17/<$18`); no other code maps bank `$37`. HUD colours: bank 1 `$83C3` writes 7 words from `$83E5` to entries `$F1-$F7` through `$F23C` (stage load, every area change, `$86A7`) |
 | Profile → palette set | 1-1: 1, 2-2: 4, 3-1/3-2: 6, 4-1: 8, 4-2: 9, 5-2: 13, castle (5-3/5-4/6-1): 14, 6-3: 16 |
+| Stage → set (`$F211` at the stage load, all 22 entries) | 1, 2, 3, 4, 5, 6, 6, 7, 8, 9, 10, 11, 12, 13, 14, 14, 14, 15, 16, 17, 17, 18; sets 0 and 19-21 are the title's and cinemas'. No set loads at area changes (sprite palettes and the HUD do) |
 | Playfield split | VDC scanline interrupt at RCR `$6F` (IRQ1 vector `$FCD7`); the handler (`$FD26`) waits (3 × `jsr $FD8C`), then writes BYR (`$FD3B`) and BXR from `$2E4D/$2E4E` and `$2E4B/$2E4C`, ~69.9 lines after vblank. Geargrafx shows the playfield a line low if the BYR write lands after ~70.9 |
 | Stage timer | Three digits, units first: `$2EDB-$2EDD` (5-2 starts at 150); running out kills Ryu |
 
@@ -202,7 +203,7 @@ files to allocate free space.
 
 | CPU address | Meaning / constraint |
 | --- | --- |
-| `$2100` | Active options: bit 0 Original, bit 1 No Damage, bit 2 Use NES Firewheel logic, bits 3-4 palette mode (00 Original, 01 NES reserved, 10 GB DMG, 11 reserved; 1.11-dev); bits 5-7 are the palette module's state (5: a left-over palette entry is queued; 6: the main loop was busy at the last vblank with palette work; 7: the VCE holds mapped colours), not options: menus and saved settings mask them out. Zero = the defaults |
+| `$2100` | Active options: bit 0 Original, bit 1 No Damage, bit 2 Use NES Firewheel logic, bits 3-4 palette mode (00 Original, 01 NES, 10 GB DMG, 11 reserved; 1.11-dev); bits 5-7 are the palette module's state (5: a left-over palette entry is queued; 6: the main loop was busy at the last vblank with palette work; 7: the VCE holds mapped colours), not options: menus and saved settings mask them out. Zero = the defaults |
 | `$2101` | The menu's draft while it is open: bits 0-4 the options (copied into `$2100` on Run, bits 5-7 of `$2100` kept), bits 5-6 the language (written to `$3227` on Run). Meaningless while the menu is closed |
 | `$2260-$2280` | Native palette upload queue: count, then 8 entries of byte count (low `$2261`, high `$2269`) and first colour (low `$2271`, high `$2279`); `$F350` adds one under the lock and drops it when 8 are queued; `$F394` replaces the queue with all 512 colours |
 | `$2281-$2283` | Border colour (written to VCE entry `$100` after each upload) / upload lock |
@@ -251,6 +252,7 @@ guard checks.
 | `$FD13` | Vblank interrupt's palette upload (native `jsr $F3B5`): `jsr $FEC0` |
 | `$FEBE–$FECE` | Palette trampoline (1.11-dev, 17 bytes): `$FEBE` palette_now (stage modules: write colours X..X+Y-1 of the RAM palette to the VCE at once, in the mode's colours), `$FEC0` vblank upload; both map bank `$46` into MPR2 and restore it |
 | `$FECF–$FEDF` | Free (`$FF`, 17 bytes) |
+| `$F1DC`, `$F234` | The sprite-palette and colour-set loaders' unpack calls (native `jsr $F2BE`): `jsr $7FE0`, the NES palette hook in bank `$37`'s free tail (MPR3 holds bank `$37` at both; 1.11-dev) |
 | `$FE40 / $FE46` | Early wrapper / preserved-scratch renderer entry |
 | `$FEE0` | Development cinema sprite reset wrapper (bank 04 `$802D` hook) |
 | `$FF2C` | Area change (bank 1 `$85B4`): native init, marks the Enhanced draw pending (`$2258 = $FE`) |
@@ -321,9 +323,10 @@ copies it to `$2100`.
 
 ## Palette modes
 
-`$2100` bits 3-4 (1.11-dev; module `src/palette`): 00 Original, 01 NES
-(reserved; shown as Original), 10 GB DMG. Evidence:
-[validation/gb-palette.md](validation/gb-palette.md).
+`$2100` bits 3-4 (1.11-dev; modules `src/palette` and `src/nes-palette`):
+00 Original, 01 NES, 10 GB DMG, 11 reserved (uploaded as Original). Evidence:
+[validation/gb-palette.md](validation/gb-palette.md),
+[validation/nes-palette.md](validation/nes-palette.md).
 
 The native game writes colours only into the RAM palette `$2286` and queues
 ranges (`$F350`); the vblank interrupt (`$FCD7`) uploads the queue at `$FD13`
@@ -335,8 +338,9 @@ merged palettes (below).
 
 The upload goes through the trampoline at `$FEC0` to bank `$46` `$5000`:
 
-- Original (and the reserved modes), or `$2240` != 0 (cinema, title,
-  ending): the native `$F3B5`.
+- Original, NES and the reserved mode 11, or `$2240` != 0 (cinema, title,
+  ending): the native `$F3B5`. NES colours are not a mapping: they are other
+  palette data, loaded into the RAM palette (below).
 - GB DMG in gameplay: the same queue, each colour looked up in a 512-entry
   table (`scripts/palette_tables.py` from `src/palette/gb-dmg.json`:
   luminance thresholds and four shades; four 256-byte pages at
@@ -359,8 +363,9 @@ The upload goes through the trampoline at `$FEC0` to bank `$46` `$5000`:
   entries: `$F350` may have dropped one) leaves all 512 colours over.
 - `$2100` bit 7 records whether the VCE holds mapped colours; when the
   colours due differ (mode changed, cinema started or ended) the upload
-  queues all 512 first (`$F394`). Changing the mode therefore needs only a
-  write of bits 3-4; the RAM palette always holds the original colours.
+  queues all 512 first (`$F394`). Changing between Original and GB DMG
+  therefore needs only a write of bits 3-4; outside NES mode the RAM palette
+  holds the original colours.
 
 1-1 (palette 1) and 2-2 (palettes 13-14) write their merged palettes into
 the RAM palette and call `$FEBE` (palette_now) to write them to the VCE at
@@ -369,23 +374,75 @@ palette existed only in the VCE, so any full re-queue (the area-1 fade in the
 stored 1-1 run) put back the native palette 1 and showed the Enhanced
 backdrop in wrong colours until the stage changed.
 
+### NES palette mode
+
+Mode 01 (module `src/nes-palette`) recolours the stages to read as the
+corresponding stages of NES Ninja Gaiden. Its colours are data:
+`src/nes-palette/stages/*.json` (one file per colour set, plus the 3-2
+variant of set 6) and `shared.json` (HUD, Ryu's sprite palette 96), colour
+values and role names only; `scripts/nes_palette.py` resolves the roles,
+checks the files' original colours against the original ROM and generates
+`nes-tables.inc` / `nes-sets.inc` at build time (prepare step `nes-palette`)
+and the NES versions of the 1-1 / 2-2 merged palettes (`nes-enhanced-stage11`,
+`nes-enhanced-stage22`, after the backdrop steps). Swapping the colours needs
+no code change.
+
+- Loaders: `$F211` and `$F1C0` call `$7FE0` in bank `$37` (their own MPR3
+  bank; `$FF` in the original from `$7C30`) instead of `$F2BE`. The 26-byte
+  hook tests bits 3-4 = 01 and otherwise jumps to `$F2BE` with nothing
+  pushed (15 cycles more per load). In NES mode it maps bank `$45` into MPR2
+  and calls `nes_unpack` (`$45:$4000`): only in gameplay (`$2240` = 0), a
+  sprite palette with an NES copy (by source address: palette 96, `$7840`),
+  or a colour set (`<$21`, checked against its table entry) with one: the
+  stage's variant when `$2E5F` names one (3-2, set 6), else the set's copy
+  (none for the title/cinema sets 0 and 19-21). It maps bank `$45` into MPR3,
+  points `<$19/<$1A` at the copy (`$6000` window), calls `$F2BE`, then maps
+  bank `$37` back and restores `<$19/<$1A`, X and Y. Everything downstream
+  (the backup `$2686`, fades, the vblank upload) works on the RAM palette, so
+  it carries the NES colours with it.
+- HUD: bank 1 `$83C3` is a 19-byte trampoline to `nes_hud` in bank `$45`,
+  which writes the 7 words as the native routine did, from the NES table in
+  NES gameplay, else from `$83E5`; it returns A, X, Y, the flags and `$2E88`
+  as the native routine did. (The routine's old bytes `$83D6-$83E4` are dead.)
+- 1-1 and 2-2 copy `extra_palette_nes` / `palette13_nes`, `palette14_nes`
+  instead of their merged palettes in NES mode (a mode test before the copy).
+  Each NES colour is the NES colour of the native set entries that supply
+  most of the merged colour's pixels.
+- Not covered: enemy and boss sprite palettes, colours the game animates
+  (written straight into the RAM palette from tables: the stage checks list
+  them, e.g. 2-3 row 9, 6-2 row 10), cinemas and the title (original by
+  design).
+
+Space: bank `$45` `$4000-$43FF` (code 249 bytes `$4000-$40F8`, tables, HUD,
+Ryu, the 3-2 variant: to `$4236`; 457 bytes free) and `$5200-$5FFF` (the 18
+NES sets, 3,240 bytes to `$5EA7`; 344 free). `stage61-upload`'s claim ends at
+`$51FF` (its code ends at `$5113`, guarded). Bank `$37` `$7FE0-$7FF9`.
+Fixed bank: none of the free bytes; only the two call operands change.
+
 The menu's **PALETTE** row (1.11-dev) offers the values listed in
-`src/options/menu.txt` (Original and GB DMG; NES is one more `$08=NES` item
-there once this module implements it). While the menu is open the live bits
-3-4 follow the draft, so the module re-uploads every colour at the next
-vblanks and the choice shows at once (the menu waits in `$FD67`, so the
+`src/options/menu.txt` (ORIGINAL, NES, GB DMG). While the menu is open the
+live bits 3-4 follow the draft, so the module re-uploads every colour at the
+next vblanks and the choice shows at once (the menu waits in `$FD67`, so the
 left-over rule gets its 16 colours a vblank: all 512 in about 25 frames);
 Select puts the old bits back and waits until the queue is empty (at most 48
 vblanks; Original is back after one) before the game runs
 on. Run keeps the bits and restarts the stage, which reloads the palettes.
+NES colours need that reload, so they show after Run: while NES is
+highlighted in a menu opened in another mode, the live bits stay as the menu
+found them (`$2100` on the menu's stack). Opened in NES mode, the RAM palette
+holds NES colours, so ORIGINAL previews them unmapped and GB DMG maps them;
+Run reloads the stage in the chosen mode's own data. A live NES preview would
+need the RAM palette rewritten with NES data and the exact previous palette
+(fade state, animated and enemy colours) restored on cancel: 1 KiB of backup
+the menu does not have; not done.
 
 Bank `$46` (1.11-dev): `$4000-$40FF` dispatch, `$4100-$42FF` unowned
 (512 bytes), `$4300-$43FF` cinema sprite reset, `$4400-$4AFF` the menu
 (`options`), `$4B00-$4FFF` unowned (1,280 bytes, contiguous), `$5000-$53FF`
 palette code, `$5400-$57FF` its GB DMG table, `$5800-$583F` 6-1 dispatch,
-`$5840-$58FF` options' renderer gate, `$5900-$5FFF` speed. Bank `$45`
-`$4000-$43FF`, the menu's old range, is unowned again (1 KiB; the rest of
-bank `$45` is `stage61-upload`).
+`$5840-$58FF` options' renderer gate, `$5900-$5FFF` speed. Bank `$45`:
+`$4000-$43FF` and `$5200-$5FFF` NES palette (`nes-palette`), `$4400-$51FF`
+`stage61-upload`.
 
 ## Facts kept from retired build scripts
 

@@ -109,11 +109,20 @@ default) keeps the PC Engine game's Fire Wheel.
 ### Palette
 
 - **ORIGINAL** (the default): the game's own colours.
+- **NES**: each stage recoloured to read like the same stage of the NES
+  Ninja Gaiden (a first draft of the colours, still under review): the
+  backgrounds, Ryu and the HUD. Enemies, bosses and the colours the game
+  animates (water, lamps and the like) keep their PC Engine colours for now.
 - **GB DMG**: the four green shades of the original Game Boy.
 
-The colours change at once while the window is open, so you can look at the
-choice before you accept it; **Select** (cancel) puts the old colours back.
-Story scenes, the title and the ending always keep the original colours.
+ORIGINAL and GB DMG change at once while the window is open, so you can look
+at the choice before you accept it; **Select** (cancel) puts the old colours
+back. NES colours are other palette data that the stage loads, so they
+appear when **Run** restarts the stage: while NES is highlighted the colours
+on screen stay as they are. (With the window opened in NES mode, ORIGINAL
+and GB DMG preview from the NES colours; Run reloads the stage in the real
+colours of the mode chosen.) Story scenes, the title and the ending always
+keep the original colours.
 
 ### Language
 

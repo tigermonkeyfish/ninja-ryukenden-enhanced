@@ -35,9 +35,15 @@ select  From a cold boot: exact_cycle in each of the 22 Level Select entries,
 options Each option row changed and accepted with Run, from 1-1: $2100 and
         $3227 afterwards; GB DMG shows the GB table's colours for the whole
         RAM palette, and ORIGINAL afterwards the same VCE as a stage start
-        that never left Original. Cancel after changing everything (from
-        Original and from GB DMG) leaves the options and $3227 unchanged
-        and is compared with the run without the menu for LONG frames.
+        that never left Original. NES: the restarted 1-1 holds the NES
+        colours (src/nes-palette) in the RAM palette, uploaded unmapped.
+        Original -> NES -> GB DMG -> Original, Run each time: NES colours,
+        then the GB table over the original colours (none of the NES ones
+        left), then the VCE of a stage start that never left Original.
+        Cancel after changing everything (from Original and from GB DMG,
+        the PALETTE row stepped through NES) leaves the options and $3227
+        unchanged and is compared with the run without the menu for LONG
+        frames.
 select  also checks, after a cold boot, that the LANGUAGE row reads
         ENGLISH with $3227 = 1.
 
@@ -576,11 +582,43 @@ def gb_expected(game):
     return b''.join(table[c & 0x1ff].to_bytes(2, 'little') for c in colours)
 
 
-def check_options(emulator, candidate, seed, output):
+def nes_expected(original):
+    """1-1 in NES mode (src/nes-palette): {RAM palette index: colour} for the
+    NES copy of set 1 (rows 0 and 2-14; row 1 is the Enhanced merged palette,
+    row 15 the HUD's), the NES HUD entries $F1-$F7 and Ryu's sprite row 0;
+    entries the game animates in 1-1 (r9:7, r9:d, r11:f) left out.
+    Returns (NES colours, original colours) by index; only entries whose
+    NES colour differs from the original are in the second."""
+    import nes_palette as NP
+    data = NP.load()
+    lay = NP.layout(data)
+    set1 = next(d for d in data['stages'] if d['set'] == 1)
+    orig = {i: int(e['pce'], 16) for i, e in enumerate(set1['entries'])}
+    want = {i: c for i, c in enumerate(lay['sets'][1]) if i < 240 and not 16 <= i < 32 and (i % 16 or i == 0)}
+    for i in (0x97, 0x9d, 0xbf):
+        want.pop(i, None)
+    want.update({0xf1 + k: c for k, c in enumerate(lay['hud'])})
+    orig.update({0xf1 + k: int(e['pce'], 16) for k, e in enumerate(data['shared']['hud']['entries'])})
+    want.update({256 + k: c for k, c in enumerate(lay['sprites'][0][1]) if k})
+    orig.update({256 + k: int(c, 16) for k, c in enumerate(data['shared']['sprites'][0]['pce'])})
+    if original is not None:
+        m, n = NP.enhanced_palettes('stage11', original)['extra_palette_nes']
+        want.update({16 + k: n[k] for k in range(1, 16)})
+        orig.update({16 + k: m[k] for k in range(1, 16)})
+    return want, {i: orig[i] for i in want if orig[i] != want[i]}
+
+
+def palette_words(ram):
+    return [ram[0x286 + 2 * i] | ram[0x287 + 2 * i] << 8 for i in range(512)]
+
+
+def check_options(emulator, candidate, seed, output, original=None):
     work = Path(tempfile.mkdtemp(prefix='menu-options-', dir=output))
     results = {}
+    nes, nes_changed = nes_expected(original)
     cases = [('parallax off', 1, ['right'], 0x01, None), ('no damage on', 2, ['right'], 0x02, None),
-             ('nes firewheel on', 3, ['right'], 0x04, None), ('palette gb dmg', 4, ['right'], 0x10, None),
+             ('nes firewheel on', 3, ['right'], 0x04, None), ('palette nes', 4, ['right'], 0x08, None),
+             ('palette gb dmg', 4, ['right', 'right'], 0x10, None),
              ('palette wraps left to gb dmg', 4, ['left'], 0x10, None),
              ('language japanese', 5, ['right'], 0x00, 0), ('language chinese', 5, ['left'], 0x00, 2)]
     for name, row, presses, bits, language in cases:
@@ -599,15 +637,46 @@ def check_options(emulator, candidate, seed, output):
                 entry['vce_is_gb_table'] = vce == expected
                 entry['ok'] = entry['ok'] and vce == expected and ram[0x100] & 0x80 == 0x80
                 (Path(output) / f'options-{name.replace(" ", "-")}.png').write_bytes(game.screenshot())
+            if bits == 0x08:
+                # NES: the restarted stage loaded the NES colours, uploaded natively.
+                pal = palette_words(ram)
+                bad = [i for i, c in nes.items() if pal[i] != c]
+                vce = game.read(0, 1024, area=8)
+                entry['nes_colours_wrong'] = bad[:10]
+                entry['vce_is_ram_palette'] = vce[:512] == ram[0x286:0x486]
+                entry['ok'] = entry['ok'] and not bad and entry['vce_is_ram_palette'] and ram[0x100] & 0x80 == 0
+                (Path(output) / f'options-{name.replace(" ", "-")}.png').write_bytes(game.screenshot())
             results[name] = entry
             print('option', name, entry, flush=True)
-    # The reference for ORIGINAL: the same two Runs with nothing changed.
+    # Original -> NES -> GB DMG -> Original, Run each time (the PALETTE row
+    # stepped right): the right colours after each restart.
     with Game(emulator, work) as game:
         start_point(game, candidate, seed, enhanced=True)
         game.write(0x1227, b'\x01')
         start_stage(game, 0)
         game.step(30)
-        menu_to(game, 4, ['right'])
+        steps = {}
+        ram = menu_to(game, 4, ['right'])
+        pal = palette_words(ram)
+        steps['nes'] = {'options': f'{ram[0x100]:#04x}', 'nes_colours_wrong': [i for i, c in nes.items() if pal[i] != c][:10]}
+        steps['nes']['ok'] = ram[0x100] & 0x1f == 0x08 and not steps['nes']['nes_colours_wrong']
+        ram = menu_to(game, 4, ['right'])
+        pal = palette_words(ram)
+        vce = game.read(0, 1024, area=8)
+        steps['gb dmg'] = {'options': f'{ram[0x100]:#04x}', 'vce_is_gb_table': vce == gb_expected(game),
+                           'nes_colours_left': [i for i in nes_changed if pal[i] == nes[i]][:10],
+                           'original_colours_back': all(pal[i] == c for i, c in nes_changed.items())}
+        (Path(output) / 'options-switch-gb-after-nes.png').write_bytes(game.screenshot())
+        ram = menu_to(game, 4, ['right'])
+        steps['original'] = {'options': f'{ram[0x100]:#04x}'}
+        switched = game.read(0, 1024, area=8)
+    # The reference for ORIGINAL: the same Runs with nothing changed.
+    with Game(emulator, work) as game:
+        start_point(game, candidate, seed, enhanced=True)
+        game.write(0x1227, b'\x01')
+        start_stage(game, 0)
+        game.step(30)
+        menu_to(game, 4, ['right', 'right'])
         menu_to(game, 4, ['right'])
         gb_back = game.read(0, 1024, area=8)
     with Game(emulator, work) as game:
@@ -621,20 +690,39 @@ def check_options(emulator, candidate, seed, output):
         ram = game.read(0, 0x2000)
     results['original restored exactly'] = {'ok': gb_back == plain and ram[0x100] & 0x9f == 0}
     print('original restored exactly', results['original restored exactly'], flush=True)
+    # A third Run with nothing changed: the reference for the switch sequence.
+    with Game(emulator, work) as game:
+        start_point(game, candidate, seed, enhanced=True)
+        game.write(0x1227, b'\x01')
+        start_stage(game, 0)
+        game.step(30)
+        for _ in range(3):
+            menu_to(game, 0, [])
+        plain3 = game.read(0, 1024, area=8)
+    steps['gb dmg']['ok'] = (steps['gb dmg']['options'] == '0x90' and steps['gb dmg']['vce_is_gb_table']
+                             and not steps['gb dmg']['nes_colours_left'] and steps['gb dmg']['original_colours_back'])
+    steps['original']['ok'] = steps['original']['options'] == '0x00' and switched == plain3
+    results['switch original nes gb original'] = dict(steps, ok=all(s['ok'] for s in steps.values()))
+    print('switch original nes gb original', results['switch original nes gb original'], flush=True)
     # Cancel after changing everything: nothing changes. Long comparisons
     # (LONG frames, the stage timer included) show whether the palette
     # module's state bits a cancelled preview may leave have any effect:
     # from Original (preview GB DMG) and from GB DMG (preview ORIGINAL).
-    everything = ['right', 'down', 'right', 'down', 'right', 'down', 'right', 'down', 'right', 'down', 'right']
-    for name, gb_first in (('cancel after changing everything', False),
-                           ('cancel after changing everything, from GB DMG', True)):
+    # The PALETTE row is stepped twice: from Original it previews NES (the
+    # colours stay) then GB DMG; from GB DMG, ORIGINAL then NES; from NES
+    # (the RAM palette holds NES colours), GB DMG then ORIGINAL.
+    everything = ['right', 'down', 'right', 'down', 'right', 'down', 'right', 'down', 'right', 'right', 'down',
+                  'right']
+    for name, first in (('cancel after changing everything', []),
+                        ('cancel after changing everything, from GB DMG', ['right', 'right']),
+                        ('cancel after changing everything, from NES', ['right'])):
         with Game(emulator, work) as game:
             start_point(game, candidate, seed, enhanced=True)
             game.write(0x1227, b'\x01')
             start_stage(game, 0)
             game.step(30)
-            if gb_first:
-                menu_to(game, 4, ['right'])
+            if first:
+                menu_to(game, 4, first)
             before = game.read(0, 0x2000)
             found = exact_cycle(game, work, actions=everything, n=LONG) \
                 if select_at_hook(game) else {'ok': False, 'problems': ['menu not available']}
@@ -682,7 +770,9 @@ def main():
     if 'runs' in parts:
         actions = None
         if args.preview:
-            actions = ['down', 'right', 'down', 'right', 'down', 'right', 'down', 'right', 'down', 'right', 'down']
+            # PALETTE stepped twice: NES (colours kept), then GB DMG.
+            actions = ['down', 'right', 'down', 'right', 'down', 'right', 'down', 'right', 'right', 'down', 'right',
+                       'down']
         if args.shots:
             args.shots.mkdir(parents=True, exist_ok=True)
         report['runs'] = check_runs(args.emulator, args.candidate, seed, args.every, args.output,
@@ -696,7 +786,9 @@ def main():
         report['level_select'] = check_level_select(args.emulator, args.candidate, args.output)
         oks += [e['ok'] for e in report['level_select']]
     if 'options' in parts:
-        report['options'] = check_options(args.emulator, args.candidate, seed, args.output)
+        rom = args.original.read_bytes()
+        report['options'] = check_options(args.emulator, args.candidate, seed, args.output,
+                                          rom[512:] if len(rom) % 8192 == 512 else rom)
         oks += [e['ok'] for e in report['options'].values()]
     report['ok'] = all(oks)
     (args.output / 'report.json').write_text(json.dumps(report, indent=2) + '\n')

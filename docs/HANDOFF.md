@@ -24,7 +24,7 @@
   game plays as 1.10. Code: `src/nes-firewheel` in bank 3's unused tail;
   no fixed-bank bytes.
 - **Palette modes** (1.11-dev, branch `gb-palette`): `$2100` bits 3-4,
-  00 Original (default), 01 NES (reserved, shown as Original), 10 GB DMG
+  00 Original (default), 01 NES (branch `nes-palette`, below), 10 GB DMG
   (four dark olive shades by luminance, `src/palette/gb-dmg.json`), menu row
   `PALETTE` (previewed while the menu is open). The vblank palette upload maps the native queue in GB DMG gameplay;
   cinemas and the title stay original. 1-1 and 2-2 now keep their merged
@@ -32,6 +32,21 @@
   native palette 1 after the re-queue there
   ([architecture](ARCHITECTURE.md#palette-modes),
   [evidence](validation/gb-palette.md), emulator only).
+- **NES palette** (1.11-dev, branch `nes-palette`): the PALETTE row's NES
+  value (`$2100` bits 3-4 = 01) recolours each stage to read as the same
+  stage of NES Ninja Gaiden, from a **draft** of hand-assigned colours the
+  maintainer has not reviewed yet. The colours are data
+  (`src/nes-palette/*.json`, roles and colour values only; regenerate or
+  swap them without code changes, `scripts/nes_palette.py`). NES gameplay
+  loads NES copies of the 18 stage colour sets (3-2 its own variant of set
+  6), Ryu's sprite palette, the HUD colours and the 1-1 / 2-2 Enhanced
+  palettes; enemies, bosses, animated colours, cinemas and the title stay
+  original. NES shows after Run (the stage reload); the open menu keeps the
+  colours while NES is highlighted. Code and data in bank `$45`
+  (`$4000-$43FF`, `$5200-$5FFF`) and a 26-byte hook in bank `$37`'s free
+  tail; no fixed-bank free bytes
+  ([architecture](ARCHITECTURE.md#nes-palette-mode),
+  [evidence](validation/nes-palette.md), emulator only).
 - **Popup menu** (1.11-dev, branch `popup-menu`): Select opens a 26 x 10
   window over the playfield (BAT rows 7-16) instead of covering the HUD:
   STAGE, SMOOTH PARALLAX, NO DAMAGE, NES FIREWHEEL, PALETTE, LANGUAGE, then
@@ -102,6 +117,11 @@
    evidence. Never change the published patches.
 
 ## Next useful work
+
+- NES palette: the maintainer's review of the draft colours (the draft
+  sheets and notes are private, `build/nes-draft/`); then enemy and boss
+  sprite palettes and the game's animated colours (both still PC Engine
+  colours in NES mode), as more data in `src/nes-palette`.
 
 - After any change that could affect timing, rerun
   `scripts/comparison_video.py make` and `cinema` on all runs; a run that no

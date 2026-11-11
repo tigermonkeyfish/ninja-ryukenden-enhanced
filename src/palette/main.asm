@@ -1,6 +1,7 @@
 ; Palette modes: $2100 bits 3-4. 00 Original (the shipped colours; zero is
-; the default), 01 NES (reserved, shown as Original for now), 10 GB DMG,
-; 11 reserved (Original). No menu row yet (see docs/ARCHITECTURE.md).
+; the default), 01 NES (other palette data loaded into the RAM palette by
+; src/nes-palette; uploaded here as Original), 10 GB DMG, 11 reserved
+; (Original). See docs/ARCHITECTURE.md.
 ;
 ; The native game keeps its live palette in RAM ($2286, 512 words) and queues
 ; ranges to upload ($F350; up to 8 entries at $2260-$2280). The vblank
