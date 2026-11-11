@@ -75,6 +75,28 @@ describe `bram-save` as it was stopped.
   (`--only matrix --shard K/3`, `build/v111/matrix`): 210 of 210 pass; the
   48-entry directory boots at the baseline's frame (asserted); the three
   longer ones (111, 112 and 126 entries) are reported apart.
+- **Regression against the `dark-lift` build, incomplete.** Both jobs were
+  stopped by the session's host when the machine ran low on memory (other
+  work was running; nothing points at these jobs) and were not started
+  again. What had finished:
+  `check_menu.py` (all parts asked for; `build/v111/menu.log`, no
+  `report.json` because it is written at the end): runs, 140 openings in
+  the 11 runs, all exact, stack low-water `$21D7`; sweep, every window with
+  the counts of the `dark-lift` record (one opening differing only by the
+  timer phase, 1-1 2829); Level Select, all entries; options, the first 29
+  of 36 cases pass (the last seven "cancel after changing everything, from
+  X to Y" cases did not run). Its log equals the `dark-lift` build's line
+  for line as far as it got. Before that, the check had failed every
+  opening: its expected window never received the status text (a slice
+  assignment to a copy), so `SAVE: NONE` counted as a wrong cell; fixed in
+  `check_menu.expected_window`, with a unit test.
+  Stored runs (`research/tools/dark-lift/recall.sh`, backup RAM absent,
+  recordings in `build/v111/reg/rec/v111-*`) against the `dark-lift`
+  build's recordings (`analyse.py identity dl-MODE v111-MODE`): Original,
+  GB DMG, SMS and HELL, 11 runs each (35,084 frames a mode): identical in
+  every field of every frame (picture, VCE, sprite table, RAM, gameplay).
+  NES-A: 1-1 identical; its other ten runs and all of NES-B were not
+  recorded.
 - Random images (`research/tools/bram-save/fuzz.py`, pinned emulator, seed
   2): the first 560 images, 0 problems, before the generator itself tripped
   on a short end pointer (fixed); a longer run is pending.
