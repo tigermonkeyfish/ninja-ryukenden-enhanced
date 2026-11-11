@@ -28,7 +28,10 @@ runs    In each stored comparison run (research/comparison-runs/), every
         raster timing (identical writes at other raster positions; with the
         sound held none are expected). With --same-music the run without
         the menu gets the music driver's state as the menu left it, and
-        every picture must match. Sound-driver RAM that differs at the
+        every picture must match. A frame whose video state differs only by
+        the timer interrupt's phase (see compare_frames) is accepted but
+        listed ('timer_phase_frames', the sweep's 'opened, timer phase only',
+        the report's 'timer_phase_only'); --strict fails it. Sound-driver RAM that differs at the
         return is listed ('sound_ram_differs': zero page $8B, the driver's
         per-tick scratch, is cleared by the ticks in the menu). The stack's
         low-water mark is measured from a $A5 fill below the stack pointer.
@@ -99,6 +102,7 @@ MENU = layout((ROOT / 'src/options/menu.txt').read_text(), VERSION)
 HUD_WORDS = (28 * 64, 31 * 64 - 1)                 # BAT rows 28-30
 UPDATES = 20
 SAME_MUSIC = False          # --same-music: see exact_cycle
+STRICT = False              # --strict: timer-phase frames (compare_frames) fail too
 LONG = 900                  # frames compared after a cancelled palette preview
 
 
@@ -321,6 +325,9 @@ def compare_frames(found, menu_shots, reference_shots):
     found['timer_phase_frames'] = [k for k in video if same_vdc and timer_moved and driver_held and k + 1 < len(menu_shots)
                                    and menu_shots[k][0] == reference_shots[k][0] and k + 1 not in video]
     video = [k for k in video if k not in found['timer_phase_frames']]
+    if STRICT and found['timer_phase_frames']:
+        found['problems'].append(f'video state differs (timer phase only) at the end of frames '
+                                 f'{found["timer_phase_frames"]}')
     if video or len(menu_shots) != len(reference_shots):
         found['problems'].append(f'video state differs at the end of frames {video[:20]}')
     sound = [k for k, (a, b) in enumerate(zip(menu_shots, reference_shots)) if a[2] != b[2]]
@@ -528,9 +535,11 @@ def check_runs(emulator, candidate, seed, every, output, options=0, actions=None
             'columns': sorted({c.get('column') for c in checks if 'column' in c}),
             'stack_low': min((c['stack_low'] for c in checks if c.get('stack_low')), default=None),
             'raster_timing': {c['frame']: c['raster_timing_frames'] for c in checks if c.get('raster_timing_frames')},
+            'timer_phase': {c['frame']: c['timer_phase_frames'] for c in checks if c.get('timer_phase_frames')},
             'problems': [c for c in checks if not c['ok']]}
         print(run['name'], results[run['name']]['menus_checked'], 'menus',
               results[run['name']]['wrapping_windows'], 'wrapping, stack low', results[run['name']]['stack_low'],
+              'timer phase only', results[run['name']]['timer_phase'],
               'ok' if results[run['name']]['ok'] else 'FAILED', flush=True)
     return results
 
@@ -554,9 +563,13 @@ def sweep_frames(game, work, frames, label, step):
             info['result'] = 'no update saw Select'
         else:
             found = exact_cycle(game, work, actions=['down', 'right', 'down', 'right'], n=10, blink=False)
-            info['result'] = 'refused' if found is None else ('opened, exact' if found['ok'] else 'opened, FAILED')
+            info['result'] = 'refused' if found is None else ('opened, FAILED' if not found['ok'] else
+                                                              'opened, timer phase only' if found['timer_phase_frames']
+                                                              else 'opened, exact')
             if found and not found['ok']:
                 info['problems'] = found['problems']
+            if found and found['timer_phase_frames']:
+                info['timer_phase_frames'] = found['timer_phase_frames']
         game.call('load_state_file', {'file_path': str(state)})
         game.held = set()
         game.press(set())
@@ -644,6 +657,8 @@ def check_level_select(emulator, candidate, output):
                 entry['problems'].append('menu not available')
             elif not found['ok']:
                 entry['problems'] += found['problems']
+            if found and found.get('timer_phase_frames'):
+                entry['timer_phase_frames'] = found['timer_phase_frames']
             if stage == 21:
                 entry['ok'] = not entry['problems']
                 results.append(entry)
@@ -897,6 +912,8 @@ def main():
     parser.add_argument('--same-music', action='store_true',
                         help='give the run without the menu the music driver state the menu left, and require '
                              'identical pictures in every frame')
+    parser.add_argument('--strict', action='store_true',
+                        help='frames whose video state differs only by the timer interrupt\'s phase fail too')
     parser.add_argument('--sweep-step', type=int, default=1)
     parser.add_argument('--sweep-runs', default='1-1,2-2,5-3,6-3')
     parser.add_argument('--shots', type=Path, help='runs: keep the first open-window picture of each check here')
@@ -904,8 +921,9 @@ def main():
     args.output = args.output.resolve()
     args.output.mkdir(parents=True, exist_ok=True)
     parts = set(args.only or ('runs', 'sweep', 'select', 'options'))
-    global SAME_MUSIC, STATE_IN_2104
+    global SAME_MUSIC, STATE_IN_2104, STRICT
     SAME_MUSIC = args.same_music
+    STRICT = args.strict
     rom = args.candidate.read_bytes()
     if MENU_PREFIX != rom[MENU_ENTRY:MENU_ENTRY + len(MENU_PREFIX)]:
         raise SystemExit('The menu entry is not where this check expects it')
@@ -945,6 +963,25 @@ def main():
         report['options'] = check_options(args.emulator, args.candidate, seed, args.output,
                                           rom[512:] if len(rom) % 8192 == 512 else rom)
         oks += [e['ok'] for e in report['options'].values()]
+    # Every frame accepted as timer phase only, listed in one place.
+    timer = []
+    for name, r in report.get('runs', {}).items():
+        timer += [{'part': 'runs', 'run': name, 'opened_at': f, 'frames': v} for f, v in r['timer_phase'].items()]
+    for window, outcome in report.get('sweep', {}).items():
+        timer += [{'part': 'sweep', 'window': window, 'opened_at': o['frame'], 'frames': o['timer_phase_frames']}
+                  for o in outcome if o.get('timer_phase_frames')]
+    for name, r in report.get('options', {}).items():
+        if r.get('timer_phase_frames'):
+            timer.append({'part': 'options', 'case': name, 'frames': r['timer_phase_frames']})
+    for e in report.get('level_select', []):
+        if e.get('timer_phase_frames'):
+            timer.append({'part': 'select', 'stage': e.get('stage'), 'frames': e['timer_phase_frames']})
+    report['timer_phase_only'] = timer
+    report['strict'] = args.strict
+    print('openings whose video state differed only by the timer interrupt\'s phase:', len(timer),
+          '(failures with --strict)' if args.strict else '(accepted; --strict fails them)', flush=True)
+    for t in timer:
+        print('  timer phase only:', t, flush=True)
     report['ok'] = all(oks)
     (args.output / 'report.json').write_text(json.dumps(report, indent=2) + '\n')
     print('menu check', 'passed' if report['ok'] else 'FAILED')
