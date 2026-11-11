@@ -168,14 +168,21 @@ def window_words(game, c0):
             for j in range(BOX_ROWS)]
 
 
+def expected_window(status):
+    """menu.txt's window with the text of save status `status` in its field
+    (an unknown status shows the first text, as the menu does)."""
+    window = bytearray(MENU['window'])
+    row, column, width = MENU['status']
+    at = row * BOX_WIDTH + column
+    window[at:at + width] = MENU['status_texts'][status if status < len(MENU['status_texts']) else 0]
+    return window
+
+
 def window_problems(game, c0):
     """Differences between the BAT window and menu.txt (value fields: any
     font cell; the save status field: the text of the status in $2105)."""
     fields = {(r, c + k) for r, c, w in MENU['fields'] for k in range(w)}
-    window = bytearray(MENU['window'])
-    row, column, width = MENU['status']
-    status = game.read(0x105, 1)[0]
-    window[row * BOX_WIDTH + column:][:width] = MENU['status_texts'][status if status < len(MENU['status_texts']) else 0]
+    window = expected_window(game.read(0x105, 1)[0])
     problems = []
     for j, row in enumerate(window_words(game, c0)):
         for i, word in enumerate(row):

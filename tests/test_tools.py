@@ -936,6 +936,24 @@ class SavedSettingsTests(unittest.TestCase):
         module = next(m for m in json.loads((ROOT / 'src/modules.json').read_text()) if m['name'] == 'bram')
         self.assertEqual(module['ranges'], [[0x2c, 0x2f], [0x1fe6, 0x1ff6], [0x8cb00, 0x8d000]])
 
+    def test_menu_check_expects_the_status_text(self):
+        """check_menu compares the open window with menu.txt and the text
+        of the status in $2105: the text must really be in what it expects
+        (it once was not, and every opening failed on `NONE`)."""
+        import bram_image as bi
+        import check_menu as cm
+        row, column, width = cm.MENU['status']
+        at = row * cm.BOX_WIDTH + column
+        seen = set()
+        for status, text in enumerate(bi.STATUS):
+            window = cm.expected_window(status)
+            self.assertEqual(len(window), len(cm.MENU['window']))
+            self.assertEqual(''.join(cm.DECODE[c] for c in window[at:at + width]), text.ljust(width))
+            self.assertEqual(window[:at] + window[at + width:], cm.MENU['window'][:at] + cm.MENU['window'][at + width:])
+            seen.add(bytes(window))
+        self.assertEqual(len(seen), len(bi.STATUS))
+        self.assertEqual(cm.expected_window(200), cm.expected_window(bi.NONE))
+
     def test_lock_controls_match_the_source(self):
         """check_bram's negative controls (the unlock and lock removed or
         changed) are byte patterns: they must be the module's instructions."""
