@@ -69,8 +69,11 @@ python3 scripts/check_boot.py --emulator /path/to/geargrafx \
 ```
 
 The menu check opens the in-game menu throughout the 11 stored runs and in
-every Level Select entry, and requires the machine to be unchanged when it
-returns to the game (see the script for the RAM the interrupt may change):
+every Level Select entry, sweeps Select over deaths and area changes, and
+accepts each option; a cancelled menu is compared with the same state run
+without it (see the script's docstring and
+[validation/popup-menu.md](validation/popup-menu.md); `--only` picks parts,
+`--parallax-off`, `--preview` and `--same-music` the variants):
 
 ```sh
 python3 scripts/check_menu.py --emulator /path/to/geargrafx \

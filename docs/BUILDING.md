@@ -66,11 +66,14 @@ all equal (`uniform_rows`). `scripts/native_seams.py` is the development tool th
 chose each loop; the build does not run it.
 
 The in-game menu's text is also generated: `src/options/menu.txt` lays out
-its four rows as they appear (`#` runs are the value fields), `VERSION`
-fills `{version}`, and `scripts/menu_text.py` encodes the rows in the HUD
-font. Characters outside the HUD font, lines over 32 columns, text in the
-item box (columns 13-14 of the middle rows) and wrong value fields fail the
-build.
+the popup window as it appears (10 lines of 26 columns; `#` runs are the
+value fields), the band line under the HUD (`{version}` from `VERSION`,
+`{credit}` with `GITHUB.COM/` only when the line fits 32 columns) and each
+option's values (`@` lines: draft bits, then `value=TEXT` choices), and
+`scripts/menu_text.py` encodes them in the HUD font. Characters outside the
+HUD font, window lines of the wrong width, a band line over 32 columns, a
+STAGE field not 5 wide, values wider than their field or outside their
+bits, and overlapping bits fail the build.
 
 This is a **source rebuild from the original game**: no byte comes from a
 release patch.
