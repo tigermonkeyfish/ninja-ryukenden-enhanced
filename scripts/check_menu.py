@@ -108,6 +108,12 @@ PREVIEW_SCRATCH = set(range(0x205, 0x20d)) | {0x284, 0x285} | set(range(0x261, 0
 STATE_IN_2104 = True        # main(): False for builds before the SMS palette
 
 
+def stack_fill():
+    """The first byte of the watched stack margin ($2104, or $2105 once $2104
+    holds the palette module's state), offset from $2000."""
+    return 0x105 if STATE_IN_2104 else 0x104
+
+
 def module_state_only(i, a, b):
     """Before the SMS palette (1.11-dev), $2100 differing only in bits 5-6:
     the palette module's left-over and busy-history state, which a cancelled
@@ -247,7 +253,7 @@ def exact_cycle(game, state_dir, actions=None, n=UPDATES, shots=None, blink=True
     """At the hook with Select newly pressed (select_at_hook). Returns None if
     the menu is refused here, else findings ('ok' False on any problem)."""
     sp = int(game.call('get_huc6280_status')['SP'], 16) - 0x2000   # $100 + S
-    game.write(0x104, b'\xa5' * (sp - 0x104 + 1))   # stack low-water mark
+    game.write(stack_fill(), b'\xa5' * (sp - stack_fill() + 1))   # stack low-water mark
     state = Path(state_dir) / 'cycle.state'
     game.call('save_state_file', {'file_path': str(state)})
     before = snapshot(game)
@@ -304,7 +310,7 @@ def exact_cycle(game, state_dir, actions=None, n=UPDATES, shots=None, blink=True
         game.call('remove_breakpoint', {'address': f'{HUD_WORDS[0]:x}', 'end_address': f'{HUD_WORDS[1]:x}',
                                         'memory_area': 'vram'})
     after = snapshot(game)
-    low = next((i for i in range(0x104, sp + 1) if after['ram'][i] != 0xa5), None)
+    low = next((i for i in range(stack_fill(), sp + 1) if after['ram'][i] != 0xa5), None)
     found['stack_low'] = f'${0x2000 + low:04x}' if low is not None else None
     build = before['ram'][0xb81]
     spare = range(2 * (0x7e00 + 0x100 * build), 2 * (0x7f00 + 0x100 * build))
