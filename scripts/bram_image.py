@@ -286,6 +286,8 @@ def matrix():
         'exact-room-a000': image(filled(ENTRY_SIZE + 2), end=0xa000),
         'full-with-ours': image(filled(ENTRY_SIZE + 2) + [ours]),
         'tiny-entries': image([other(k, 18) for k in range(112)]),
+        'tiny-entries-48': image([other(k, 18) for k in range(48)]),
+        'smallest-entries': image([other(k, 16) for k in range(126)]),
         'tiny-entries-ours-last': image([other(k, 18) for k in range(110)] + [ours]),
         # Our entry, not usable.
         'ours-bad-checksum': image([other(0, 0x40), settings_entry(0x1a, 2, sum_error=1)]),
