@@ -22,12 +22,12 @@
 # Option values: the draft-byte bits the field owns, then value=TEXT in
 # Left/Right order ('_' is a space). Draft bits 0-4 are $2100's options on
 # Run (0 original background, 1 No Damage, 2 NES Firewheel, 3-4 palette
-# mode: 00 Original, 01 NES, 10 GB DMG); bits 5-6 the language ($3227:
+# mode: 00 Original, 01 NES, 10 GB DMG, 11 HELL); bits 5-6 the language ($3227:
 # 0 Japanese, 1 English, 2 Chinese).
 # To offer the NES palette once src/palette implements it, make the PALETTE
-# line: @ $18 $00=ORIGINAL $08=NES $10=GB_DMG
+# line: @ $18 $00=ORIGINAL $08=NES $10=GB_DMG $18=HELL
 @ $01 $00=ON $01=OFF
 @ $02 $00=OFF $02=ON
 @ $04 $00=OFF $04=ON
-@ $18 $00=ORIGINAL $10=GB_DMG
+@ $18 $00=ORIGINAL $10=GB_DMG $18=HELL
 @ $60 $20=ENGLISH $00=JAPANESE $40=CHINESE

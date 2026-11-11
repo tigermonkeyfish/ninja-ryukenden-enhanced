@@ -422,10 +422,11 @@ class ReleaseTests(unittest.TestCase):
         with self.assertRaises(ValueError): band('V{version} {credit}', '1.11-development-build')
         self.assertEqual(len(menu['band']), 32)
         palette = menu['choices'][3]
-        self.assertEqual((palette[0], [v for v, _ in palette[1]]), (0x18, [0x00, 0x10]))
+        self.assertEqual((palette[0], [v for v, _ in palette[1]]), (0x18, [0x00, 0x10, 0x18]))
+        self.assertEqual(palette[1][2][1], bytes(CODES[c] for c in 'HELL    '))
         # Offering NES is one more value=TEXT item on the PALETTE line.
         nes = source.replace('@ $18 $00=ORIGINAL $10=GB_DMG', '@ $18 $00=ORIGINAL $08=NES $10=GB_DMG')
-        self.assertEqual([v for v, _ in layout(nes, '1.11')['choices'][3][1]], [0x00, 0x08, 0x10])
+        self.assertEqual([v for v, _ in layout(nes, '1.11')['choices'][3][1]], [0x00, 0x08, 0x10, 0x18])
         self.assertEqual(layout(nes, '1.11')['choices'][3][1][1][1][:3], bytes(CODES[c] for c in 'NES'))
         for broken in (source.replace('| STAGE: #####             |', '| STAGE: ####              |'),  # STAGE width
                        source.replace('| NO DAMAGE: ###           |', '| NO DAMAGE: ###            |'),  # 27 columns

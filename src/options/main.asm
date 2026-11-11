@@ -97,6 +97,7 @@ RYU_STATE = $2eab           ; native: Ryu's state, 10 from his death on
 RYU_DEAD = 10
 RYU_HEALTH = $2ead
 QUEUE_COUNT = $2260         ; native palette upload queue: entries
+QUEUE_ALL = $f394           ; native: queue colours 0-511, under the lock
 WAIT_VBLANK = $fd67
 SET_WRITE = $fc34           ; native: VRAM write address = X:A, register 2
 SPACE = $9f
@@ -262,16 +263,11 @@ choose:
  bra closed
 cancelled:
  ; Select: the palette mode as it was (the preview may have changed it).
- php
- sei
- lda OPTIONS
- and #$ff - PALETTE_BITS
- ora <SCRATCH
- sta OPTIONS
- plp
+ lda <SCRATCH
+ jsr set_palette
  ; Let the palette module put the colours back before the game runs on (a
  ; full upload at once in Original; in GB DMG about 136 colours, then 16 a
- ; vblank left over, about 25 vblanks for all 512): a vblank, then more
+ ; vblank left over, about 25 vblanks for all 512; HELL about 12): a vblank, then more
  ; while its queue holds work, at most 48 in all; then one more, so the
  ; game resumes after an interrupt with no upload (a full upload takes about
  ; 27 lines and would move the update's first writes against the raster).
@@ -310,13 +306,22 @@ restore_zero_page:
 selection_return:
  rts
 
- ; The live palette mode follows the draft's (src/palette re-uploads every
- ; colour at the next vblanks when the mode changes), so the choice shows at
- ; once; cancel puts the old mode back.
+ ; The live palette mode follows the draft's, so the choice shows at once;
+ ; cancel puts the old mode back.
 preview_palette:
  lda DRAFT
  and #PALETTE_BITS
+ ; A = palette bits: make them the live mode. When they change, all 512
+ ; colours are queued (native $F394, under the palette lock) and src/palette
+ ; re-uploads them in the new mode's colours at the next vblanks: its state
+ ; bit tells only whether the VCE holds mapped colours, not which table
+ ; (GB DMG or HELL), so a change between those needs the full queue.
+set_palette:
  sta <SCRATCH
+ lda OPTIONS
+ and #PALETTE_BITS
+ cmp <SCRATCH
+ beq palette_kept
  php
  sei
  lda OPTIONS
@@ -324,6 +329,8 @@ preview_palette:
  ora <SCRATCH
  sta OPTIONS
  plp
+ jmp QUEUE_ALL
+palette_kept:
  rts
 
  ; X = option field (1..FIELDS-1). Y = its choice entry for the draft's
