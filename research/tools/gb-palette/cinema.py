@@ -40,6 +40,11 @@ def main():
             g.press(set(buttons))
             g.checked_step(count)
         g.press(set())
+        # The run's own stage end may start the cinema a few frames later.
+        for _ in range(120):
+            if g.read(0x240, 1)[0] != 0:
+                break
+            g.checked_step(1)
         seen_cinema, n = False, 0
         for _ in range(40000):
             kind = g.read(0x240, 1)[0]

@@ -24,6 +24,16 @@
   [evidence](validation/nes-firewheel.md), emulator only). With it off the
   game plays as 1.10. Code: `src/nes-firewheel` in bank 3's unused tail;
   no fixed-bank bytes.
+- **Palette modes** (1.11-dev, branch `gb-palette`): `$2100` bits 3-4,
+  00 Original (default), 01 NES (reserved, shown as Original), 10 GB DMG
+  (four dark olive shades by luminance, `src/palette/gb-dmg.json`), no menu
+  row yet (a row would toggle the draft's bits 3-4; the draft already keeps
+  them). The vblank palette upload maps the native queue in GB DMG gameplay;
+  cinemas and the title stay original. 1-1 and 2-2 now keep their merged
+  palettes in the RAM palette, which fixes 1-1's area-1 backdrop showing the
+  native palette 1 after the re-queue there
+  ([architecture](ARCHITECTURE.md#palette-modes),
+  [evidence](validation/gb-palette.md), emulator only).
 - **Release 1.09** (2026-10-21, tag `v1.09`) was the first public release
   (`f84a31a8…b912`), played on the same hardware. Its patches stay
   unchanged at the tag; `patches/` holds only the current release.

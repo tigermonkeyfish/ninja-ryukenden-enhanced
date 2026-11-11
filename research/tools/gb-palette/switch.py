@@ -97,23 +97,23 @@ def paused(rom, run, at, shots):
         set_mode(g, 0x10)
         call_requeue(g)
         lag = None
-        for k in range(1, 16):
+        for k in range(1, 61):
             g.checked_step(1)
             if not gb_bad(g) and lag is None:
                 lag = k
         out['to_gb_frames'] = lag
-        out['gb_all_match_after_15'] = not gb_bad(g)
+        out['gb_all_match_after_60'] = not gb_bad(g)
         if shots:
             (shots / f'switch-{run["name"]}-paused-gb.png').write_bytes(g.screenshot())
         set_mode(g, 0)
         call_requeue(g)
         back = None
-        for k in range(1, 16):
+        for k in range(1, 61):
             g.checked_step(1)
             if g.read(0, 1024, area=8) == vce0 and back is None:
                 back = k
         out['back_frames'] = back
-        out['back_exact_after_15'] = g.read(0, 1024, area=8) == vce0
+        out['back_exact_after_60'] = g.read(0, 1024, area=8) == vce0
         out['still_paused'] = before == g.read(0xe9e, 0x40)
     return out
 

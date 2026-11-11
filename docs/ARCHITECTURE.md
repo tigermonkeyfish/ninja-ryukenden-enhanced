@@ -345,9 +345,11 @@ The upload goes through the trampoline at `$FEC0` to bank `$46` `$5000`:
   entries: 0.266 mapped colours per native one, less 6 per further entry,
   at least 16, because in the frames around an area change the native main
   loop has under a line to spare (6-3); the stored runs' worst mapped upload
-  ends 18.1 lines after the interrupt. New entries go first; what is left
-  becomes one entry (lowest to highest colour left), marked by `$2100` bit 5.
-  A left-over entry alone gets 32 colours a vblank when the main loop was
+  ends 18.2 lines after the interrupt. Entries go first in, first out; what
+  is left becomes one entry that starts where the upload stopped and runs on
+  past colour 511 to 0 far enough to cover the rest (only this upload ever
+  sees such an entry: the native one always gets a full re-queue first),
+  marked by `$2100` bit 5. A left-over entry alone gets 16 colours a vblank when the main loop was
   waiting for vblank (interrupted PC in `$FD67-$FD6F`) at this vblank and at
   the last one with palette work (bit 6), otherwise none. A full queue (8
   entries: `$F350` may have dropped one) leaves all 512 colours over.
