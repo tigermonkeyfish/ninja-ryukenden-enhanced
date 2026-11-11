@@ -1,0 +1,5 @@
+{
+  "about": "SMS palette mode (candidate A of the owner's mock-ups): every 9-bit PC Engine colour (GGG RRR BBB) becomes one of the Sega Master System's 64 colours, channel by channel. A PC Engine channel c (0-7) stands for the linear level c * 255 / 7; it takes the nearest of sms_levels (the SMS's four levels per channel on the same 0-255 scale; a level exactly halfway between two takes the darker one), shown as the PC Engine channel value at the same position in pce_levels. With the defaults: 0,1 -> 0; 2,3 -> 2; 4,5 -> 5; 6,7 -> 7. The mode recolours every VCE entry and the border. scripts/palette_tables.py turns this file into the 512-entry table at build time.",
+  "sms_levels": [0, 85, 170, 255],
+  "pce_levels": [0, 2, 5, 7]
+}

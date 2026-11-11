@@ -99,6 +99,51 @@ class PaletteTableTests(unittest.TestCase):
             self.assertEqual(table[colour], hell, hex(colour))
         self.assertEqual(load_hell()['mapped_entries'], 240)    # background palettes 0-14
 
+    def test_sms_table_is_the_owners_mockup(self):
+        from palette_tables import load_sms, sms_colours, sms_table
+        table = sms_table()
+        self.assertEqual(len(table), 512)
+        # The 512 colours of candidate A (build/sms-mockup/table-A.json,
+        # `by_colour`, the owner's choice) as little-endian words.
+        self.assertEqual(hashlib.sha256(b''.join(c.to_bytes(2, 'little') for c in table)).hexdigest(),
+                         'bb0779db843cfb9ee7094e11f7cf95dad5fdc8038092048ee281a0080ae8d927')
+        # Channel by channel, independently of the parameters: PC Engine
+        # 0,1 -> 0; 2,3 -> 2; 4,5 -> 5; 6,7 -> 7 (GGGRRRBBB).
+        q = [0, 0, 2, 2, 5, 5, 7, 7]
+        for colour in range(512):
+            g, r, b = colour >> 6, (colour >> 3) & 7, colour & 7
+            self.assertEqual(table[colour], q[g] << 6 | q[r] << 3 | q[b], hex(colour))
+        # Every output is one of the 64 SMS colours, all 64 occur, and an SMS
+        # colour maps to itself.
+        sms64 = {g << 6 | r << 3 | b for g in (0, 2, 5, 7) for r in (0, 2, 5, 7) for b in (0, 2, 5, 7)}
+        self.assertEqual(sms_colours(), sms64)
+        self.assertEqual(set(table), sms64)
+        self.assertTrue(all(table[c] == c for c in sms64))
+        self.assertEqual(load_sms()[1], [0, 2, 5, 7])
+
+    def test_sms_parameters_are_editable(self):
+        import tempfile
+        from palette_tables import generate, pages, sms_table
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'sms.json'
+            path.write_text(json.dumps({'sms_levels': [0, 1, 254, 255], 'pce_levels': [0, 1, 6, 7]}))
+            table = sms_table(path)
+            self.assertEqual(table[0x1ff], 0x1ff)
+            self.assertEqual(table[0x049], 0x049)                   # 1 (36.4) -> level 1, shown as 1
+            self.assertEqual(table[0x124], 0x1b6)                   # 4 (145.7) -> level 254, shown as 6
+            generate(temp, sms_path=path)
+            include = (Path(temp) / 'sms-table.inc').read_text()
+            values = [int(b[1:], 16) for line in include.splitlines() if line.startswith(' .db ')
+                      for b in line[5:].split(',')]
+            self.assertEqual(bytes(values), b''.join(pages(table)))
+            self.assertEqual(include.splitlines()[1], 'sms_lo0:')
+            for broken in ({'sms_levels': [0, 85, 170], 'pce_levels': [0, 2, 5]},
+                           {'sms_levels': [0, 170, 85, 255], 'pce_levels': [0, 2, 5, 7]},
+                           {'sms_levels': [0, 85, 170, 255], 'pce_levels': [0, 2, 5, 8]}):
+                path.write_text(json.dumps(broken))
+                with self.assertRaises(ValueError):
+                    sms_table(path)
+
     def test_hell_parameters_are_editable(self):
         import tempfile
         from palette_tables import HELL_PARAMETERS, generate, hell_table, pages
