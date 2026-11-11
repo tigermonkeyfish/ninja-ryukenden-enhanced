@@ -14,10 +14,15 @@ runs    In each stored comparison run (research/comparison-runs/), every
         moment it was entered except the sprite-table buffer being built
         (the backup) and RAM except ALLOWED; then the game runs UPDATES more
         frames and is compared with the same state run without the menu:
-        every frame's picture, and at the end all of VRAM (the backup buffer
-        included: the game rewrote it), the sprite table, the palette and
-        RAM except ALLOWED. The stack's low-water mark is measured from a
-        $A5 fill below the stack pointer.
+        at every frame's end VRAM (the backup buffer included: the game
+        rewrote it), the sprite table and the palette, and at the next
+        update boundary RAM except ALLOWED. Pictures that differ in a frame
+        whose video state agrees are reported as raster timing: the music
+        driver played on during the menu, so the interrupts take different
+        time and identical writes land at other raster positions. With
+        --same-music the run without the menu gets the music driver's state
+        as the menu left it, and every picture must match. The stack's
+        low-water mark is measured from a $A5 fill below the stack pointer.
         Parallax OFF variants of the runs are selected with --parallax-off.
 sweep   Select pressed at every frame (`--sweep-step`) of the unsafe
         windows: a time-out death and respawn in 1-1 (timer set to 2 by a
@@ -30,8 +35,11 @@ select  From a cold boot: exact_cycle in each of the 22 Level Select entries,
 options Each option row changed and accepted with Run, from 1-1: $2100 and
         $3227 afterwards; GB DMG shows the GB table's colours for the whole
         RAM palette, and ORIGINAL afterwards the same VCE as a stage start
-        that never left Original. Cancel after changing everything leaves
-        $2100, $2101's meaning, $3227 and the picture unchanged.
+        that never left Original. Cancel after changing everything (from
+        Original and from GB DMG) leaves the options and $3227 unchanged
+        and is compared with the run without the menu for LONG frames.
+select  also checks, after a cold boot, that the LANGUAGE row reads
+        ENGLISH with $3227 = 1.
 
 Writes a JSON report to the output folder; captures stay private there.
 """
@@ -67,6 +75,8 @@ VERSION = (ROOT / 'VERSION').read_text().strip()
 MENU = layout((ROOT / 'src/options/menu.txt').read_text(), VERSION)
 HUD_WORDS = (28 * 64, 31 * 64 - 1)                 # BAT rows 28-30
 UPDATES = 20
+SAME_MUSIC = False          # --same-music: see exact_cycle
+LONG = 900                  # frames compared after a cancelled palette preview
 
 
 def allowed(offset, stack_pointer):
@@ -189,8 +199,9 @@ def opens(game):
 
 def frames(game, count, state_dir):
     """From a breakpoint stop: normalize (save and reload the state, so frame
-    steps have a defined length), then `count` whole frames; each completed
-    frame's picture. A screenshot taken at a breakpoint can show a frame in
+    steps have a defined length), then `count` whole frames; for each, the
+    completed frame's picture and the video state at its end (VRAM, sprite
+    table, palette). A screenshot taken at a breakpoint can show a frame in
     progress, so pictures are only taken after whole frame steps."""
     state = Path(state_dir) / 'normal.state'
     game.call('save_state_file', {'file_path': str(state)})
@@ -198,8 +209,25 @@ def frames(game, count, state_dir):
     shots = []
     for _ in range(count):
         game.checked_step(1)
-        shots.append(hashlib.sha256(game.screenshot()).hexdigest()[:16])
+        video = hashlib.sha256()
+        for area, size in ((4, 0x10000), (6, 512), (8, 1024)):
+            video.update(game.read(0, size, area=area))
+        shots.append((hashlib.sha256(game.screenshot()).hexdigest()[:16], video.hexdigest()[:16]))
     return shots
+
+
+def compare_frames(found, menu_shots, reference_shots):
+    """Every frame must end with the same VRAM, sprite table and palette.
+    A picture may differ only in a frame whose video state agrees: the same
+    writes landed at another raster position (the interrupts take different
+    time after the menu: the music driver played on), which is reported."""
+    video = [k for k, (a, b) in enumerate(zip(menu_shots, reference_shots)) if a[1] != b[1]]
+    if video or len(menu_shots) != len(reference_shots):
+        found['problems'].append(f'video state differs at the end of frames {video[:20]}')
+    found['raster_timing_frames'] = [k for k, (a, b) in enumerate(zip(menu_shots, reference_shots))
+                                     if a[0] != b[0] and a[1] == b[1]]
+    if SAME_MUSIC and found['raster_timing_frames']:
+        found['problems'].append(f'pictures differ with the same music state in frames {found["raster_timing_frames"]}')
 
 
 def exact_cycle(game, state_dir, actions=None, n=UPDATES, shots=None, blink=True):
@@ -294,6 +322,11 @@ def exact_cycle(game, state_dir, actions=None, n=UPDATES, shots=None, blink=True
     game.call('load_state_file', {'file_path': str(state)})
     game.held = set()
     game.write(0xe55, pad)
+    if SAME_MUSIC:
+        # Control: the music driver's state as the menu left it, so the
+        # interrupts take the same time in both runs.
+        game.write(0x080, after['ram'][0x080:0x090])
+        game.write(0x1800, after['ram'][0x1800:0x1c00])
     if not stop_at(game, HOOK_RETURN, 3):
         found['problems'].append('reference did not return from the hook')
     reference = game.read(0, 0x2000)
@@ -305,8 +338,7 @@ def exact_cycle(game, state_dir, actions=None, n=UPDATES, shots=None, blink=True
     stop_at(game, HOOK_AFTER_DRAW)
     reference_end = snapshot(game)
     reference_cpu = game.call('get_huc6280_status')
-    if menu_shots != reference_shots:
-        found['problems'].append(f'pictures differ in frames {[k for k, (a, b) in enumerate(zip(menu_shots, reference_shots)) if a != b]}')
+    compare_frames(found, menu_shots, reference_shots)
     for area in ('vram', 'sat', 'vce'):
         if menu_end[area] != reference_end[area]:
             words = [i // 2 for i in range(0, len(menu_end[area]), 2) if menu_end[area][i:i + 2] != reference_end[area][i:i + 2]]
@@ -364,6 +396,7 @@ def check_runs(emulator, candidate, seed, every, output, options=0, actions=None
             'wrapping_windows': sum(c.get('wraps', False) for c in checks),
             'columns': sorted({c.get('column') for c in checks if 'column' in c}),
             'stack_low': min((c['stack_low'] for c in checks if c.get('stack_low')), default=None),
+            'raster_timing': {c['frame']: c['raster_timing_frames'] for c in checks if c.get('raster_timing_frames')},
             'problems': [c for c in checks if not c['ok']]}
         print(run['name'], results[run['name']]['menus_checked'], 'menus',
               results[run['name']]['wrapping_windows'], 'wrapping, stack low', results[run['name']]['stack_low'],
@@ -461,6 +494,14 @@ def check_level_select(emulator, candidate, output):
         game.call('debug_pause')
         to_title(game)
         to_gameplay(game)
+        # A cold boot: the LANGUAGE row reads ENGLISH ($3227 = 1).
+        press(game, 'select', after=8)
+        ram = game.read(0, 0x2000)
+        language = field_text(game, box_column(ram), 5).strip()
+        results.append({'cold_boot_language': language, 'language_byte': ram[0x1227],
+                        'ok': language == 'ENGLISH' and ram[0x1227] == 1, 'problems': []})
+        print('cold boot language row', language, ram[0x1227], flush=True)
+        press(game, 'select', after=30)
         for stage in range(22):
             entry = {'stage': stage, 'problems': []}
             game.call('save_state_file', {'file_path': str(work / 'select.state')})
@@ -578,21 +619,28 @@ def check_options(emulator, candidate, seed, output):
         ram = game.read(0, 0x2000)
     results['original restored exactly'] = {'ok': gb_back == plain and ram[0x100] & 0x9f == 0}
     print('original restored exactly', results['original restored exactly'], flush=True)
-    # Cancel after changing everything: nothing changes.
-    with Game(emulator, work) as game:
-        start_point(game, candidate, seed, enhanced=True)
-        game.write(0x1227, b'\x01')
-        start_stage(game, 0)
-        game.step(30)
-        before = game.read(0, 0x2000)
-        found = exact_cycle(game, work, actions=['right', 'down', 'right', 'down', 'right', 'down', 'right',
-                                                 'down', 'right', 'down', 'right'], n=UPDATES) \
-            if select_at_hook(game) else {'ok': False, 'problems': ['menu not available']}
-        after = game.read(0, 0x2000)
-        found['options_and_language_kept'] = after[0x100] & 0x1f == before[0x100] & 0x1f and after[0x1227] == 1
-        found['ok'] = found['ok'] and found['options_and_language_kept']
-        results['cancel after changing everything'] = found
-        print('cancel after changing everything', found, flush=True)
+    # Cancel after changing everything: nothing changes. Long comparisons
+    # (LONG frames, the stage timer included) show whether the palette
+    # module's state bits a cancelled preview may leave have any effect:
+    # from Original (preview GB DMG) and from GB DMG (preview ORIGINAL).
+    everything = ['right', 'down', 'right', 'down', 'right', 'down', 'right', 'down', 'right', 'down', 'right']
+    for name, gb_first in (('cancel after changing everything', False),
+                           ('cancel after changing everything, from GB DMG', True)):
+        with Game(emulator, work) as game:
+            start_point(game, candidate, seed, enhanced=True)
+            game.write(0x1227, b'\x01')
+            start_stage(game, 0)
+            game.step(30)
+            if gb_first:
+                menu_to(game, 4, ['right'])
+            before = game.read(0, 0x2000)
+            found = exact_cycle(game, work, actions=everything, n=LONG) \
+                if select_at_hook(game) else {'ok': False, 'problems': ['menu not available']}
+            after = game.read(0, 0x2000)
+            found['options_and_language_kept'] = after[0x100] & 0x1f == before[0x100] & 0x1f and after[0x1227] == 1
+            found['ok'] = found['ok'] and found['options_and_language_kept']
+            results[name] = found
+            print(name, found, flush=True)
     shutil.rmtree(work, ignore_errors=True)
     return results
 
@@ -606,6 +654,9 @@ def main():
                         help='run these parts only (repeatable)')
     parser.add_argument('--parallax-off', action='store_true', help='runs: with $2100 bit 0 set')
     parser.add_argument('--preview', action='store_true', help='runs: change the palette too before cancelling')
+    parser.add_argument('--same-music', action='store_true',
+                        help='give the run without the menu the music driver state the menu left, and require '
+                             'identical pictures in every frame')
     parser.add_argument('--sweep-step', type=int, default=1)
     parser.add_argument('--sweep-runs', default='1-1,2-2,5-3,6-3')
     parser.add_argument('--shots', type=Path, help='runs: keep the first open-window picture of each check here')
@@ -613,12 +664,14 @@ def main():
     args.output = args.output.resolve()
     args.output.mkdir(parents=True, exist_ok=True)
     parts = set(args.only or ('runs', 'sweep', 'select', 'options'))
+    global SAME_MUSIC
+    SAME_MUSIC = args.same_music
     if MENU_PREFIX != args.candidate.read_bytes()[MENU_ENTRY:MENU_ENTRY + len(MENU_PREFIX)]:
         raise SystemExit('The menu entry is not where this check expects it')
     report = {
         'rom_sha256': hashlib.sha256(args.candidate.read_bytes()).hexdigest(),
         'emulator_sha256': hashlib.sha256(args.emulator.read_bytes()).hexdigest(),
-        'physical_hardware_tested': False, 'audio_compared': False,
+        'physical_hardware_tested': False, 'audio_compared': False, 'same_music': args.same_music,
     }
     seed = None
     if parts & {'runs', 'sweep', 'options'}:

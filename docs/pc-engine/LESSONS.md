@@ -797,3 +797,47 @@ time it.
 **Confidence/limits:** emulator (Geargrafx), deterministic replays; the
 slack figures are Ninja's. The cinema after 4-1, 5-3 and 6-3 still starts one
 frame later in GB DMG mode, and so does the Level Select load of 4-4.
+
+## A paused game's sprite-table buffer is free VRAM for a moment
+
+**Observed:** the popup menu needed 260 words to keep the BAT cells its
+window covers. RAM had no room and the stack no longer could hold them.
+Ninja builds its sprite table in one of two VRAM buffers each update and only
+then points the VDC's SATB register at it (no automatic SATB DMA).
+
+**Finding/fix:** the menu runs inside the update (the Select hook), before
+the sprite-table routine; it borrows the buffer being built, and the same
+update rewrites all 256 words of it before it is shown. Exact-restore checks
+compare the whole VRAM one update later with the same state run without the
+menu.
+
+**Reusable lesson:** a double-buffered table that the game fully rewrites
+before every display is scratch VRAM between the start of an update and the
+rewrite. Prove three things before borrowing it: the writer writes every word
+every time, nothing else selects the buffer for display, and the borrower runs
+in that window. Refuse the borrowing in states that reset the buffers
+differently (here: death and continue).
+
+**Confidence/limits:** emulator, all stored runs, every Level Select entry,
+deaths and area changes; the buffer layout is Ninja's.
+
+## Compare a paused run with an unpaused one at update boundaries
+
+**Observed:** after a cancelled menu, RAM compared at a fixed number of frames
+differed from the run without the menu in a stack byte and the CPU position,
+and an occasional single screenshot taken at a breakpoint differed.
+
+**Finding/fix:** the music driver keeps playing while the game waits in the
+menu, so afterwards it spends different time in each interrupt and the update
+in progress at a frame's end is a few cycles apart. Pictures are compared
+after whole frame steps from a normalized state; machine state is compared at
+the next update boundary (the main-loop hook). A frame step started at a
+still-set execute breakpoint reports a whole frame although the CPU stopped
+at the breakpoint again, so breakpoints are reached by continue-and-poll.
+
+**Reusable lesson:** a pause shifts interrupt timing even when game state is
+identical; compare state at a code point the game reaches once per update,
+and take pictures only of completed frames.
+
+**Confidence/limits:** Geargrafx `78fc3d7` behaviour of the debugger; the
+interrupt-time differences are Ninja's sound driver.

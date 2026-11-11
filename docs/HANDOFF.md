@@ -15,9 +15,8 @@
   started. Everything else is emulator evidence; see
   [VALIDATION.md](VALIDATION.md).
 - **Development 1.11-dev** (`VERSION`; the menu shows `V1.11-DEV`) adds
-  **Use NES Firewheel logic**, `$2100` bit 2, off by default and without a
-  menu row yet (the menu is being rebuilt; the row would read
-  `NES FIREWHEEL: OFF/ON` and only toggle bit 2 of the draft). With it on,
+  **Use NES Firewheel logic**, `$2100` bit 2, off by default (menu row
+  `NES FIREWHEEL`). With it on,
   the Fire Wheel behaves like the NES Invincible Fire Wheel: no damage while
   it spins, NES hitbox, bosses lose a point per update, 516-update life with
   flicker, NES pickup rules ([architecture](ARCHITECTURE.md#contact-damage-and-nes-firewheel),
@@ -26,14 +25,27 @@
   no fixed-bank bytes.
 - **Palette modes** (1.11-dev, branch `gb-palette`): `$2100` bits 3-4,
   00 Original (default), 01 NES (reserved, shown as Original), 10 GB DMG
-  (four dark olive shades by luminance, `src/palette/gb-dmg.json`), no menu
-  row yet (a row would toggle the draft's bits 3-4; the draft already keeps
-  them). The vblank palette upload maps the native queue in GB DMG gameplay;
+  (four dark olive shades by luminance, `src/palette/gb-dmg.json`), menu row
+  `PALETTE` (previewed while the menu is open). The vblank palette upload maps the native queue in GB DMG gameplay;
   cinemas and the title stay original. 1-1 and 2-2 now keep their merged
   palettes in the RAM palette, which fixes 1-1's area-1 backdrop showing the
   native palette 1 after the re-queue there
   ([architecture](ARCHITECTURE.md#palette-modes),
   [evidence](validation/gb-palette.md), emulator only).
+- **Popup menu** (1.11-dev, branch `popup-menu`): Select opens a 26 x 10
+  window over the playfield (BAT rows 7-16) instead of covering the HUD:
+  STAGE, SMOOTH PARALLAX, NO DAMAGE, NES FIREWHEEL, PALETTE, LANGUAGE, then
+  `RUN: OK  SELECT: CANCEL`; the band under the HUD shows the version and
+  credit; sprites are hidden while it is open; it refuses to open while Ryu
+  is dead. Code in bank `$46` `$4400-$4AFF` (bank `$45` `$4000-$43FF` is
+  free again); the covered BAT words are kept in the sprite-table buffer
+  being built and HUD tiles `$7AB-$7AC`
+  ([architecture: menu display](ARCHITECTURE.md#menu-display),
+  [evidence](validation/popup-menu.md), emulator only). The options guide's
+  menu screenshots (`docs/images/options/menu*.png`) still show the 1.10
+  menu: regenerate them with `scripts/guide_screenshots.py` (already
+  adapted) before a release; new rows have no screenshot of their own (new
+  images need the maintainer's approval).
 - **Release 1.09** (2026-10-21, tag `v1.09`) was the first public release
   (`f84a31a8…b912`), played on the same hardware. Its patches stay
   unchanged at the tag; `patches/` holds only the current release.
