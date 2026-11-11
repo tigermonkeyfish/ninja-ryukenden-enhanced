@@ -8,7 +8,9 @@ SET: starts   Level Select entries: SMS and HELL due for their tables
               entries (nes-palette/onscreen.py); NEW and OLD
      caps     the survey's captures in all six modes (cap.py); NEW only
      shots    the comparison pictures of 1-1, 2-2 and 5-3; NEW and OLD
-     fades    fades.py on 4-1 and 6-2 in SMS and HELL (and Original); NEW and OLD"""
+     fades    fades.py on 4-1 and 6-2 in SMS and HELL (and Original); NEW and OLD
+     trans    trans.py: every area exit of all 22 Level Select entries and
+              the 11 stored runs in Original, GB DMG, HELL and SMS; NEW and OLD"""
 import sys
 
 kind, work, new, old = sys.argv[1:5]
@@ -54,5 +56,14 @@ elif kind == 'fades':
             for case in ('load:8:60', 'run:4-1:2400:2547', 'load:17:60', 'warp:17:4:240'):
                 print(f'fade-{tag}-{mode}-{case.replace(":", "-")}: {D}/fades.py {rom} {work}/fades {tag}-{mode} '
                       f'{MODES[mode]} {case}')
+elif kind == 'trans':
+    for tag, rom in BUILDS:
+        for mode in ('original', 'gb-dmg', 'hell', 'sms'):
+            for part, stages in (('a', range(0, 8)), ('b', range(8, 15)), ('c', range(15, 22))):
+                cases = ' '.join(f'walk:{s}' for s in stages)
+                print(f'trans-{tag}-{mode}-walk-{part}: {D}/trans.py {rom} {work}/trans {tag}-{mode} {MODES[mode]} {cases}')
+            for part, runs in (('a', RUNS[:4]), ('b', RUNS[4:8]), ('c', RUNS[8:])):
+                cases = ' '.join(f'run:{r}' for r in runs)
+                print(f'trans-{tag}-{mode}-run-{part}: {D}/trans.py {rom} {work}/trans {tag}-{mode} {MODES[mode]} {cases}')
 else:
     raise SystemExit(__doc__)
