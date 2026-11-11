@@ -142,8 +142,10 @@ describe `bram-save` as it was stopped.
   without ours and 42 with ours (new matrix image
   `tiny-entries-41-ours-last`: passes on the pinned emulator and under
   `lock` and `key`).
-- NES-A recorded afterwards (one session): all 11 runs identical to the
-  `dark-lift` build's in every field. NES-B: running.
+- NES-A and NES-B recorded afterwards (one session,
+  `build/v111/recall-nes.log`): all 22 runs identical to the `dark-lift`
+  build's in every field. With the four modes above: all 66 runs, six
+  modes, identical in every field of every frame.
 - Stack (`research/tools/bram-save/stackguard.py`, `build/v111/stackguard.log`):
   the lowest byte written by the loader or by the save in the open menu is
   `$21D5` (149 bytes above the watched margin's top `$2140`); the save uses
@@ -169,6 +171,69 @@ describe `bram-save` as it was stopped.
   before `csh` (file offsets `$1C72-$1C7E`, `$1CA8-$1CAB`); HuC's
   `huc_bram.asm` sends `$48 $75 $80`. The game's three writes end in `$80`
   and so satisfy both.
+
+### Final build, the many-files decision, review, and what was not done
+
+- **Final build delivered** (the same bytes as the early build: nothing in
+  `src/` changed after the merge): `/workspace/roms/Ninja Ryukenden -
+  Enhanced v1.11-dev (all palettes, dark lift, settings save).pce`, SHA-256
+  `7fc60a092afc359697ee95310ac398280b4be851853e32961c1c228ff768a0ae`, with
+  `ninja-ryukenden-enhanced-v1.11-dev-all-palettes-dark-lift-settings-save.bps`
+  (headered original, `f5efd8e7...9018`) and `...-settings-save-headerless.bps`
+  (`61a1d365...4082`), both applied again with `scripts/bps.py`; the
+  hardware checklist is copied to
+  `/workspace/roms/settings-save-hardware-checklist.md`.
+- **The lock, plainly.** The unlock (`$48 $75 $80` to `$1807` with bank
+  `$F7` in MPR4 at low speed) and the lock (a read of `$1803`) are verified
+  on an emulator that models the lock: the whole matrix and the power
+  cycles pass under the MiSTer rule and under the three-byte key, the bank
+  is closed again after every boot and save, and builds without the unlock
+  or the lock fail as predicted. The order of operations is the Super
+  System Card 3.0's own and HuC's. Hardware-only: whether the Duo's memory
+  answers a HuCard in the slot through the EverDrive, electrical timing,
+  and what each cartridge or core does with its save file.
+- **Many files: left as it is.** Reading at high speed is rejected (the
+  System Card and HuC both switch to low speed for every access; nothing
+  readable says the memory may be read faster). Stopping at our entry does
+  not bound the walk when the entry is absent or late and gives up the
+  whole-directory validation. Bounding the walk would make a legal, if
+  absurd, directory lose its settings to save one frame at power-on. The
+  delay is exactly one frame of boot, from 57 files without saved settings
+  or 46 beside ours, with nothing else changed; `check_bram.py` reports
+  such boots apart.
+- **Review of `src/bram/main.asm` (no defect found).** Pointer arithmetic
+  at the 2 KiB end, the format path, the stale-pointer repair and an end
+  pointer of `$A000` were read again and exercised by the matrix, by 560
+  random images and by the System Card's routines. The four deviations are
+  accepted: (1) the stale pointer: narrow (our entry last, the pointer's
+  low byte naming it), repairs only the pointer, and the high-byte-first
+  order is the safer one, because the other order can leave the pointer
+  below the terminator, where the System Card's next create would
+  overwrite files; the remaining exposure is the state shown above (a
+  page-crossing create cut between the two pointer bytes, then another
+  game saving before ours runs: that game's new file is not found again
+  and ours reports `ERROR 2`; no existing save is damaged); (2) the
+  writable test before the blank check touches only `$8000`, restores it,
+  and is reached only without "HUBM" and with blank or format-like header
+  bytes; (3) finishing a cut format needs every byte from `$8012` up blank,
+  so nothing can be lost, and "uniform but not blank means no memory" only
+  chooses between two texts; (4) the extra status texts are the diagnostic
+  channel for the console test. Limits to know: with an end pointer above
+  `$8800` only the first 2 KiB is used (a directory reaching past it shows
+  `ERROR 2` or `FULL`, nothing written); an entry of our length with
+  another format version is rewritten at the next Run.
+- **Not done on this build:** the boot-modes row `$BF` (SMS with the
+  original background) was not rerun after the probe's correction (it
+  equalled the baseline in picture, VCE, palette and state); the cut-save
+  part, the timing part and the long random-image run were not repeated on
+  the merged build (the `src/bram` bytes are those of `bram-save`, where
+  cut saves and timing passed); the free-space read/execute watch was not
+  run; the full matrix was not repeated after the last two edits of
+  `check_bram.py` (the 42-entry bound and the entry count: the three
+  affected images and the `readonly` subset were); the menu screenshots of
+  the options guide and the changelog are untouched. This record still has
+  the older sections below as they were written on `bram-save`; the notes
+  above are current where the two differ.
 
 ## What is built
 
