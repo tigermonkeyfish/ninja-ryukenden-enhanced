@@ -60,6 +60,9 @@ menu's **LANGUAGE** row changes the same setting.
    to close the window and keep playing with nothing changed. **I** and
    **II** do nothing in the menu.
 
+The music and sound effects pause while the window is open, as in the
+game's own pause, and go on from the same note when it closes.
+
 ![The menu, opened during 1-1](images/options/menu.png)
 
 **Run** always restarts the stage shown in the menu from its beginning, even
@@ -109,10 +112,15 @@ default) keeps the PC Engine game's Fire Wheel.
 ### Palette
 
 - **ORIGINAL** (the default): the game's own colours.
-- **NES**: the game in the NES's own colours only, with all the PC Engine
-  detail, read like NES Ninja Gaiden: every stage, Ryu, the HUD, enemies,
-  items, each boss in its NES fight colours, and the colours the game
-  animates (water, lamps and the like). A draft, still under review.
+- **NES-A**: the game in the NES's own colours only, with all the PC
+  Engine detail, read like NES Ninja Gaiden: every stage, Ryu, the HUD,
+  enemies, items, each boss in its NES fight colours, and the colours the
+  game animates (water, lamps and the like). A draft, still under review.
+- **NES-B**: the same NES colours and the same choices, re-lit: the dark
+  shades of each part of the scenery are lifted towards the lighter NES
+  shades the NES stages use, so the picture reads lighter and closer to the
+  NES game. Ryu, the enemies, items, bosses and the status bar are as in
+  NES-A. Also a draft.
 - **GB DMG**: the four green shades of the original Game Boy.
 - **HELL**: the scenery turns to lava, fire and ash: skies and blues glow
   red and orange, greens scorch to brown, greys and whites become embers and
@@ -123,14 +131,14 @@ default) keeps the PC Engine game's Fire Wheel.
   picture's detail: each colour is moved to the nearest Master System
   shade, channel by channel.
 
-ORIGINAL and GB DMG change at once while the window is open, so you can look
-at the choice before you accept it; **Select** (cancel) puts the old colours
-back. NES colours are other palette data that the stage loads, so they
-appear when **Run** restarts the stage: while NES is highlighted the colours
-on screen stay as they are. (With the window opened in NES mode, ORIGINAL
-and GB DMG preview from the NES colours; Run reloads the stage in the real
-colours of the mode chosen.) Story scenes, the title and the ending always
-keep the original colours.
+ORIGINAL, GB DMG, HELL and SMS change at once while the window is open, so
+you can look at the choice before you accept it; **Select** (cancel) puts
+the old colours back. NES colours are other palette data that the stage
+loads, so they appear when **Run** restarts the stage: while NES-A or NES-B
+is highlighted the colours on screen stay as they are. (With the window
+opened in an NES mode, the other values preview from the NES colours; Run
+reloads the stage in the real colours of the mode chosen.) Story scenes,
+the title and the ending always keep the original colours.
 
 ### Language
 

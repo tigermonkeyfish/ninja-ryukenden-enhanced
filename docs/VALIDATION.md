@@ -73,7 +73,11 @@ every Level Select entry, sweeps Select over deaths and area changes, and
 accepts each option; a cancelled menu is compared with the same state run
 without it (see the script's docstring and
 [validation/popup-menu.md](validation/popup-menu.md); `--only` picks parts,
-`--parallax-off`, `--preview` and `--same-music` the variants):
+`--parallax-off`, `--preview`, `--same-music` and `--strict` the variants;
+since `all-palettes` it compares from the next vblank after the menu and
+also the PSG registers, and lists frames that differ only by the timer
+interrupt's phase, which `--strict` fails:
+[validation/all-palettes.md](validation/all-palettes.md)):
 
 ```sh
 python3 scripts/check_menu.py --emulator /path/to/geargrafx \
@@ -86,7 +90,11 @@ The NES palette mode (1.11-dev) is checked by the reference probes in
 `research/tools/nes-palette/` (stage loads, stored runs, cinemas, identity
 of Original and GB DMG with the build before it); results and rerun
 commands are in [validation/nes-palette.md](validation/nes-palette.md).
-`check_menu.py --only options` covers its menu value and switching.
+`check_menu.py --only options` covers its menu values (NES-A, NES-B) and
+switching between all six palette modes; the all-palettes build's evidence
+(identity of every mode with its single-mode build, NES-B, the menu's sound
+hold) is in [validation/all-palettes.md](validation/all-palettes.md), its
+probes in `research/tools/all-palettes/`.
 
 ## Outstanding
 

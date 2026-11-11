@@ -332,8 +332,8 @@ SMS:
 | Value | Mode | Upload |
 | --- | --- | --- |
 | `$00` | Original (default) | native |
-| `$08` | NES-A (`nes-palette` branch: other palette data loaded into the RAM palette) | native |
-| `$28` | NES-B (planned: a second NES data set) | native |
+| `$08` | NES-A (other palette data loaded into the RAM palette, [NES palette mode](#nes-palette-mode)) | native |
+| `$28` | NES-B (the re-lit NES data, loaded the same way) | native |
 | `$20` | unassigned | native (as Original) |
 | `$10` | GB DMG | mapped, GB DMG table |
 | `$30` | unassigned | as GB DMG |
@@ -450,7 +450,10 @@ backdrop in wrong colours until the stage changed.
 
 ### NES palette mode
 
-Mode 01 (module `src/nes-palette`) shows the game in NES master-palette
+Family 01 (module `src/nes-palette`): NES-A (`$08`) and NES-B (`$28`,
+bit 5 set). Every test of the family is `and #$18 / cmp #$08`; the NES-B
+choice (`and #$20`) comes only after it, so Original, GB DMG, HELL and SMS
+run the instructions they ran before NES-B. NES-A shows the game in NES master-palette
 colours only (the 47 9-bit colours of the 2C02G composite palette) with the
 PC Engine's full detail, reading as NES Ninja Gaiden: every stage's colour
 set, Ryu, the HUD, every enemy, item and boss sprite palette and every colour
@@ -518,18 +521,43 @@ that still merge; `nes_palette.py detail` lists them.
   instead of their merged palettes in NES mode (a mode test before the copy).
   Each NES colour is the NES colour of the native set entries that supply
   most of the merged colour's pixels.
+- NES-B (1.11-dev, `all-palettes`): `relit(data)` in `scripts/nes_palette.py`
+  resolves the same role data with each role's dark PC Engine shades lifted
+  into the lightness range of its NES ramp codes (from the role's darkest
+  colour over its whole file, set entries and animation lists, up to the
+  ramp's lightest code, linearly, never darker; near-blacks stay black
+  unless the role has `lift_black`; `lift` names a floor code; `lift:
+  false` keeps a role as NES-A; no data file uses these keys yet), with the
+  same detail rules and NES colours only. NES-B has its own 18 sets and 3-2
+  variant (bank `$3B` `$4200-$4F7D`, read through MPR3 at `$6200` up), its
+  own animation table in bank 3 after NES-A's (records of its own; a list
+  equal to an NES-A list points there) and its own 1-1 / 2-2 merged
+  palettes (`extra_palette_nes_b`, `palette13_nes_b`, `palette14_nes_b`;
+  their copy loops out of line, behind a `jmp`, so the renderers' branches
+  over the initialize block stay in range). Sprite palettes, Ryu and the
+  HUD are NES-A's (the build checks it). In `nes_unpack` the set lookup
+  tests bit 5 after the set's table check (`set_lookup_b`: variant by
+  `$2E5F`, else the set, both from `nes_b_set_*` / `nes_b_variant_*`, bank
+  `$3B` mapped into MPR3 for the unpack); `nes_anim_table` tests it after
+  the family and `$2240`. NES-A pays for the tests: 9 cycles per set load,
+  9 per animation-table choice, 11 at the 1-1 / 2-2 start.
 - Not covered: cinemas and the title (original by design); Continue and Game
   Over screens were not checked.
 
-Space (1.11-dev, NES palette draft 2): bank `$45` `$4000-$43FF` (code,
-tables, the HUD words and the 3-2 variant: 723 bytes to `$42D2`; 301 free)
+Space (1.11-dev, NES palette draft 2 and NES-B): bank `$45` `$4000-$43FF` (code,
+tables, the HUD words and the 3-2 variant, NES-B's set addresses and lookup:
+874 bytes to `$4369`; 150 free)
 and `$5200-$5FFF` (the 18 NES sets, then the sprite palettes that do not fit
 bank `$37`: 3,276 bytes to `$5ECB`; 309 free). Bank `$37` `$7C30-$7FDF`: 52
 NES sprite palettes (936 bytes to `$7FD7`; 8 free) and the hook
-`$7FE0-$7FF9`. Bank 3: `$CE98-$CE9C` (the call) and `$D400-$D9FF` claimed
-(the table helper and the NES animation table, 1,022 bytes to `$D7FD`; 514
-free); `$DA00-$DBFF` stays unclaimed and `$D3FD-$D3FF` untouched (next to
-the original's table). `stage61-upload`'s claim ends at `$51FF` (its code
+`$7FE0-$7FF9`. Bank 3: `$CE98-$CE9C` (the call) and `$D400-$DBFF` claimed
+(the table helper, NES-A's and NES-B's animation tables, 1,796 bytes to
+`$DB03`; 252 free); `$D3FD-$D3FF` untouched (next to the original's table),
+`$DC00-$DFFF` the NES Firewheel's. Bank `$3B` `$4200-$4FFF` (file
+`$76200-$76FFF`): NES-B's sets and variant, 3,454 bytes to `$4F7D` (the
+bank's data end at `$41CE`; read/execute watches over `$761CF-$76FFF` saw
+nothing on the build before: cold boot, the 11 stored runs, all 22 Level
+Select entries). `stage61-upload`'s claim ends at `$51FF` (its code
 ends at `$5113`, guarded). Every region has an `.if/.fail` guard. Fixed
 bank: none of the free bytes; only the two call operands change. The bank 3
 call costs every stage load in every mode about 25 cycles more.
@@ -544,6 +572,30 @@ Select puts the old bits back (queuing all 512 again if they differ) and
 waits until the queue is empty (at most 48 vblanks; Original is back after
 one) before the game runs on. Run keeps the bits and restarts the stage,
 which reloads the palettes.
+
+The sound holds while the window is open (1.11-dev, `all-palettes`): the
+menu saves the sound driver's play flags `$387E` (bank `$38`; bit 6 music,
+bit 7 effect channels) on its stack and clears bits 6-7, so the driver's
+vblank tick (`$FD16` → `$EA5B` → `$38:$43F0`) advances nothing and only
+writes volume 0 to each channel (`$5066`); the flags go back after the
+last vblank of the menu. The driver then goes on from exactly its state at
+the Select hook (only zero page `$8B`, the tick's own scratch, which every
+tick clears first, differs), so every interrupt after the menu takes the
+time it takes without the menu; the channels sound again from the second
+vblank after the return, with every PSG register as in the run without
+the menu from then on. Before, the driver played on through the menu, its
+vblank work afterwards took other time, and the main loop stood a few
+cycles elsewhere at frame ends; that showed while an area change redraws
+the BAT across frames (`check_menu.py` sweep, 8 openings in 2-2 and 5-3;
+the same at any distance before the change once the comparison window
+reaches it). The native pause (`$E0C2`, Run) uses the driver's own pause
+commands (`$83`/`$86` through `$EA84`), which change its state, so the menu
+does not use them. What the menu cannot hold is the timer: its interrupt
+(`$FCD3`) only acknowledges, but with reload `$74` its period is 143 CPU
+cycles longer than a frame, so after the menu it lands elsewhere in the
+frame and moves the main loop by its own length; once in the sweep's 727
+openings a frame end inside the 1-1 → 1-2 load saw one VRAM word apart
+(`check_menu.py` lists such frames; `--strict` fails them).
 NES colours need that reload, so they show after Run: while NES-A or NES-B
 is highlighted in a menu opened in another mode, the live bits stay as the
 menu found them (`$2100` on the menu's stack), and Run sets the draft's mode
@@ -572,6 +624,9 @@ Bank `$3B` (original game data to `$761CE`, then `$FF`; file offsets
 `$77000-$777FF`, `$77A00-$77AFF`) are the SMS copy of bank `$46`'s palette
 code, dispatch and the SMS table (1.11-dev). Read/execute watches over them
 on the build before saw nothing (cold boot and all 11 stored runs).
+`$4200-$4FFF` (file `$76200-$76FFF`) holds NES-B's colour sets and 3-2
+variant (`nes-palette`, 3,454 bytes to `$4F7D`); `$41CF-$41FF`,
+`$5800-$59FF` and `$5B00-$5FFF` stay `$FF` and unowned.
 
 Bank `$43` `$7800-$7FFF` (MPR3 view; file offsets `$87800-$87FFF`, 1.11-dev):
 the palette module's HELL code (`$7800-$7B4F`, 176 bytes spare to `$7BFF`)

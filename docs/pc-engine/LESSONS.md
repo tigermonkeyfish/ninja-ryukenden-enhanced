@@ -960,3 +960,40 @@ the unchanged path moved Ninja's music driver a timer tick in one stage,
 with two single frames redrawn a moment apart: any hook on a load path
 shifts sub-frame timing, so compare such builds per frame and explain each
 difference.
+
+## A pause that lets the sound driver run is not a pause for timing
+
+**Observed:** after Ninja's popup menu (which waits for vblanks while it is
+open), the game was compared with the same state run without the menu.
+Everything matched at update boundaries, but in openings whose comparison
+window reached an area change, one or two frame ends showed 2 BAT words
+apart. The sound driver runs in the vblank interrupt and had played on
+through the menu, so its work per vblank afterwards differed; the main loop
+stood a few cycles elsewhere at frame ends, which shows only while the game
+writes VRAM from the main loop across frames (an area change's redraw, a
+stage load).
+
+**Finding/fix:** clear the driver's own play flags while the menu is open
+(its tick then advances nothing and only silences the channels) and put
+them back after the menu's last vblank: the driver resumes from exactly its
+state, and the PSG registers match the run without the menu from the
+second frame on. The driver's pause/resume commands changed its state and
+did not do it. The menu now returns before the emulator's frame boundary
+(its last vblank is shorter), so comparisons start at the next vblank
+interrupt in both runs, not at the return. What remains is the hardware
+timer's phase: a timer whose period is not a whole number of frames runs on
+through any pause, and a frame end inside multi-frame work can then see one
+write more or less (once in 727 openings). The interrupt trace tells it
+apart: VDC interrupts at the same times, the timer's moved.
+
+**Reusable lesson:** when proving a pause "invisible", freeze every
+interrupt-driven state machine that the pause does not own, compare from a
+synchronisation point both runs share (an interrupt, not a return address),
+and log interrupt entry times so that a residual timer phase is shown, not
+assumed. Do not refuse the pause near the place a check happens to notice
+the difference; measure whether the difference depends on the distance
+first.
+
+**Confidence/limits:** emulator (Geargrafx `78fc3d7`), Ninja's driver
+(`$387E` bits 6-7) and timer (reload `$74`); validation/all-palettes.md.
+Audio was compared as PSG register state, not listened to.
