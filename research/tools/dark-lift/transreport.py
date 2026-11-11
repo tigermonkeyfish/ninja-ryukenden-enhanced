@@ -12,8 +12,10 @@ the probes' interventions and the gameplay are identical) the report gives:
          the Original's still is, with the largest share of the playfield
          and the colours shown
   lit    VCE entries that are not the mode's black at the first frame of
-         the span with the palette lock ($2283) set, and their colours: the
-         fade-out left unfinished when a load begins
+         the span with the palette lock ($2283) set (after a fade-out: the
+         first with the fade's level $2A8A at $FF, so the load's lock and
+         not the last fade step's own), and their colours: the black left
+         unfinished when a load begins
   play   'differs' if the gameplay hash differs from the Original's in any
          frame of the case
 usage: transreport.py TRANS TAG[,TAG2] [--modes gb-dmg,hell,sms] [--all] [--json OUT]
@@ -65,7 +67,10 @@ def measure(rows, a, b):
     while tail < len(seg) and seg[tail]['notblack'] > 0:
         tail += 1
     flash = [r for r in seg[tail:] if r['notblack'] > 0]
-    locked = next((r for r in seg if r['lock']), None)
+    # The load's lock, not the fade's own while it computes its last step:
+    # after a fade-out the level byte $2A8A is $FF by then.
+    locked = (next((r for r in seg if r['lock'] and r['fade'].startswith('ff')), None)
+              or next((r for r in seg if r['lock']), None))
     colours = {}
     for r in flash:
         for c, share in r['top']:
