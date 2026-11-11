@@ -21,7 +21,13 @@ the environment variable NG_BRAM_MODEL selects, for HuCards:
 
 Unset, the variant behaves like the project's build. The harness installs an
 image as usual (emulator_session.power_on); the lock state is not part of a
-save state and survives a state load.
+save state and survives a state load. Under a lock model only the model
+decides whether bank $F7 is mapped: the emulator's own CD unit calls
+Memory::UpdateBackupRam(true) at every reset (after the memory's reset), which
+would otherwise leave the bank unlocked until the next state load.
+
+scripts/check_bram.py --bram-model drives it and proves that the model bites
+(builds with the unlock or the lock removed must fail).
 
 usage: locktest_patch.py GEARGRAFX-COPY     (then: make -C platforms/linux)
 """
@@ -123,6 +129,15 @@ if '#include <cstring>' not in text:
 (root / 'src/memory.cpp').write_text(text)
 
 edit('src/memory_inline.h', [
+    ('''INLINE void Memory::UpdateBackupRam(bool enable)
+{
+''', '''INLINE void Memory::UpdateBackupRam(bool enable)
+{
+    // Test-only: under a lock model only the model decides (the CD unit's
+    // reset and state load call this with their own flag).
+    if (m_bram_model == 1 || m_bram_model == 2 || m_bram_model == 4)
+        enable = m_bram_unlocked;
+'''),
     ('''    if (bank != 0xFF)
     {
         if (IsValidPointer(m_current_mapper) && (bank < 0x80))

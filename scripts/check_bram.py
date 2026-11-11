@@ -37,12 +37,35 @@ cut     Saves cut short: a Run that creates the entry, one that rewrites
 timing  Master clocks of the reset loader ($FFE6 to the native init $FCBE)
         and of the save (its entry to its return, interrupts off) for the
         named images, against the baseline's 8-byte English initialization.
+lock    (with `--bram-model lock` or `key`) Negative controls: copies of
+        the candidate with the unlock writes removed, cut down to the single
+        $80 write, ending in $00, or with the lock read removed must behave
+        as that model says (no backup RAM seen and nothing written, or the
+        bank left open), which proves that the model bites and that the
+        "locked again" probe can fail.
+
+`--bram-model` runs every part on the test-only emulator of
+research/tools/bram-save/locktest_patch.py (give its binary as
+`--emulator`), which models the backup RAM lock for a HuCard:
+  lock      locked at reset, unlocked by bit 7 of a write to $1807, locked
+            by a read of $1803 (the MiSTer core's rule);
+  key       only the three writes $48, $75, $80 unlock;
+  readonly  as lock, but writes never land: a Run that has to write ends
+            with ERROR 4 (NONE on a blank memory) and the image as it was;
+  openbus   no backup RAM: the bank reads the address's high byte: NONE
+            before and after Run, no write attempted, whatever the image.
+With lock, key and readonly a stub run by the debugger after every boot and
+every Run (`bank_locked`) reads and writes bank $F7 the way the game would:
+the reads must give $FF and the writes must not land (locked again). Each
+invocation first proves that the emulator really applies the model
+(`model_applies`).
 
 Writes report.json to the output folder; captures stay private there.
 """
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import shutil
 import tempfile
@@ -65,6 +88,57 @@ TEST_WRITES = {'blank-00-one-byte': 3, 'blank-00-last-byte': 3}
 # interrupt behind the baseline's and its frames are not compared.
 MANY_ENTRIES = 48
 ROWS = {'parallax': 1, 'no damage': 2, 'firewheel': 3, 'palette': 4, 'language': 5}
+MODEL = None                 # --bram-model: the test-only emulator's NG_BRAM_MODEL
+LOCKING = ('lock', 'key', 'readonly')
+BANK46 = (0x46 * 0x2000, 0x47 * 0x2000)
+UNLOCK = bytes.fromhex('a9488d0718a9758d0718a9808d0718')    # lda #$48/$75/$80, sta $1807
+LOCK = bytes.fromhex('ad0318d4')                            # lda $1803, csh
+STUB = 0x1f00                # work RAM offset of the probe's code: CPU $3F00
+
+
+def bank_locked(game, work):
+    """Is backup RAM locked right now? A stub in work RAM maps bank $F7 and
+    reads and writes its first and last byte as the game's code would. True:
+    all four reads gave $FF and the memory is as it was. False: the reads
+    gave the memory's bytes and the writes landed. Anything else raises. The
+    machine is put back (a save state from before the stub; the lock itself
+    is not in a state, and the stub does not touch $1807/$1803)."""
+    image = game.backup_ram()
+    values = [0xa5 if image[k] == 0x5a else 0x5a for k in (0, -1)]
+    code = bytes.fromhex('78 4310 48 a9f7 5310'                         # sei, tma #4, pha, lda #$f7, tam #4
+                         f'ad0080 8df03f a9{values[0]:02x} 8d0080 ad0080 8df13f'
+                         f'adff87 8df23f a9{values[1]:02x} 8dff87 adff87 8df33f'
+                         '68 5310')                                    # pla, tam #4
+    stop = f'{0x2000 + STUB + len(code):04X}'
+    state = work / 'probe.state'
+    game.call('save_state_file', {'file_path': str(state)})
+    game.write(STUB, code + b'\x80\xfe')                               # ... and stay there
+    game.reg('PC', 0x2000 + STUB)
+    game.call('set_breakpoint', {'address': stop, 'execute': True})
+    try:
+        pc = continue_to(game)
+    finally:
+        game.call('remove_breakpoint', {'address': stop})
+    reads = tuple(game.read(STUB + 0xf0, 4))
+    after = game.backup_ram()
+    game.call('load_state_file', {'file_path': str(state)})
+    game.held = set()
+    game.press(set())
+    if pc != stop or game.backup_ram() != image:
+        raise RuntimeError(f'the lock probe did not run as planned: pc {pc}')
+    if reads == (0xff,) * 4 and after == image:
+        return True
+    if (reads == (image[0], values[0], image[-1], values[1])
+            and after == bytes([values[0]]) + image[1:-1] + bytes([values[1]])):
+        return False
+    raise RuntimeError(f'the lock probe: reads {reads}, image changed: {after != image}')
+
+
+def probe(game, work):
+    """After a boot or a Run, at the stage's first update: note whether the
+    bank is locked (the models that have a lock, a machine with backup RAM)."""
+    if MODEL in LOCKING and game.backup_ram() is not None:
+        game.locks = getattr(game, 'locks', []) + [bank_locked(game, work)]
 
 
 def continue_to(game, polls=400000):
@@ -113,6 +187,7 @@ def boot(game, rom, bram, work, poke=None):
     ram = game.read(0, 0x2000)
     found = {'first_update_frame': frame + 1, 'options': ram[0x100], 'language': ram[0x1227],
              'status': ram[0x105], 'stage': ram[0xe5f], 'palette_state': ram[0x104]}
+    probe(game, work)
     normalize(game, work)
     game.step(40)
     return found
@@ -135,7 +210,9 @@ def cancel(game):
 
 def accept(game, work, watch):
     """Press Run in the open menu and go on to the restarted stage's first
-    update. With `watch`: the backup RAM after each write to it, in order."""
+    update. With `watch`: the backup RAM after each write to it, in order
+    (under a lock model a write that is attempted but does not land stops
+    here too, with the memory as it was)."""
     game.press({'run'})
     game.step(2)
     game.call('set_breakpoint', {'address': FIRST_UPDATE, 'memory_area': 'rom', 'execute': True})
@@ -155,6 +232,7 @@ def accept(game, work, watch):
         game.call('remove_breakpoint', {'address': FIRST_UPDATE, 'memory_area': 'rom'})
         if watch:
             game.call('remove_breakpoint', {'address': '000', 'end_address': '7ff', 'memory_area': 'backup_ram'})
+    probe(game, work)
     normalize(game, work)
     game.step(40)
     return images
@@ -170,9 +248,28 @@ def others(data):
         return None
 
 
-def check_case(emulator, rom, name, image, output, reference):
+def expected_run(image, options, language, dead):
+    """(status, image afterwards) of a Run under the model in use. `dead`:
+    the game cannot reach the memory at all (a negative control)."""
+    if image is None:
+        return bi.NONE, None
+    if dead or MODEL == 'openbus':
+        return bi.NONE, image
+    saved, after = bi.expected_save(image, options, language)
+    if MODEL == 'readonly' and after != image:
+        if bi.expected_load(image)[0] == bi.NONE:        # unformatted: the writable test fails
+            return bi.expected_save(image, options, language, writable=False)
+        return bi.UNVERIFIED, image                      # written, read back: not there
+    return saved, after
+
+
+def check_case(emulator, rom, name, image, output, reference, dead=False, locked=True):
+    """`dead`, `locked`: what a negative control must show instead (the
+    memory never reached; the bank left open)."""
     work = Path(tempfile.mkdtemp(prefix='bram-', dir=output))
     problems = []
+    unreachable = dead or MODEL == 'openbus'
+    attempts = MODEL == 'readonly' or dead               # writes that do not land still stop the debugger
 
     def expect(what, found, wanted):
         if found != wanted:
@@ -181,15 +278,18 @@ def check_case(emulator, rom, name, image, output, reference):
     try:
         with Game(emulator, work) as game:
             started = boot(game, rom, image, work)
-            status, options, language = bi.expected_load(image)
+            status, options, language = (bi.NONE,) + bi.DEFAULTS if unreachable else bi.expected_load(image)
             expect('status at reset', bi.STATUS[started['status']], bi.STATUS[status])
             expect('$2100', started['options'], options)
             expect('$3227', started['language'], language)
             files = None if image is None else others(image)
-            slow = files is not None and len(files) + 1 > MANY_ENTRIES
+            slow = files is not None and len(files) + 1 > MANY_ENTRIES and not unreachable
             if not slow:
                 expect('first update frame', started['first_update_frame'], reference(options, language))
             expect('backup RAM after the boot', game.backup_ram(), image)
+            probed = MODEL in LOCKING and image is not None
+            if probed:
+                expect('bank $F7 locked after the boot', game.locks[-1], locked)
             expect('menu after the boot', open_menu(game), f'SAVE: {bi.STATUS[status]}')
             cancel(game)
             expect('backup RAM after a cancel', game.backup_ram(), image)
@@ -198,22 +298,31 @@ def check_case(emulator, rom, name, image, output, reference):
             expect('menu before Run', open_menu(game), f'SAVE: {bi.STATUS[status]}')
             writes = accept(game, work, image is not None)
             ram = game.read(0, 0x2000)
-            saved, after = bi.expected_save(image, ram[0x100], ram[0x1227])
+            saved, after = expected_run(image, ram[0x100], ram[0x1227], dead)
             expect('settings after Run', (ram[0x100], ram[0x1227]), (options, language))
             expect('status after Run', bi.STATUS[ram[0x105]], bi.STATUS[saved])
             expect('backup RAM after Run', game.backup_ram(), after)
-            if after == image:
-                expect('writes on an image that stays as it is', len(writes), TEST_WRITES.get(name, 0))
+            if probed:
+                expect('bank $F7 locked after Run', game.locks[-1], locked)
+            if attempts:
+                expect('writes that landed', [k for k, w in enumerate(writes) if w != image], [])
+            elif after == image:
+                expect('writes on an image that stays as it is', len(writes),
+                       0 if MODEL == 'openbus' else TEST_WRITES.get(name, 0))
             if image is not None and others(image) is not None:
                 expect("other games' files after Run", others(game.backup_ram()), others(image))
             expect('menu after Run', open_menu(game), f'SAVE: {bi.STATUS[saved]}')
             again = accept(game, work, image is not None)
             expect('status after a second Run', bi.STATUS[game.read(0x105, 1)[0]], bi.STATUS[saved])
             expect('backup RAM after a second Run', game.backup_ram(), after)
+            if probed:
+                expect('bank $F7 locked after a second Run', game.locks[-1], locked)
+                expect('lock probes run', len(game.locks), 3)
             if saved == bi.OK:
                 expect('writes in a second Run', len(again), 0)
             result = {'case': name, 'reset': bi.STATUS[status], 'options': f'${options:02X}', 'language': language,
                       'run': bi.STATUS[saved], 'writes': len(writes),
+                      'locked_after_boot_run_run': getattr(game, 'locks', None),
                       'bytes_changed': 0 if image is None else sum(a != b for a, b in zip(image, after)),
                       'first_update_frame': started['first_update_frame'], 'problems': problems}
             if slow:
@@ -302,6 +411,10 @@ def check_cycle(emulator, rom, output):
                     problems.append("other games' files changed")
                 entry.update(changed=row, options=f'${ram[0x100]:02X}', language=ram[0x1227])
                 image = game.backup_ram()
+            if MODEL in LOCKING:
+                entry['locked_after_boot_and_run'] = game.locks
+                if not all(game.locks) or len(game.locks) != (1 if row is None else 2):
+                    problems.append(f'bank $F7 not locked after the boot and the Run: {game.locks}')
         shutil.rmtree(work, ignore_errors=True)
         entry.update(problems=problems, ok=not problems)
         results.append(entry)
@@ -415,6 +528,73 @@ def check_cut(emulator, rom, output, shard):
     return report
 
 
+def variant(data, kind):
+    """The candidate with its unlock or lock code changed (negative
+    controls). The unlock is lda #$48, sta $1807, lda #$75, sta $1807,
+    lda #$80, sta $1807; the lock is lda $1803."""
+    data = bytearray(data)
+    assert data.count(UNLOCK) == 1 and data.count(LOCK, *BANK46) == 1, 'the unlock or lock code was not found once'
+    unlock, lock = (data.index(code, *BANK46) for code in (UNLOCK, LOCK))
+    nop = b'\xea' * 3
+    if kind == 'no-unlock':                 # nothing is written to $1807
+        for at in (2, 7, 12):
+            data[unlock + at:unlock + at + 3] = nop
+    elif kind == 'bit7-only':               # only $80 (what the System Card itself writes)
+        for at in (2, 7):
+            data[unlock + at:unlock + at + 3] = nop
+    elif kind == 'bit7-clear':              # $48, $75, $00
+        data[unlock + 11] = 0x00
+    elif kind == 'no-lock':                 # $1803 is never read
+        data[lock:lock + 3] = nop
+    else:
+        raise ValueError(kind)
+    return bytes(data)
+
+
+def model_applies(emulator, rom, output):
+    """Proof that this emulator applies MODEL: with the unlock writes
+    removed (lock, key, readonly), or as it is (openbus), the game must not
+    see a formatted memory that holds its settings."""
+    image = bi.matrix()['others-before']
+    work = Path(tempfile.mkdtemp(prefix='bram-', dir=output))
+    try:
+        test = work / 'model.pce'
+        test.write_bytes(variant(Path(rom).read_bytes(), 'no-unlock') if MODEL in LOCKING else Path(rom).read_bytes())
+        with Game(emulator, work) as game:
+            started = boot(game, test, image, work)
+            return ((started['status'], started['options'], started['language']) == (bi.NONE,) + bi.DEFAULTS
+                    and game.backup_ram() == image and (MODEL not in LOCKING or game.locks == [True]))
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+
+def check_lock(emulator, rom, baseline, output):
+    """Negative controls under `lock` or `key` (see the module text)."""
+    cases = bi.matrix()
+    data = Path(rom).read_bytes()
+    reference = baseline_frames(emulator, baseline, output)
+    # kind: (the game never reaches the memory, the bank is locked afterwards)
+    plan = {'no-unlock': (True, True), 'bit7-clear': (True, True),
+            'bit7-only': (MODEL == 'key', True), 'no-lock': (False, False)}
+    work = Path(tempfile.mkdtemp(prefix='bram-', dir=output))
+    report = []
+    try:
+        for kind, (dead, locked) in plan.items():
+            test = work / f'{kind}.pce'
+            test.write_bytes(variant(data, kind))
+            for name in ('others-before', 'empty-8800', 'blank-ff'):
+                result = check_case(emulator, test, name, cases[name], output, reference, dead=dead, locked=locked)
+                result.update(variant=kind, must_show=('no backup RAM, nothing written' if dead else 'works')
+                              + (', locked afterwards' if locked else ', bank left open'))
+                report.append(result)
+                print('lock', kind, name, 'as predicted' if result['ok'] else result['problems'],
+                      {k: result.get(k) for k in ('reset', 'run', 'writes', 'bytes_changed', 'locked_after_boot_run_run')},
+                      flush=True)
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+    return report
+
+
 def loader_clocks(emulator, rom, image, output):
     work = Path(tempfile.mkdtemp(prefix='bram-', dir=output))
     try:
@@ -479,7 +659,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     for name in ('emulator', 'candidate', 'baseline', 'output'):
         parser.add_argument('--' + name, type=Path, required=True)
-    parser.add_argument('--only', choices=('matrix', 'cycle', 'cut', 'timing'), action='append')
+    parser.add_argument('--only', choices=('matrix', 'cycle', 'cut', 'timing', 'lock'), action='append')
+    parser.add_argument('--bram-model', choices=('lock', 'key', 'readonly', 'openbus'),
+                        help='the test-only emulator (locktest_patch.py) with this NG_BRAM_MODEL')
     parser.add_argument('--cases', help='matrix: comma-separated image names (default: all)')
     parser.add_argument('--shard', default='0/1', help='matrix, cut: do every N-th case, K/N')
     args = parser.parse_args()
@@ -493,6 +675,21 @@ def main():
               'physical_hardware_tested': False,
               'backup_ram_lock': 'not modelled by this emulator build: $1807/$1803 are not decoded for a HuCard'}
     ok = True
+    if args.bram_model:
+        global MODEL
+        MODEL = os.environ['NG_BRAM_MODEL'] = args.bram_model
+        report['backup_ram_lock'] = (f'test-only emulator, NG_BRAM_MODEL={MODEL} '
+                                     '(research/tools/bram-save/locktest_patch.py)')
+        report['model_applies'] = model_applies(args.emulator, args.candidate, args.output)
+        if not report['model_applies']:
+            raise SystemExit(f'This emulator does not apply NG_BRAM_MODEL={MODEL}: is it the test-only build?')
+    elif 'NG_BRAM_MODEL' in os.environ:
+        raise SystemExit('NG_BRAM_MODEL is set: use --bram-model')
+    if 'lock' in parts:
+        if MODEL not in ('lock', 'key'):
+            raise SystemExit('--only lock needs --bram-model lock or key')
+        report['lock'] = check_lock(args.emulator, args.candidate, args.baseline, args.output)
+        ok &= all(entry['ok'] for entry in report['lock'])
     if 'matrix' in parts:
         report['matrix'] = check_matrix(args.emulator, args.candidate, args.baseline, args.output,
                                         args.cases.split(',') if args.cases else None, shard)

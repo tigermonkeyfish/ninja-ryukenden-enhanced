@@ -21,6 +21,49 @@ early).pce`, with `ninja-ryukenden-enhanced-v1.11-dev-settings-save-early.bps`
 `…-settings-save-early-headerless.bps` (`318caf73…3718`); both patches were
 applied again with `scripts/bps.py` and give that ROM.
 
+## Branch `v111` (merge with `dark-lift`): results so far, 2026-11-11
+
+Interim notes, kept current while the work runs; the sections below still
+describe `bram-save` as it was stopped.
+
+- `v111` = `bram-save` (`d01c060`) + `dark-lift` (`2ad5815`), merged without
+  conflicts. Build SHA-256
+  `7fc60a092afc359697ee95310ac398280b4be851853e32961c1c228ff768a0ae`, the
+  same from the headered and the headerless original
+  (`build/v111/v111.pce`); 52 unit tests and `audit_public.py` pass.
+- Early build delivered in `/workspace/roms/`: `Ninja Ryukenden - Enhanced
+  v1.11-dev (all palettes, dark lift, settings save, early).pce` with
+  `...-all-palettes-dark-lift-settings-save-early.bps` (`f5efd8e7...9018`)
+  and `...-early-headerless.bps` (`61a1d365...4082`), both applied again
+  with `scripts/bps.py`.
+- `check_boot.py`, backup RAM absent: frames 1-899 identical to the
+  original, first update at frame 163 (`build/v111/boot-absent`).
+- `check_bram.py --only cycle` on the pinned emulator: 16 of 16 steps pass
+  (`build/v111/cycle`).
+- **Lock test.** The test-only emulator built on `bram-save`
+  (`build/bram-save/locktest`) was linked from object files compiled
+  against the unpatched `memory.h` (its build log shows the LTO type
+  mismatches), and the CD unit's reset re-opened the bank behind the model.
+  It was rebuilt from clean objects in `build/v111/locktest` with
+  `locktest_patch.py` extended (the model now also governs
+  `Memory::UpdateBackupRam`); SHA-256 `2c12a540...c134`.
+  `check_bram.py --bram-model MODEL` drives it, runs a stub after every boot
+  and Run that reads and writes bank `$F7` (must read `$FF`, must not land)
+  and refuses an emulator that does not apply the model (the pinned one is
+  refused). Negative controls (`--only lock`), 12 cases each under `lock`
+  and `key`, all as predicted: no unlock writes, or `$48 $75 $00`: no backup
+  RAM seen, nothing lands; only `$80` written: works under `lock`, dead
+  under `key`; lock read removed: works, and the probe reports the bank
+  open after the boot and after each Run
+  (`build/v111/lock-neg-lock`, `lock-neg-key`).
+  Full matrix under `lock` and `key`, `readonly` and `openbus`: running.
+- Independent check of the sequence: the Super System Card 3.0 ROM itself
+  (the Duo's own code) maps bank `$F7` in MPR4, executes `csl`, `sei`,
+  writes the single byte `$80` to `$1807`, and afterwards reads `$1803`
+  before `csh` (file offsets `$1C72-$1C7E`, `$1CA8-$1CAB`); HuC's
+  `huc_bram.asm` sends `$48 $75 $80`. The game's three writes end in `$80`
+  and so satisfy both.
+
 ## What is built
 
 - **What is saved:** `$2100` (all eight bits) and `$3227`, in a System Card
