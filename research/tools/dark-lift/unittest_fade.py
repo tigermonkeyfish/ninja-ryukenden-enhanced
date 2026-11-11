@@ -2,7 +2,7 @@
 reference, not a maintained tool): hell-1-1/unittest_override.py's harness
 and model (every mode, the visible stage written per case), each case also
 writing the native fade's level $2A8A (restored after the case), and the
-model giving a left-over entry the whole cap (168 colours) instead of 16
+model giving a left-over entry FADE_CAP (136) colours instead of 16
 when that byte's bit 7 is set (a fade-out has ended on black). Levels: 8
 (after a fade-in), 0-7 (a fade under way) and $FF; edge cases run with 8 and
 with $FF, in 1-1 and in 2-2.
@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'hell-1-1'))
 import unittest_override as uo  # noqa: E402
 
 ut = uo.ut
-FADE_CAP = 168
+FADE_CAP = 136
 NO_FADE = bool(os.environ.get('NO_FADE_MODEL'))
 stage_run_case = uo.run_case
 
@@ -69,7 +69,7 @@ def main():
     boosted = sum(1 for c in cases if c['level'] & 0x80 and c['master'] == 0 and 'now' not in c and not c['lock']
                   and ut.mode_due(c['opts']) and len(c['queue']) == 1 and c['st'] & 0x20 and c['st'] & 0x80
                   and not c['st'] & 0x40 and 0xfd67 <= c.get('pc', 0xfd69) <= 0xfd6f)
-    print(f'{len(cases)} cases ({boosted} with a left-over entry at the whole cap), {failures} failures'
+    print(f'{len(cases)} cases ({boosted} with a left-over entry at the fade cap), {failures} failures'
           f'{" (negative control: model without the fade rule)" if NO_FADE else ""}')
     sys.exit(1 if failures else 0)
 

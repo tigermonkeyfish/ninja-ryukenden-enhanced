@@ -62,6 +62,33 @@
 ; so it is replaced by all 512 colours. In HELL an unmapped colour costs
 ; about a quarter of a mapped one (RAW_* below), so those entries take about
 ; the native upload's time.
+;
+; Fades. The native fade ($F49A, a main-loop tick) recomputes its range of
+; the RAM palette from the backup at a brightness FADE_LEVEL ($2A8A) and
+; queues the range, every 7 ticks: a fade-in from level 0 up to 7 (then the
+; byte is 8), a fade-out from 7 down to 0, all black (then the byte is $FF:
+; $F4B6 adds $2A8F = $FF to it after the last step). The stage-end fade-out
+; (bank 1 $8510, the only one in gameplay) is followed 8 ticks after its
+; last step by the next stage's load, which holds the lock and, starting
+; its fade-in ($F436), empties the queue ($F345). With LEFTOVER_CAP colours
+; a vblank the last step's 512 colours were still on their way then: the
+; load dropped the left-over entry, and the VCE kept the step before black
+; in those entries (a hundred of them in 6-2's exit) while the new stage's
+; tiles were drawn, until the fade-in's first step reached them. Since the
+; dark lift SMS shows that step's greens and greys (6-3's floor, grey on
+; the black screen for 7 frames); before, the modes' tables happened to
+; show them as their black. So while FADE_LEVEL is $FF (bit 7: a fade-out
+; has ended on black and no fade has begun since) a left-over entry gets
+; FADE_CAP colours a vblank, still only with the main loop idle at this
+; vblank and the last one with work. FADE_CAP is what a fade step's 512
+; colours get in their first vblank (0.266 x 512), so those vblanks are no
+; longer than every fade step's first already is; with that first vblank
+; (130 or 136 colours) three more complete the black, at the fourth vblank
+; after the step, four ticks before the load (BUDGET_MIN + 4 x FADE_CAP is
+; more than 512: the fifth at the latest; docs/validation/dark-lift.md).
+; The main loop does nothing but count those ticks. The colours still come
+; from the RAM palette through the table: the fade's state changes the
+; pace only.
 
 OPTIONS = $2100
 DISPATCH_BITS = $98         ; the upload family (bits 3-4) and the SMS copy (bit 7)
@@ -77,6 +104,7 @@ QUEUE_BYTES_HI = $2269
 QUEUE_INDEX_LO = $2271      ; first colour (0-511)
 QUEUE_INDEX_HI = $2279
 BORDER = $2281              ; written to colour $100 after each upload
+FADE_LEVEL = $2a8a          ; the native fade's brightness (below, "Fades")
 PALETTE_LOCK = $2283
 NATIVE_UPLOAD = $f3b5
 QUEUE_ALL = $f394           ; native: queue colours 0-511, under the lock
@@ -93,6 +121,7 @@ HELL_TABLE = $7c00          ; ... and $7C00-$7FFF
 PALETTE_CAP = 168           ; colours per vblank (measured: docs/validation/gb-palette.md)
 ENTRY_COST = 6              ; colours' worth of time per further queue entry
 LEFTOVER_CAP = 16           ; colours a vblank for a left-over entry alone
+FADE_CAP = 136              ; ... once a fade-out has ended on black ("Fades")
 NATIVE_PLUS = 0             ; colours beyond the native upload's time
 BUDGET_MIN = 16
 ; HELL: an unmapped chunk of n colours (a TIA from the RAM palette, at the
@@ -417,12 +446,29 @@ idle_now:
  beq new_work
  lda <CHUNK
  ora <ENTRY
- bne main_loop_busy
- lda #LEFTOVER_CAP
- sta <BUDGET
- jmp budget_done
-main_loop_busy:
+ beq leftover_idle
+ nop                        ; busy: 2 + 2 + 4 cycles, the taken bne and the jmp before 1.11-dev's fade rule
  jmp mapped_return
+leftover_idle:
+ ; A fade-out that has ended on black (FADE_LEVEL = $FF, below) is followed
+ ; by a load that holds the lock and then drops the queue, so what is left
+ ; over must be in the VCE before it: FADE_CAP colours go, not LEFTOVER_CAP.
+ ; Otherwise this is the path before the rule, cycle for cycle (39 from the
+ ; branch above to next_chunk: budget_done's work for the one entry, here).
+ bit FADE_LEVEL
+ bmi leftover_fade
+ lda #LEFTOVER_CAP
+leftover_set:
+ sta <BUDGET
+ lda PALETTE_STATE
+ and #$ff - LEFTOVER
+ sta PALETTE_STATE
+ stz <ENTRY
+ clx
+ jmp next_chunk
+leftover_fade:
+ lda #FADE_CAP
+ bra leftover_set
 new_work:
  ; New entries: about the time the native upload would take for them (a
  ; mapped colour costs about 156 master clocks, a native one 42, so 0.266
@@ -932,12 +978,30 @@ hell_idle_now:
  beq hell_new_work
  lda <CHUNK
  ora <ENTRY
- bne hell_busy
- lda #LEFTOVER_CAP
- sta <BUDGET
- jmp hell_budget_done
-hell_busy:
+ beq hell_leftover_idle
+ nop                        ; busy: 8 cycles, as before the fade rule
  jmp hell_return
+hell_leftover_idle:
+ ; mapped_upload's fade rule (leftover_idle): FADE_CAP for what is left
+ ; over once a fade-out has ended on black. Otherwise 45 cycles from the
+ ; branch above to hell_next_chunk, as before the rule (the three nops).
+ bit FADE_LEVEL
+ bmi hell_leftover_fade
+ lda #LEFTOVER_CAP
+hell_leftover_set:
+ sta <BUDGET
+ lda PALETTE_STATE
+ and #$ff - LEFTOVER
+ sta PALETTE_STATE
+ stz <ENTRY
+ clx
+ nop
+ nop
+ nop
+ jmp hell_next_chunk
+hell_leftover_fade:
+ lda #FADE_CAP
+ bra hell_leftover_set
 hell_new_work:
  stz <PTR
  stz <PTR+1

@@ -3,8 +3,8 @@ rule (research reference, not a maintained tool): sms-palette/upload_cost.py's
 measurement (the hardware-event trace of one vblank from the 1-1 main-loop
 hook) for a queue of one left-over entry ($2104 bit 5 set, the main loop
 idle), with the native fade's level $2A8A written to 8 (after a fade-in:
-LEFTOVER_CAP colours go) and to $FF (a fade-out has ended on black: the
-whole cap goes). Printed per case: the VCE colour writes, the first and the
+LEFTOVER_CAP colours go) and to $FF (a fade-out has ended on black:
+FADE_CAP colours go). Printed per case: the VCE colour writes, the first and the
 last in master clocks and lines after the VDC vblank interrupt, the
 scanline interrupt's CPU entry after it, and what is left queued. Run on the
 build before the rule and on the build with it: with level 8 the figures
