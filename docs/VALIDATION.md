@@ -82,6 +82,12 @@ python3 scripts/check_menu.py --emulator /path/to/geargrafx \
   --output captures/menu-check
 ```
 
+The NES palette mode (1.11-dev) is checked by the reference probes in
+`research/tools/nes-palette/` (stage loads, stored runs, cinemas, identity
+of Original and GB DMG with the build before it); results and rerun
+commands are in [validation/nes-palette.md](validation/nes-palette.md).
+`check_menu.py --only options` covers its menu value and switching.
+
 ## Outstanding
 
 Complete hardware coverage of every damage/death/Continue path and every
