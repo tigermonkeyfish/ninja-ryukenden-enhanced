@@ -663,6 +663,20 @@ against 1,561 in NES-A, 1,695 against 1,697 in NES-B; the two more are
 lighter trunks pass through `$049` and `$048` and the old colour was already
 black. Cinemas: 494 in both.
 
+### Delivered
+
+For the owner's review, in `roms/` (new names; nothing there was changed):
+
+| File | SHA-256 |
+| --- | --- |
+| `Ninja Ryukenden - Enhanced v1.11-dev (all palettes, dark lift 2).pce` | `1678b2e1b2eaabcb27ae8a23e51dd95d0f411c2e570a1bd3f2e224aa3541e2ae` |
+| `ninja-ryukenden-enhanced-v1.11-dev-all-palettes-dark-lift-2.bps` (for the headered original) | `1791e6a5a181d6781b42ec18092dce04466e8bad5e11d428fb0d6ddc4f3599a4` |
+| `ninja-ryukenden-enhanced-v1.11-dev-all-palettes-dark-lift-2-headerless.bps` | `fa9fce57cc655ed36a404e9aa8794191634a3d77e4d5c8d46f014d0fbbe00504` |
+
+The ROM is the fix build (`scripts/project.py build` from either original
+gives these bytes); the patches are the build's own (`--bps-output`), and
+`scripts/bps.py apply` of each to its original gives the ROM again.
+
 ## Rerunning
 
 From the repository root, `W=build/dark-lift-rom` holding `original.pce`,
