@@ -71,6 +71,10 @@ describe `bram-save` as it was stopped.
   check's own expectation said `ERROR 1`: the check was wrong (on a memory
   that ignores writes the writable test fails first, which is the design);
   corrected, rerun pending.
+- Full matrix on the pinned emulator with the current script
+  (`--only matrix --shard K/3`, `build/v111/matrix`): 210 of 210 pass; the
+  48-entry directory boots at the baseline's frame (asserted); the three
+  longer ones (111, 112 and 126 entries) are reported apart.
 - Random images (`research/tools/bram-save/fuzz.py`, pinned emulator, seed
   2): the first 560 images, 0 problems, before the generator itself tripped
   on a short end pointer (fixed); a longer run is pending.

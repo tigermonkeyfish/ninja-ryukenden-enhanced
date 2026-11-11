@@ -936,6 +936,36 @@ class SavedSettingsTests(unittest.TestCase):
         module = next(m for m in json.loads((ROOT / 'src/modules.json').read_text()) if m['name'] == 'bram')
         self.assertEqual(module['ranges'], [[0x2c, 0x2f], [0x1fe6, 0x1ff6], [0x8cb00, 0x8d000]])
 
+    def test_lock_controls_match_the_source(self):
+        """check_bram's negative controls (the unlock and lock removed or
+        changed) are byte patterns: they must be the module's instructions."""
+        import re
+        import check_bram as cb
+        source = (ROOT / 'src/bram/main.asm').read_text()
+        self.assertIsNotNone(re.search(r' lda #\$48\n sta BRAM_UNLOCK\n lda #\$75\n sta BRAM_UNLOCK\n'
+                                       r' lda #\$80\n sta BRAM_UNLOCK\n', source))
+        self.assertIsNotNone(re.search(r' lda BRAM_LOCK [^\n]*\n csh\n', source))
+        self.assertIn('BRAM_UNLOCK = $1807\n', source)
+        self.assertIn('BRAM_LOCK = $1803\n', source)
+        self.assertEqual(cb.UNLOCK, bytes.fromhex('a948 8d0718 a975 8d0718 a980 8d0718'))
+        self.assertEqual(cb.LOCK, bytes.fromhex('ad0318 d4'))
+        rom = bytearray(b'\xff' * 0x100000)
+        at = cb.BANK46[0] + 0xb29
+        rom[at:at + 15] = cb.UNLOCK
+        rom[at + 40:at + 44] = cb.LOCK
+        nop = b'\xea' * 3
+        self.assertEqual(cb.variant(rom, 'no-unlock')[at:at + 15],
+                         b'\xa9\x48' + nop + b'\xa9\x75' + nop + b'\xa9\x80' + nop)
+        self.assertEqual(cb.variant(rom, 'bit7-only')[at:at + 15],
+                         b'\xa9\x48' + nop + b'\xa9\x75' + nop + b'\xa9\x80\x8d\x07\x18')
+        self.assertEqual(cb.variant(rom, 'bit7-clear')[at:at + 15], cb.UNLOCK[:11] + b'\x00' + cb.UNLOCK[12:])
+        self.assertEqual(cb.variant(rom, 'no-lock')[at + 40:at + 44], nop + b'\xd4')
+        for kind in ('no-unlock', 'bit7-only', 'bit7-clear', 'no-lock'):
+            changed = [k for k, (a, b) in enumerate(zip(rom, cb.variant(rom, kind))) if a != b]
+            self.assertTrue(changed and at <= changed[0] and changed[-1] < at + 44, kind)
+        with self.assertRaises(AssertionError):
+            cb.variant(b'\xff' * 0x100000, 'no-unlock')
+
     def test_entry_is_a_system_card_file(self):
         import bram_image as bi
         raw = bi.settings_entry(0xb9, 2)
