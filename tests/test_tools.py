@@ -367,26 +367,37 @@ class ReleaseTests(unittest.TestCase):
 
     def test_menu_text_is_editable_source(self):
         import tempfile
-        from menu_text import ITEM_BOX, generate, layout
+        from menu_text import BOX_ROWS, BOX_WIDTH, CODES, band, generate, layout
+        source = (ROOT / 'src/options/menu.txt').read_text()
         with tempfile.TemporaryDirectory() as temp:
             work = Path(temp)
-            (work / 'menu.txt').write_text((ROOT / 'src/options/menu.txt').read_text())
-            generate(work, '1.10-dev')
+            (work / 'menu.txt').write_text(source)
+            menu = generate(work, '1.11-dev')
             include = (work / 'menu-text.inc').read_text()
-        self.assertIn('STAGE_AT = $07\nPARALLAX_AT = $4a\nDAMAGE_AT = $88\n', include)
-        codes = [int(b) for line in include.split('.db ')[1:] for b in line.split('\n')[0].split(',')]
-        self.assertEqual(len(codes), 128)
-        # V 1 . 1 0 - D E V at column 16 of the first row; the item box stays blank.
-        self.assertEqual(codes[16:25], [0x95, 0xa1, 0xaa, 0xa1, 0xa0, 0x9a, 0x83, 0x84, 0x95])
-        self.assertEqual({codes[row * 32 + c] for row in (1, 2) for c in ITEM_BOX}, {0x9f})
-        self.assertEqual(codes[5], 0xad)                    # STAGE:
-        good = ['A: #####', 'B: ###', 'C: ###', '']
-        layout(good)
-        with self.assertRaises(ValueError): layout(['A: #####', 'B: ###' + ' ' * 7 + 'X', 'C: ###', ''])  # column 13
-        with self.assertRaises(ValueError): layout(['A: #####', 'B: ###', 'C: ###', 'X' * 33])
-        with self.assertRaises(ValueError): layout(['A: #####', 'B: ###', 'C: ###', '!'])
-        with self.assertRaises(ValueError): layout(['A: ###', 'B: ###', 'C: ###', ''])        # field width
-        with self.assertRaises(ValueError): layout(good[:3])
+        self.assertIn('BOX_WIDTH = 26\nBOX_ROWS = 10\nFIELDS = 6\n', include)
+        self.assertEqual(len(menu['window']), BOX_WIDTH * BOX_ROWS)
+        self.assertEqual([w for _, _, w in menu['fields']], [5, 3, 3, 3, 8, 8])
+        # The dev version fits only without GITHUB.COM/; a release version with it.
+        self.assertEqual(menu['band_text'], 'V1.11-DEV TIGERMONKEYFISH')
+        self.assertEqual(band('V{version} {credit}', '1.11')[1], 'V1.11 GITHUB.COM/TIGERMONKEYFISH')
+        with self.assertRaises(ValueError): band('V{version} {credit}', '1.11-development-build')
+        self.assertEqual(len(menu['band']), 32)
+        palette = menu['choices'][3]
+        self.assertEqual((palette[0], [v for v, _ in palette[1]]), (0x18, [0x00, 0x10]))
+        # Offering NES is one more value=TEXT item on the PALETTE line.
+        nes = source.replace('@ $18 $00=ORIGINAL $10=GB_DMG', '@ $18 $00=ORIGINAL $08=NES $10=GB_DMG')
+        self.assertEqual([v for v, _ in layout(nes, '1.11')['choices'][3][1]], [0x00, 0x08, 0x10])
+        self.assertEqual(layout(nes, '1.11')['choices'][3][1][1][1][:3], bytes(CODES[c] for c in 'NES'))
+        for broken in (source.replace('| STAGE: #####             |', '| STAGE: ####              |'),  # STAGE width
+                       source.replace('| NO DAMAGE: ###           |', '| NO DAMAGE: ###            |'),  # 27 columns
+                       source.replace('LANGUAGE', 'LANGUAGE!'),
+                       source.replace('$10=GB_DMG', '$10=GB_DMG_PALETTE'),                         # wider than its field
+                       source.replace('@ $04 $00=OFF $04=ON', '@ $04 $00=OFF $02=ON'),              # value outside its bits
+                       source.replace('@ $04 $00=OFF $04=ON', '@ $02 $00=OFF $02=ON'),              # bits owned twice
+                       source.replace('@ $04 $00=OFF $04=ON\n', ''),                                # a field without values
+                       source.replace('|                          |\n', '', 1)):                    # nine rows
+            with self.assertRaises(ValueError):
+                layout(broken, '1.11')
 
 
 class ComparisonRunTests(unittest.TestCase):

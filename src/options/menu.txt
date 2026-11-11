@@ -1,4 +1,33 @@
-STAGE: #####    V{version}
-PARALLAX: ###   GITHUB.COM/
-NO DMG: ###     TIGERMONKEYFISH
-RUN: ACCEPT     SELECT: CANCEL
+# The in-game menu (scripts/menu_text.py builds menu-text.inc from this).
+#
+# The popup window, 26 columns x 10 rows between the bars, drawn over the
+# playfield at screen columns 3-28, BAT rows 7-16. '#' runs are the value
+# fields: STAGE, then one per option row (the @ lines below, in order).
+|                          |
+| STAGE: #####             |
+| SMOOTH PARALLAX: ###     |
+| NO DAMAGE: ###           |
+| NES FIREWHEEL: ###       |
+| PALETTE: ########        |
+| LANGUAGE: ########       |
+|                          |
+| RUN: OK  SELECT: CANCEL  |
+|                          |
+#
+# The band under the HUD (BAT row 31) while the menu is open, centred in 32
+# columns. {credit} is GITHUB.COM/TIGERMONKEYFISH when the line fits, else
+# TIGERMONKEYFISH.
+= V{version} {credit}
+#
+# Option values: the draft-byte bits the field owns, then value=TEXT in
+# Left/Right order ('_' is a space). Draft bits 0-4 are $2100's options on
+# Run (0 original background, 1 No Damage, 2 NES Firewheel, 3-4 palette
+# mode: 00 Original, 01 NES, 10 GB DMG); bits 5-6 the language ($3227:
+# 0 Japanese, 1 English, 2 Chinese).
+# To offer the NES palette once src/palette implements it, make the PALETTE
+# line: @ $18 $00=ORIGINAL $08=NES $10=GB_DMG
+@ $01 $00=ON $01=OFF
+@ $02 $00=OFF $02=ON
+@ $04 $00=OFF $04=ON
+@ $18 $00=ORIGINAL $10=GB_DMG
+@ $60 $20=ENGLISH $00=JAPANESE $40=CHINESE
