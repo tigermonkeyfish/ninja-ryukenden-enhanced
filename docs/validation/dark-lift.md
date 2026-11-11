@@ -630,6 +630,18 @@ NES-A and NES-B):
   other than its NES colour (4-1 the new set 8), the same load length and
   gameplay as Original.
 
+**NES colours on screen** (`nes-palette/onscreen.py` every 30 frames over
+the 11 runs and every area of all 22 entries, 1,901 samples a mode, on the
+`hell-1-1` build and the fix build): the same on both builds except 4-1.
+Gameplay samples with an entry on screen that is not an NES colour: 4 in
+NES-A and 5 in NES-B on both builds, the same ones (the leftover rows the
+NES record lists: 4-3, 5-2 and 6-3 at frame 750 of their walks, 2-1 in
+NES-B). Fade-step entries (a dimmed NES colour is not an NES colour): 1,559
+against 1,561 in NES-A, 1,695 against 1,697 in NES-B; the two more are
+4-1's entries 56 and 59 in one fade frame (frame 570 of its walk), where the
+lighter trunks pass through `$049` and `$048` and the old colour was already
+black. Cinemas: 494 in both.
+
 ## Rerunning
 
 From the repository root, `W=build/dark-lift-rom` holding `original.pce`,
