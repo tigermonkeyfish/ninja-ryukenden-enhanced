@@ -272,14 +272,18 @@ cancelled:
  ; Let the palette module put the colours back before the game runs on (a
  ; full upload at once in Original; in GB DMG about 136 colours, then 16 a
  ; vblank left over, about 25 vblanks for all 512): a vblank, then more
- ; while its queue holds work, at most 48 in all.
+ ; while its queue holds work, at most 48 in all; then one more, so the
+ ; game resumes after an interrupt with no upload (a full upload takes about
+ ; 27 lines and would move the update's first writes against the raster).
  ldx #48
 settle_palette:
  jsr WAIT_VBLANK
  lda QUEUE_COUNT
- beq closed
+ beq settled
  dex
  bne settle_palette
+settled:
+ jsr WAIT_VBLANK
 closed:
  pla
  sta <$11

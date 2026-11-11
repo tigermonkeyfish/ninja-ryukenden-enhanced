@@ -91,7 +91,9 @@ def allowed(offset, stack_pointer):
             or 0x104 <= offset <= stack_pointer - 0x2000)
 
 
-# Palette upload scratch, rewritten before it is read: the RAM TIA's operands
+# Palette upload scratch, rewritten before it is read (every user of the RAM
+# block-transfer instruction writes all of $2205-$220B before calling it:
+# $E108 with its callers, $E7F5, $F3B5): the RAM TIA's operands
 # ($2205-$220C, written before every call), $2284-$2285 and queue entries past the count. A cancelled
 # palette preview leaves them as the restoring upload wrote them.
 PREVIEW_SCRATCH = set(range(0x205, 0x20d)) | {0x284, 0x285} | set(range(0x261, 0x281))
@@ -350,7 +352,7 @@ def exact_cycle(game, state_dir, actions=None, n=UPDATES, shots=None, blink=True
     if found['end_cpu'][0] != found['end_cpu'][1]:
         found['problems'].append(f'CPU differs {n} frames later: {found["end_cpu"]}')
     bad = [i for i, (a, b) in enumerate(zip(menu_end['ram'], reference_end['ram']))
-           if a != b and not allowed(i, end_sp) and not module_state_only(i, a, b)]
+           if a != b and not allowed(i, end_sp) and not module_state_only(i, a, b) and i not in PREVIEW_SCRATCH]
     if bad:
         found['problems'].append(f'RAM differs {n} updates later at ' + ', '.join(f'${0x2000 + i:04x}' for i in bad[:16]))
     found['ok'] = not found['problems']
