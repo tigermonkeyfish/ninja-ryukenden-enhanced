@@ -87,6 +87,14 @@ def allowed(offset, stack_pointer):
 PREVIEW_SCRATCH = set(range(0x205, 0x20d)) | {0x284, 0x285} | set(range(0x261, 0x281))
 
 
+def module_state_only(i, a, b):
+    """$2100 differing only in bits 5-6: the palette module's left-over and
+    busy-history state, which a cancelled palette preview leaves as the
+    restoring upload set it (the menu never writes bits 5-7; in Original
+    mode the module neither reads nor writes bits 5-6)."""
+    return i == 0x100 and not (a ^ b) & ~0x60
+
+
 def snapshot(game):
     return {'ram': game.read(0, 0x2000), 'vram': game.read(0, 0x10000, area=4),
             'sat': game.read(0, 512, area=6), 'vce': game.read(0, 1024, area=8)}
@@ -268,12 +276,20 @@ def exact_cycle(game, state_dir, actions=None, n=UPDATES, shots=None, blink=True
             found['problems'].append(f'{area} changed at return')
     bad = [i for i, (a, b) in enumerate(zip(before['ram'], after['ram'])) if a != b and not allowed(i, 0x2000 + sp)]
     found['scratch_differs'] = [f'${0x2000 + i:04x}' for i in bad if i in PREVIEW_SCRATCH]
-    bad = [i for i in bad if i not in PREVIEW_SCRATCH]
+    if module_state_only(0x100, before['ram'][0x100], after['ram'][0x100]) and 0x100 in bad:
+        found['scratch_differs'].append(f'$2100 {before["ram"][0x100]:#04x} -> {after["ram"][0x100]:#04x}')
+    bad = [i for i in bad if i not in PREVIEW_SCRATCH and not module_state_only(i, before['ram'][i], after['ram'][i])]
     if bad:
         found['problems'].append('RAM changed at ' + ', '.join(f'${0x2000 + i:04x}' for i in bad[:16]))
     pad = after['ram'][0xe55:0xe5f]
     menu_shots = frames(game, n, state_dir)
+    # State is compared at an update boundary (the next hook): at a frame's
+    # end the update in progress is a few cycles apart in the two runs (the
+    # music driver, which ran on during the menu, takes different time in
+    # the interrupts).
+    stop_at(game, HOOK_AFTER_DRAW)
     menu_end = snapshot(game)
+    menu_cpu = game.call('get_huc6280_status')
     # The same state without the menu: the pad bytes as the menu left them.
     game.call('load_state_file', {'file_path': str(state)})
     game.held = set()
@@ -282,18 +298,27 @@ def exact_cycle(game, state_dir, actions=None, n=UPDATES, shots=None, blink=True
         found['problems'].append('reference did not return from the hook')
     reference = game.read(0, 0x2000)
     bad = [i for i, (a, b) in enumerate(zip(reference, after['ram']))
-           if a != b and not allowed(i, 0x2000 + sp) and i not in PREVIEW_SCRATCH]
+           if a != b and not allowed(i, 0x2000 + sp) and i not in PREVIEW_SCRATCH and not module_state_only(i, a, b)]
     if bad:
         found['problems'].append('RAM differs from the run without the menu at ' + ', '.join(f'${0x2000 + i:04x}' for i in bad[:16]))
     reference_shots = frames(game, n, state_dir)
+    stop_at(game, HOOK_AFTER_DRAW)
     reference_end = snapshot(game)
+    reference_cpu = game.call('get_huc6280_status')
     if menu_shots != reference_shots:
         found['problems'].append(f'pictures differ in frames {[k for k, (a, b) in enumerate(zip(menu_shots, reference_shots)) if a != b]}')
     for area in ('vram', 'sat', 'vce'):
         if menu_end[area] != reference_end[area]:
             words = [i // 2 for i in range(0, len(menu_end[area]), 2) if menu_end[area][i:i + 2] != reference_end[area][i:i + 2]]
             found['problems'].append(f'{area} differs {n} updates later at {len(words)} words, first {words[0]:#06x}')
-    bad = [i for i, (a, b) in enumerate(zip(menu_end['ram'], reference_end['ram'])) if a != b and not allowed(i, 0x2000 + sp)]
+    # The stack below the deeper of the two stack pointers at the end is
+    # dead in both; the CPU registers are reported.
+    end_sp = max(int(menu_cpu['SP'], 16), int(reference_cpu['SP'], 16))
+    found['end_cpu'] = [{k: c[k] for k in ('PC', 'X', 'Y', 'S')} for c in (menu_cpu, reference_cpu)]
+    if found['end_cpu'][0] != found['end_cpu'][1]:
+        found['problems'].append(f'CPU differs {n} frames later: {found["end_cpu"]}')
+    bad = [i for i, (a, b) in enumerate(zip(menu_end['ram'], reference_end['ram']))
+           if a != b and not allowed(i, end_sp) and not module_state_only(i, a, b)]
     if bad:
         found['problems'].append(f'RAM differs {n} updates later at ' + ', '.join(f'${0x2000 + i:04x}' for i in bad[:16]))
     found['ok'] = not found['problems']

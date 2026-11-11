@@ -374,8 +374,9 @@ The menu's **PALETTE** row (1.11-dev) offers the values listed in
 there once this module implements it). While the menu is open the live bits
 3-4 follow the draft, so the module re-uploads every colour at the next
 vblanks and the choice shows at once (the menu waits in `$FD67`, so the
-left-over rule gets its 32 colours a vblank); Select puts the old bits back
-and waits until the queue is empty (at most 33 vblanks) before the game runs
+left-over rule gets its 16 colours a vblank: all 512 in about 25 frames);
+Select puts the old bits back and waits until the queue is empty (at most 48
+vblanks; Original is back after one) before the game runs
 on. Run keeps the bits and restarts the stage, which reloads the palettes.
 
 Bank `$46` (1.11-dev): `$4000-$40FF` dispatch, `$4100-$42FF` unowned

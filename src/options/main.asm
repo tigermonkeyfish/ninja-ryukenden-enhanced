@@ -270,9 +270,10 @@ cancelled:
  sta OPTIONS
  plp
  ; Let the palette module put the colours back before the game runs on (a
- ; full upload at once in Original, 32 colours a vblank left over in GB
- ; DMG): a vblank, then more while its queue holds work, at most 32.
- ldx #33
+ ; full upload at once in Original; in GB DMG about 136 colours, then 16 a
+ ; vblank left over, about 25 vblanks for all 512): a vblank, then more
+ ; while its queue holds work, at most 48 in all.
+ ldx #48
 settle_palette:
  jsr WAIT_VBLANK
  lda QUEUE_COUNT
