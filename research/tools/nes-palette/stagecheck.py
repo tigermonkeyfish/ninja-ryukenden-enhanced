@@ -92,7 +92,7 @@ def main():
     stages = [int(s) for s in sys.argv[4].split(',')] if len(sys.argv) > 4 and sys.argv[4] else range(22)
     shots = Path(sys.argv[5]) if len(sys.argv) > 5 else None
     shot_stages = {int(s) for s in sys.argv[6].split(',')} if len(sys.argv) > 6 else set()
-    original = Path('/workspace/build/nes-palette/original.pce').read_bytes()
+    original = (Path(__import__('os').environ.get('NES_WORK', '/workspace/build/nes-palette')) / 'original.pce').read_bytes()
     original = original[512:] if len(original) % 8192 == 512 else original
     lay, orig_sets, enh = expected(original)
     report = {}
@@ -120,8 +120,8 @@ def main():
                 m, n = enh[label]
                 for k in range(1, 16):
                     want[16 * row + k] = (m[k], n[k])
-        for (p, cols) in lay['sprites']:
-            ryu_orig = [int(x, 16) for x in NP.load()['shared']['sprites'][0]['pce']]
+        for (p, cols) in [x for x in lay['sprites'] if x[0] == 96]:
+            ryu_orig = [int(e['pce'], 16) for e in NP.load()['shared']['sprites'][0]['entries']]
             for k in range(1, 16):
                 want[256 + k] = (ryu_orig[k], cols[k])
         bad, game_written, changed = [], [], 0
