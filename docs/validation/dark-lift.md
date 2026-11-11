@@ -379,16 +379,70 @@ step of 6-3's fade-in.
 - **Gameplay against Original, a change to know about.** On the dark-lift
   build the cinema after a stage begins one frame later in the mapped modes
   than in Original (`$2240`; the earlier records list it: 4-1, 5-3, 6-3).
-  On the fix build, in GB DMG (the 11 walks that end in a cinema, and the
-  4-1 and 6-3 runs) and in HELL (the 4 such walks recorded), it begins on
-  Original's frame: the recordings have Original's length and gameplay
-  fields in every frame. So against the dark-lift build one frame is gone
-  before each cinema; against Original the mapped modes no longer differ
-  there. Why the frame was there was not traced. The other gameplay
-  differences from Original are the dark-lift build's own, in the same
-  frames: single frames in three walks (2-1 frame 363, 6-2 frame 544, 5-2
-  every eighth frame from 293, seven of them), not in any stored run; they
-  are forced-scroll walks, and the frame after each is equal again.
+  On the fix build it begins on Original's frame: in the 4-1, 5-3 and 6-3
+  runs in GB DMG, SMS and HELL (below), in the 11 walks that end in a
+  cinema in GB DMG and the 4 such walks recorded in HELL. So against the
+  dark-lift build one frame is gone before each cinema; against Original
+  the mapped modes no longer differ there. Why the frame was there was not
+  traced (the left-over upload was still running when the cinema began; it
+  no longer is). The other gameplay differences from Original are the
+  dark-lift build's own, in the same frames: single frames in three walks
+  (2-1 frame 363, 6-2 frame 544, 5-2 every eighth frame from 293, seven of
+  them), not in any stored run; they are forced-scroll walks, and the frame
+  after each is equal again.
+
+### A. Regression: the 11 stored runs
+
+`recall.sh` (`hell-1-1/record11.py`; 35,084 frames a mode) on the fix build,
+against the dark-lift build's recordings of its own record (`rec/dl-*`):
+`sms-palette/analyse.py identity`, `summary.py`, `diffwhere.py`.
+
+| Mode | Against the dark-lift build | On the fix build |
+| --- | --- | --- |
+| Original | **identical**: picture, VCE, sprite table, game RAM, gameplay fields, every frame of every run | |
+| NES-A | **identical**, the same | |
+| GB DMG | sprite table identical in every frame; gameplay fields identical except the one frame the cinema begins in 4-1, 5-3, 6-3; picture, VCE and RAM differ in one window per run (below); 5-4, which has no stage end: nothing differs | gameplay fields and sprite table equal to Original in **every** frame of every run (`$2240` included); frames not yet due 128, 127, 94, 118, 78, 118, 137, 203, 14, 116, 135 (1-1 … 6-3; 145, 144, 111, 135, 84, 135, 154, 209, 14, 133, 141 before); longest lag 18 frames (42-46 before in the runs that end in a stage change, 19 in 4-1), 14 in 5-4 and 28 and 30 in 5-3 and 6-3 as before |
+| SMS | as GB DMG | as GB DMG, the same counts; no gameplay frame with a VCE entry or a pixel outside the 64 colours |
+| HELL | as GB DMG | gameplay equal to Original in every frame; frames not yet due 118, 116, 83, 104, 67, 106, 125, 163, 4, 104, 110 (136, 134, 101, 122, 74, 124, 143, 170, 4, 122, 117 before); longest lag 10-13 frames (33-37 before; 4-1 11), 21 in 5-3 and 6-3 and 4 in 5-4 as before |
+
+Every frame that differs from the dark-lift build lies in one run of
+frames per recording, which starts where the fade-out's last step is first
+uploaded (`diffwhere.py`: no difference outside it in any mode):
+
+| Run (its end) | GB DMG and SMS: picture | VCE | RAM | HELL: picture |
+| --- | --- | --- | --- | --- |
+| 1-1 (load at 2831) | 2823-2826 | 2822-2855 (SMS to 2862) | 2822-2844 | 2823-2855 |
+| 2-2 (load at 3945) | 3937-3961 | 3936-3972 (3976) | 3936-3958 | 3938-3969 |
+| 3-1 (load at 1886) | 1878-1902 | 1877-1919 | 1877-1901 | 1878-1912 |
+| 3-2 (load at 3136) | 3128-3131, 3136-3147 | 3127-3165 (3167) | 3127-3149 | 3128-3160 |
+| 4-1 (cinema at 2487) | 2480-2483 | 2479-2488 | 2479-2488 | 2480-2488 |
+| 4-2 (load at 2637) | 2629-2632, 2638-2646 | 2628-2659 (2666) | 2628-2648 | 2630-2659 |
+| 5-2 (load at 2928) | 2920-2925 | 2919-2953 (2960) | 2919-2942 | 2921-2953 |
+| 5-3 (cinema at 6768) | 6761-6769 | 6760-6769 | 6760-6769 | 6762-6769 |
+| 5-4 (none) | none | none | none | none |
+| 6-1 (load at 1734) | 1726-1750 | 1725-1758 (1765) | 1725-1747 | 1727-1758 |
+| 6-3 (cinema at 5122) | 5115-5120 | 5114-5123 | 5114-5123 | 5116-5123 |
+
+What they are: the first range of pictures is the end of the fade-out,
+black sooner (4 frames where the dark-lift build was 5 frames late, 25
+where it was 26); the second range in 3-2 and 4-2 is the flash, exactly its
+frames, now black; HELL's pictures differ through the load because its HUD
+band and sprite entries are black now where they stayed lit. The VCE and
+the module's state in RAM (`$2104`, the queue) differ until the next
+stage's fade-in has written every entry once. After a cinema's first frame
+(the one-frame shift above) the runs' recorded 60 frames are the cinema's
+own.
+
+**For GB DMG** (the owner: the mode is fine as it is): the fix changes 4 to
+25 pictures at each stage end and nothing else in the 11 runs. They are an
+improvement on the same grounds as in SMS: the flash was there in GB DMG
+too (its second olive `$090` on its darkest `$040`: 3-2 12 frames and 4-2
+9 frames in the runs; 4-3 to 4-4 10.8% of the playfield for 16 frames and
+6-2 to 6-3 7.1% for 8 in the walks), and the screen now reaches its
+darkest shade 0-3 frames after Original's black instead of up to 26. To
+leave GB DMG exactly as it was, the rule would need a test of the mode in
+the shared code (SMS runs GB DMG's bytes), a few cycles in GB DMG's
+left-over path; not done.
 
 ### Not verified on the fix build
 
