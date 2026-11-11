@@ -12,16 +12,26 @@ runs    In each stored comparison run (research/comparison-runs/), every
         changed except the palette (or, with --preview, the palette too),
         then Select. At the moment the menu returns, VRAM must equal the
         moment it was entered except the sprite-table buffer being built
-        (the backup) and RAM except ALLOWED; then the game runs UPDATES more
-        frames and is compared with the same state run without the menu:
-        at every frame's end VRAM (the backup buffer included: the game
-        rewrote it), the sprite table and the palette, and at the next
-        update boundary RAM except ALLOWED. Pictures that differ in a frame
-        whose video state agrees are reported as raster timing: the music
-        driver played on during the menu, so the interrupts take different
-        time and identical writes land at other raster positions. With
-        --same-music the run without the menu gets the music driver's state
-        as the menu left it, and every picture must match. The stack's
+        (the backup) and RAM except ALLOWED; then the game is compared with
+        the same state run without the menu, both from the next vblank
+        interrupt ($FCD7; the menu returns just after a vblank, the run
+        without it at the hook's raster position): at that vblank VRAM,
+        sprite table, palette, PSG registers and RAM except ALLOWED, then
+        for UPDATES frames at every frame's end VRAM (the backup buffer
+        included: the game rewrote it), the sprite table, the palette and
+        the PSG registers (not the emulator's waveform position; from the
+        second frame: the sound held in the menu comes back with the
+        driver's second tick, so frame 0 is reported apart), and at the
+        next update boundary RAM except ALLOWED. Since 1.11-dev the menu
+        holds the sound driver while it is open (src/options), so the
+        interrupts after it take the time they take without it. Pictures
+        that differ in a frame whose video state agrees are reported as
+        raster timing (identical writes at other raster positions; with the
+        sound held none are expected). With --same-music the run without
+        the menu gets the music driver's state as the menu left it, and
+        every picture must match. Sound-driver RAM that differs at the
+        return is listed ('sound_ram_differs': zero page $8B, the driver's
+        per-tick scratch, is cleared by the ticks in the menu). The stack's
         low-water mark is measured from a $A5 fill below the stack pointer.
         Parallax OFF variants of the runs are selected with --parallax-off.
 sweep   Select pressed at every frame (`--sweep-step`) of the unsafe
@@ -73,11 +83,13 @@ DECODE = {code: char for char, code in CODES.items()}
 HOOK_AFTER_DRAW = '1f73'     # $FF73: Select hook, after the pending-draw call
 HOOK_RETURN = '23f6'         # bank 1 $83F6: main loop, after the Select hook
 FIRST_UPDATE = '2457'        # bank 1 $8457: gameplay loop (a stage's first update)
+VBLANK_ENTRY = '1cd7'        # $FCD7: the VDC interrupt's entry (vblank: the sound driver's tick at $FD16)
 MENU_ENTRY = 0x46 * 0x2000 + 0x400                 # bank $46 $4400
 MENU_PREFIX = bytes.fromhex('adab2ec90af00dadad2ef008ad4d2e0d4e2ef003a9ff60')   # the refusals
 MENU_OPEN = f'{MENU_ENTRY + len(MENU_PREFIX):x}'   # after it: the menu opens
 MENU_OPEN_PC = f'{0x4400 + len(MENU_PREFIX):04X}'
-CPU = {HOOK_AFTER_DRAW: 'FF73', HOOK_RETURN: '83F6', FIRST_UPDATE: '8457', MENU_OPEN: MENU_OPEN_PC}
+CPU = {HOOK_AFTER_DRAW: 'FF73', HOOK_RETURN: '83F6', FIRST_UPDATE: '8457', MENU_OPEN: MENU_OPEN_PC,
+       VBLANK_ENTRY: 'FCD7'}
 SPACE_WORD = bytes.fromhex('9ff7')
 SOURCE = (ROOT / 'src/options/main.asm').read_text()
 BOX_TOP = int(re.search(r'^BOX_TOP = (\d+)', SOURCE, re.M)[1])
@@ -236,8 +248,17 @@ def frames(game, count, state_dir):
         video = hashlib.sha256()
         for area, size in ((4, 0x10000), (6, 512), (8, 1024)):
             video.update(game.read(0, size, area=area))
-        shots.append((hashlib.sha256(game.screenshot()).hexdigest()[:16], video.hexdigest()[:16]))
+        shots.append((hashlib.sha256(game.screenshot()).hexdigest()[:16], video.hexdigest()[:16], psg(game)))
     return shots
+
+
+def psg(game):
+    """The PSG's registers (per channel enable, amplitude, frequency,
+    balance, noise; the main amplitude and LFO), without the emulator's
+    waveform playback position (an oscillator phase, not a register)."""
+    st = game.call('get_psg_status')
+    return tuple((c['enabled'], c['amplitude'], c['frequency'], c['vol_left'], c['vol_right'], c['noise'], c['dda'])
+                 for c in st['channels']) + (st['main_amplitude'], st['lfo_control'], st['lfo_frequency'])
 
 
 def compare_frames(found, menu_shots, reference_shots):
@@ -248,6 +269,13 @@ def compare_frames(found, menu_shots, reference_shots):
     video = [k for k, (a, b) in enumerate(zip(menu_shots, reference_shots)) if a[1] != b[1]]
     if video or len(menu_shots) != len(reference_shots):
         found['problems'].append(f'video state differs at the end of frames {video[:20]}')
+    sound = [k for k, (a, b) in enumerate(zip(menu_shots, reference_shots)) if a[2] != b[2]]
+    # The sound held in the menu comes back with the driver's second tick
+    # after the return (its first re-enables the volumes the held ticks
+    # zeroed): frame 0 may differ; from frame 1 on every register must agree.
+    found['sound_resume_frames'] = [k for k in sound if k < 1]
+    if [k for k in sound if k >= 1]:
+        found['problems'].append(f'PSG registers differ at the end of frames {[k for k in sound if k >= 1][:20]}')
     found['raster_timing_frames'] = [k for k, (a, b) in enumerate(zip(menu_shots, reference_shots))
                                      if a[0] != b[0] and a[1] == b[1]]
     if SAME_MUSIC and found['raster_timing_frames']:
@@ -334,6 +362,16 @@ def exact_cycle(game, state_dir, actions=None, n=UPDATES, shots=None, blink=True
     if bad:
         found['problems'].append('RAM changed at ' + ', '.join(f'${0x2000 + i:04x}' for i in bad[:16]))
     pad = after['ram'][0xe55:0xe5f]
+    # Frames are compared from the next vblank interrupt in both runs (the
+    # vblank after the update the hook was in): the menu returns just after
+    # a vblank, the run without it at the hook's raster position, so frame
+    # steps from the return would split that update differently. The state
+    # at that vblank is compared in full.
+    if run_until(game, [VBLANK_ENTRY]) != CPU[VBLANK_ENTRY]:
+        found['problems'].append('no vblank after the menu returned')
+    menu_vblank = snapshot(game)
+    menu_vblank['psg'] = psg(game)
+    menu_vblank['cpu'] = game.call('get_huc6280_status')
     menu_shots = frames(game, n, state_dir)
     # State is compared at an update boundary (the next hook): at a frame's
     # end the update in progress is a few cycles apart in the two runs (the
@@ -358,6 +396,35 @@ def exact_cycle(game, state_dir, actions=None, n=UPDATES, shots=None, blink=True
            if a != b and not allowed(i, 0x2000 + sp) and i not in PREVIEW_SCRATCH and not module_state_only(i, a, b)]
     if bad:
         found['problems'].append('RAM differs from the run without the menu at ' + ', '.join(f'${0x2000 + i:04x}' for i in bad[:16]))
+    found['sound_ram_differs'] = [f'${0x2000 + i:04x}' for i, (a, b) in enumerate(zip(reference, after['ram']))
+                                  if a != b and (0x080 <= i <= 0x08f or 0x1800 <= i <= 0x1bff)]
+    if run_until(game, [VBLANK_ENTRY]) != CPU[VBLANK_ENTRY]:
+        found['problems'].append('reference: no vblank after the hook')
+    reference_vblank = snapshot(game)
+    reference_vblank['psg'] = psg(game)
+    reference_vblank['cpu'] = game.call('get_huc6280_status')
+    for area in ('vram', 'sat', 'vce'):
+        if menu_vblank[area] != reference_vblank[area]:
+            found['problems'].append(f'{area} differs at the first vblank after the hook')
+    found['psg_held_at_first_vblank'] = menu_vblank['psg'] != reference_vblank['psg']
+    # The interrupt's own stack frame (P, return address): both runs must
+    # have been waiting for the vblank ($FD67-$FD6F), at any instruction of
+    # that loop (a few cycles apart: the timer interrupt's phase).
+    frame_bytes = set()
+    returns = []
+    for snap, cpu in ((menu_vblank, menu_vblank['cpu']), (reference_vblank, reference_vblank['cpu'])):
+        s0 = int(cpu['SP'], 16) - 0x2000
+        returns.append(snap['ram'][s0 + 2] | snap['ram'][s0 + 3] << 8)
+        frame_bytes |= {s0 + 1, s0 + 2, s0 + 3}
+    found['vblank_interrupted'] = [f'${r:04x}' for r in returns]
+    if not all(0xfd67 <= r <= 0xfd6f for r in returns):
+        frame_bytes = set()
+    bad = [i for i, (a, b) in enumerate(zip(menu_vblank['ram'], reference_vblank['ram']))
+           if a != b and not allowed(i, 0x2000 + sp) and i not in PREVIEW_SCRATCH and i not in frame_bytes
+           and not module_state_only(i, a, b)]
+    if bad:
+        found['problems'].append('RAM differs at the first vblank after the hook at ' +
+                                 ', '.join(f'${0x2000 + i:04x}' for i in bad[:16]))
     reference_shots = frames(game, n, state_dir)
     stop_at(game, HOOK_AFTER_DRAW)
     reference_end = snapshot(game)

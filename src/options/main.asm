@@ -107,6 +107,8 @@ RYU_HEALTH = $2ead
 QUEUE_COUNT = $2260         ; native palette upload queue: entries
 QUEUE_ALL = $f394           ; native: queue colours 0-511, under the lock
 WAIT_VBLANK = $fd67
+SOUND_FLAGS = $387e         ; sound driver (bank $38, run by the vblank interrupt at
+                            ; $FD16): bit 6 music, bit 7 effect channels played
 SET_WRITE = $fc34           ; native: VRAM write address = X:A, register 2
 SPACE = $9f
 ; Zero page borrowed by the menu; saved on entry and restored on exit.
@@ -151,6 +153,18 @@ save_zero_page:
  bne save_zero_page
  lda <$11
  pha
+ ; The sound holds while the window is open: with SOUND_FLAGS bits 6-7
+ ; clear the driver's vblank tick advances nothing and only silences each
+ ; channel (bank $38 $5066: volume 0), so on return the driver goes on
+ ; from exactly the state it had here, and every interrupt after the menu
+ ; takes the time it takes in the run without the menu. (A driver that
+ ; played on through the menu took other time in each vblank afterwards,
+ ; so the main loop was a few cycles elsewhere at frame ends: seen while an
+ ; area change redraws the BAT across frames; docs/validation/all-palettes.md.)
+ lda SOUND_FLAGS
+ pha
+ and #$3f
+ sta SOUND_FLAGS
  ; The options as they were, for the palette preview's cancel.
  lda OPTIONS
  pha
@@ -296,6 +310,8 @@ settle_palette:
 settled:
  jsr WAIT_VBLANK
 closed:
+ pla
+ sta SOUND_FLAGS            ; the next vblank plays on from where the sound stopped
  pla
  sta <$11
  sta $0000
