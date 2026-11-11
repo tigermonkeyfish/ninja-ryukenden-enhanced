@@ -135,10 +135,13 @@ def _hsv_out(h, s, v):
     return _join(_q(r), _q(g), _q(b))
 
 
-def hell_colour(colour, spec):
-    """The HELL mode's colour for one 9-bit colour (the mock-up's map_C)."""
+def hell_family(colour, spec):
+    """(family, ramp position or None) of one 9-bit colour in the HELL mode:
+    'black', 'ash', 'grey', 'steel', 'leaf', 'blue', 'green' or 'warm'
+    (hell.json "about"). The position is where the family's ramp is read
+    (warm colours have no ramp)."""
     if colour == 0:
-        return 0
+        return 'black', None
     r, g, b = [x / 7 for x in channels(colour)]
     h, s, v = colorsys.rgb_to_hsv(r, g, b)
     h *= 360
@@ -146,20 +149,37 @@ def hell_colour(colour, spec):
     y = w[0] * r + w[1] * g + w[2] * b
     if s < spec['sat_low']:
         if v >= spec['ash_v']:
-            return _ramp(spec['ash_ramp'], (v - spec['ash_v']) / (1 - spec['ash_v']))
-        return _ramp(spec['grey_ramp'], v)
+            return 'ash', (v - spec['ash_v']) / (1 - spec['ash_v'])
+        return 'grey', v
     if 'steel_ramp' in spec and any(lo <= h <= hi and s <= s_max and s * v <= c_max and v <= v_max
                                     for lo, hi, s_max, c_max, v_max in spec['steel_windows']):
         m = spec['steel_mix']
-        return _ramp(spec['steel_ramp'], v * m[0] + y * m[1])
+        return 'steel', v * m[0] + y * m[1]
     # 'leaf' (dark lift): saturated pure greens, windows [hue_lo, hue_hi, min_saturation]
     if 'leaf_ramp' in spec and any(lo <= h <= hi and s >= s_min for lo, hi, s_min in spec['leaf_windows']):
         m = spec['leaf_mix']
-        return _ramp(spec['leaf_ramp'], v * m[0] + y * m[1])
+        return 'leaf', v * m[0] + y * m[1]
     if spec['blue_hue'][0] <= h <= spec['blue_hue'][1]:
-        return _ramp(spec['lava_ramp'], v * spec['lava_mix'][0] + y * spec['lava_mix'][1])
+        return 'blue', v * spec['lava_mix'][0] + y * spec['lava_mix'][1]
     if spec['green_hue'][0] <= h < spec['green_hue'][1]:
-        return _ramp(spec['green_ramp'], y * spec['green_luma_scale'])
+        return 'green', y * spec['green_luma_scale']
+    return 'warm', None
+
+
+_HELL_RAMPS = {'ash': 'ash_ramp', 'grey': 'grey_ramp', 'steel': 'steel_ramp', 'leaf': 'leaf_ramp',
+               'blue': 'lava_ramp', 'green': 'green_ramp'}
+
+
+def hell_colour(colour, spec):
+    """The HELL mode's colour for one 9-bit colour (the mock-up's map_C)."""
+    family, position = hell_family(colour, spec)
+    if family == 'black':
+        return 0
+    if family != 'warm':
+        return _ramp(spec[_HELL_RAMPS[family]], position)
+    r, g, b = [x / 7 for x in channels(colour)]
+    h, s, v = colorsys.rgb_to_hsv(r, g, b)
+    h *= 360
     keep = spec['warm_keep_hue']
     hue = h if h <= keep[0] or h >= keep[1] else spec['warm_other_hue']
     if spec['warm_magenta'][0] <= hue < spec['warm_magenta'][1]:

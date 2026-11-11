@@ -76,6 +76,33 @@
   grey `$049` is now lighter than the next grey `$092`
   ([evidence, commands and next steps](validation/dark-lift.md), emulator
   only).
+- **Dark lift 2** (1.11-dev, branch `dark-lift-fix`, from `dark-lift`;
+  delivered for review as build `1678b2e1…41e2ae`): the flash's cause is the stage load
+  dropping the palette queue while the mapped upload was still writing the
+  fade-out's last step (GB DMG has had the same flash since the mode
+  exists, as its second shade; 6 of the 11 stage changes show it, up to
+  10.8% of the playfield for 16 frames). The mapped uploads now give a
+  left-over entry 136 colours a vblank while the native fade's level
+  `$2A8A` is `$FF`, so the black is complete four ticks before the load;
+  every other path keeps its cycles. Verified: the unit test of the upload
+  and the timing of its paths; the 11 runs (Original, NES-A and NES-B
+  identical to `dark-lift` in every frame; GB DMG, SMS and HELL differ only
+  in the frames after each stage-end fade-out, gameplay equal to Original
+  in every frame, no flash, nothing left unwritten at the load);
+  `check_boot.py` and `check_menu.py`; every stage exit in GB DMG. **Not
+  verified**: three stage changes in SMS (2-1, 4-3, 5-1 exits) and one in
+  HELL (6-2's) on the fix build, since the host stopped that survey run for
+  low memory; deaths, Continue, Game Over. The dark lift's own evidence
+  (brightness from captures, equal to the study's predictions; the sheets,
+  looked at; the 22 Level Select entries; the NES checks) is complete.
+  A change to know: the cinema after a stage now begins on Original's frame
+  in the mapped modes, one frame earlier than on `dark-lift`. HELL's grey
+  order is left as it is (no table value keeps 1-1's sidewalk seams and the
+  lift of `$049` both; four choices with their costs in the record); SMS's
+  dark rescue has the same kind of reversal on a larger scale (`$049`
+  lighter than `$04A`, a fifth of 6-2's picture), which is also why 6-3's
+  fade-in passes through grey: open for the owner
+  ([evidence](validation/dark-lift.md), emulator only).
 - **SMS palette** (1.11-dev, branch `sms-palette`, from `hell-palette`):
   `$2100` = `$38`, menu value `SMS` after HELL: everything on screen in the
   Sega Master System's 64 colours (each channel to the nearest SMS level,

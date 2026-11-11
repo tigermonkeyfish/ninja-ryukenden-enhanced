@@ -387,6 +387,22 @@ The upload goes through the trampoline at `$FEC0` to bank `$46` `$5000`:
   waiting for vblank (interrupted PC in `$FD67-$FD6F`) at this vblank and at
   the last one with palette work (bit 6), otherwise none. A full queue (8
   entries: `$F350` may have dropped one) leaves all 512 colours over.
+  The fade rule (branch `dark-lift-fix`; GB DMG, SMS and HELL): while the
+  native fade's level `$2A8A` is `$FF` (bit 7: the stage-end fade-out,
+  bank 1 `$8510` and `$F422`, has computed its last step, all black, and no
+  fade has begun since) a left-over entry gets 136 colours a vblank instead
+  of 16, under the same idle condition. The game loads the next stage 8
+  ticks after that step, holds the lock and empties the queue when it
+  starts the fade-in (`$F436` calls `$F345`), so whatever the upload has
+  not written by then stays in the VCE as the step before black while the
+  new stage's tiles are drawn; 136 colours (what a fade step gets in its
+  first vblank) complete the black four ticks before the load. The level
+  byte sets the pace only: the colours come from the RAM palette through
+  the table. The paths without that state take the cycles they took before
+  the rule. Cuts to black that are not fades (an area change's fill of
+  colours 0-255 with the load at the next tick, the fill after a boss) are
+  still uploaded at the old pace and arrive late or not at all
+  ([validation/dark-lift.md](validation/dark-lift.md)).
 - HELL in gameplay: the same queue and the same budget rules, but only VCE
   entries 0-239 (background palettes 0-14) are looked up, in the HELL table
   (`src/palette/hell.json`: the owner's mock-up "Lava" retuned as candidate
@@ -408,7 +424,7 @@ The upload goes through the trampoline at `$FEC0` to bank `$46` `$5000`:
   native 42 master clocks a colour; such a chunk of n colours is charged
   n/4 + n/32 + 3 colours of the budget (measured: about 0.27 n + 0.7 of a
   mapped colour's 156 clocks beyond the per-chunk work the mapped loop also
-  has). The code (981 bytes, `$7800-$7BD4`) and the table are in bank `$43`
+  has). The code (1,005 bytes, `$7800-$7BEC`) and the table are in bank `$43`
   `$7800-$7FFF`, mapped in MPR3 for the upload (pushed and restored; code
   running in MPR3 cannot unmap itself, so the exits that restore it are in
   bank `$46`).
@@ -447,11 +463,13 @@ The upload goes through the trampoline at `$FEC0` to bank `$46` `$5000`:
   least 0.5 of 7 takes level 2 in each channel that holds 1, which is the
   four colours with green 1 and no channel above 1: `$040` → `$080`,
   `$041` → `$082`, `$048` → `$090`, `$049` → `$092`; `$001`, `$008` and
-  `$009` still show black. A side effect, open: the darkest fade step is
-  now visible, so VCE entries that the left-over upload has not yet brought
-  to black when a load locks the palette show for some frames, 6-3's floor
-  for 7 frames in the load after 6-2,
-  [validation/dark-lift.md](validation/dark-lift.md)). Bank `$3B`
+  `$009` still show black. Two side effects: the darkest fade step became
+  visible, which showed VCE entries the upload had not brought to black
+  when a load took the lock (6-3's floor for 7 frames after 6-2; closed by
+  the fade rule above); and the four rescued colours now show lighter than
+  their neighbours whose green 1 the channel rule drops (`$049` grey 222
+  against `$04A` blue 002), in stills and in fade steps (open,
+  [validation/dark-lift.md](validation/dark-lift.md))). Bank `$3B`
   `$5000-$57FF` holds a byte-for-byte copy of bank `$46` `$5000-$53FF`
   (assembled from the same source lines, `;@mirror` in `main.asm`, as
   `sms-mirror.inc`; a guard per label checks each copy's address) and the
@@ -671,7 +689,7 @@ Bank `$46` (1.11-dev): `$4000-$40FF` dispatch, `$4100-$42FF` unowned
 sprite reset, `$4400-$4AFF` the menu (`options`, 1,749 bytes used), `$4B00-$4FFF`
 the saved settings (`bram`, 962 bytes used to `$4EC1`; entries `$4B00`
 reset loader, `$4B03` save),
-`$5000-$53FF` palette code (905 bytes used), `$5400-$57FF` its GB DMG
+`$5000-$53FF` palette code (926 bytes used), `$5400-$57FF` its GB DMG
 table, `$5800-$583F` 6-1 dispatch, `$5840-$58FF` options' renderer gate,
 `$5900-$59FF` speed (143 bytes used), `$5A00-$5AFF` the palette module's
 `fold_queue` and SMS stubs (163 bytes used), `$5B00-$5FFF` unowned (1,280 bytes;
