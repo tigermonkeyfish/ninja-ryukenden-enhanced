@@ -105,6 +105,32 @@ fades; brightness and screenshots still to do) is in
 [validation/dark-lift.md](validation/dark-lift.md), probes in
 `research/tools/dark-lift/`.
 
+The saved settings (1.11-dev, `src/bram`) have their own check,
+`scripts/check_bram.py`: a matrix of backup RAM images (absent, empty,
+other games' files around ours, full, every valid setting, damaged
+directories, blank and half-formatted memories) booted cold and saved from
+the menu, compared with a model and with a System Card style reader; one
+setting changed per power cycle; saves cut after every byte written; the
+loader's and the save's time. The pinned emulator does not model the backup
+RAM's lock for a HuCard, so the same check runs on a test-only emulator
+that does (`--bram-model lock`, `key`, `readonly`, `openbus`; built by
+`research/tools/bram-save/locktest_patch.py`), with negative controls
+(`--only lock`). `scripts/check_boot.py --bram IMAGE` boots both games with
+a backup RAM image. Results, the lock models' basis and what only a
+console can show are in [validation/bram-save.md](validation/bram-save.md);
+the console test list is
+[validation/bram-save-hardware-checklist.md](validation/bram-save-hardware-checklist.md).
+
+```sh
+python3 scripts/check_bram.py --emulator /path/to/geargrafx \
+  --candidate "dist/Ninja Ryukenden - development.pce" \
+  --baseline /path/to/the-build-before.pce --output captures/bram-check
+python3 scripts/check_bram.py --emulator /path/to/locktest/geargrafx --bram-model lock \
+  --only matrix --only cycle --only lock \
+  --candidate "dist/Ninja Ryukenden - development.pce" \
+  --baseline /path/to/the-build-before.pce --output captures/bram-lock
+```
+
 ## Outstanding
 
 Complete hardware coverage of every damage/death/Continue path and every
