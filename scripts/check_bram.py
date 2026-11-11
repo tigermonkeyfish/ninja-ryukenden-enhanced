@@ -256,10 +256,11 @@ def expected_run(image, options, language, dead):
     if dead or MODEL == 'openbus':
         return bi.NONE, image
     saved, after = bi.expected_save(image, options, language)
-    if MODEL == 'readonly' and after != image:
-        if bi.expected_load(image)[0] == bi.NONE:        # unformatted: the writable test fails
+    if MODEL == 'readonly':
+        if bi.expected_load(image)[0] == bi.NONE:        # unformatted: the writable test comes first and fails
             return bi.expected_save(image, options, language, writable=False)
-        return bi.UNVERIFIED, image                      # written, read back: not there
+        if after != image:
+            return bi.UNVERIFIED, image                  # written, read back: not there
     return saved, after
 
 

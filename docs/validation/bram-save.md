@@ -60,8 +60,20 @@ describe `bram-save` as it was stopped.
   `build/v111/matrix-lock`): 210 of 210 pass, the bank locked after the
   boot and after both Runs in all 209 images (the 210th is no backup RAM).
   The same under `key` (`build/v111/matrix-key`): 210 of 210, locked
-  after every boot and Run. `readonly`, `openbus` and the power cycles
-  under `lock` and `key`: running.
+  after every boot and Run. Power cycles (`--only cycle`) under `lock` and
+  under `key`: 16 of 16 each, locked after every boot and Run
+  (`build/v111/cycle-lock`, `cycle-key`). `openbus`, 72 images (every
+  structural case and six settings cases; `build/v111/subset.txt`): 72 of
+  72 show `NONE` before and after Run, no write attempted, first update at
+  frame 163. `readonly`, the same 72: 70 as expected (`ERROR 4` wherever a
+  write was needed, 0 bytes changed anywhere); the other two
+  (`blank-00-one-byte`, `blank-00-last-byte`) showed `NONE` where the
+  check's own expectation said `ERROR 1`: the check was wrong (on a memory
+  that ignores writes the writable test fails first, which is the design);
+  corrected, rerun pending.
+- Random images (`research/tools/bram-save/fuzz.py`, pinned emulator, seed
+  2): the first 560 images, 0 problems, before the generator itself tripped
+  on a short end pointer (fixed); a longer run is pending.
 - Independent check of the sequence: the Super System Card 3.0 ROM itself
   (the Duo's own code) maps bank `$F7` in MPR4, executes `csl`, `sei`,
   writes the single byte `$80` to `$1807`, and afterwards reads `$1803`

@@ -97,7 +97,10 @@ def formatted(rng):
     if kind < 0.45:
         return bytes(data)
     if kind < 0.6:                                   # the pointer: stale, or a little off
-        ours = [at for at, _, name, _ in bi.Directory(bytes(data)).files() if name == OURS] if end >= 0x8012 else []
+        try:
+            ours = [at for at, _, name, _ in bi.Directory(bytes(data)).files() if name == OURS]
+        except ValueError:                           # the end pointer already cuts the directory
+            ours = []
         pointer = int.from_bytes(data[6:8], 'little')
         choice = rng.randrange(5)
         if ours and choice < 2:
