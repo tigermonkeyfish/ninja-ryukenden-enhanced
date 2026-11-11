@@ -45,7 +45,7 @@ from comparison_video import Game  # noqa: E402
 bios, rom = sys.argv[1:3]
 EMU = os.environ['NG_EMULATOR']
 OURS = b'\0\0' + bi.NAME
-STUB, NAME, BUFFER, RESULT = 0x1f00, 0x1e00, 0x1e20, 0x1ef0     # work RAM offsets ($2000 + ...)
+STUB, NAME, BUFFER, RESULT = 0x1f00, 0x1e00, 0x1000, 0x1ef0     # work RAM offsets ($2000 + ...); the buffer has $800
 ENTRY = {'format': 0xe048, 'free': 0xe04b, 'read': 0xe04e, 'write': 0xe051, 'delete': 0xe054, 'files': 0xe057}
 SAVE = bytes.fromhex('4304 48 a946 5304 20034b 68 5304')        # the game's save from a stub (fuzz.py)
 problems = []
@@ -175,7 +175,8 @@ def scenario(game, label, start, settings=(0x1a, 2)):
     a, free = card.free()
     expect(f'{label}: BM_FREE agrees with the port', (a, free), (0, bi.Directory(saved).free()))
     if free_before and not had:
-        expect(f'{label}: free space fell by 24 (the file; its 2-byte terminator moved)', free_before[1] - free, 24)
+        # The file's 24 bytes (its terminator only moved); BM_FREE stops at 0.
+        expect(f'{label}: free space fell by the file', free_before[1] - free, min(24, free_before[1]))
     expect(f'{label}: nothing changed by listing and reading', card.image(), saved)
     # The System Card writes its own file after ours ...
     theirs, payload = b'\0\0SYSCARD   ', bytes((7 * k + 3) & 0xff for k in range(40))
@@ -222,15 +223,24 @@ def main():
                       'pointer-stale', 'pointer-stale-high', 'ours-bad-checksum', 'blank-ff', 'blank-00'):
             scenario(game, label, cases[label])
         # 5. The formats.
+        # The game formats and creates its file in one save: with the file
+        # deleted again (by the System Card) the first 18 bytes must be
+        # what BM_FORMAT writes on the same blank memory (BM_FORMAT also
+        # zero-fills the rest, which the game leaves as it was).
         for label in ('blank-00', 'blank-ff'):
             _, ours = game_save(game, cases[label], 0x00, 1)
+            card = SystemCard(game, ours)
+            expect(f'{label}: BM_DELETE of our file after the game\'s format', card.delete(OURS), 0)
+            emptied = card.image()
             card = SystemCard(game, cases[label])
             a = card.format()
             theirs = card.image()
-            print(f'== format of {label}: BM_FORMAT returned {a}; header {theirs[:18].hex(" ")}', flush=True)
+            print(f'== format of {label}: BM_FORMAT returned {a}; header {theirs[:18].hex(" ")}; '
+                  f'the game\'s, emptied: {emptied[:18].hex(" ")}', flush=True)
             expect(f'{label}: BM_FORMAT', a, 0)
-            expect(f'{label}: the game\'s format header is BM_FORMAT\'s', ours[:16], theirs[:16])
-            expect(f'{label}: an empty directory either way', (theirs[16:18], bi.Directory(theirs).files()), (b'\0\0', []))
+            expect(f'{label}: the game\'s format header is BM_FORMAT\'s', emptied[:18], theirs[:18])
+            expect(f'{label}: an empty directory either way', (bi.Directory(theirs).files(), bi.Directory(emptied).files()),
+                   ([], []))
         # 6. Cut-save states under the System Card (reported).
         report = {}
         for label in ('pointer-stale', 'pointer-stale-high'):

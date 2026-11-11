@@ -97,6 +97,30 @@ describe `bram-save` as it was stopped.
   every field of every frame (picture, VCE, sprite table, RAM, gameplay).
   NES-A: 1-1 identical; its other ten runs and all of NES-B were not
   recorded.
+- **The System Card as the judge** (`research/tools/bram-save/syscard.py`,
+  pinned emulator; `build/v111/syscard.log`): the Super System Card 3.0 ROM
+  (the user's own file, loaded as a card; its `BM_` entries called from a
+  stub after its reset) on the memories the game leaves. 11 start images
+  (empty, other files only, before, around, exact room, full with ours, the
+  two cut-save pointer states, our entry with a bad checksum, blank `$FF`
+  and `$00`): after the game's save `BM_FILES` lists exactly the port's
+  list with `NR ENHANCE` once and 8 data bytes; `BM_READ` returns every
+  file, ours included, with a good checksum; `BM_FREE` agrees with the port
+  and fell by the file's 24 bytes; a file the System Card then writes
+  (`BM_WRITE`) leaves the game loading its settings, the game's next save
+  leaves both files readable, `BM_DELETE` of ours gives `READY` and the
+  game's next save puts it back; the game's format of a blank memory, with
+  our file deleted again, is `BM_FORMAT`'s 18 header bytes. PASS.
+  Reported from the same run, on the two states a cut save can leave: with
+  the pointer still naming our entry, `BM_WRITE` puts its file over ours
+  (others intact, the game then shows `READY`); with the pointer's high
+  byte already moved (a create that crosses a page, cut between the two
+  pointer bytes), `BM_WRITE` returns 0 but its file lands 232 bytes above
+  the terminator and is not found again, the others stay intact and the
+  game shows `ERROR 2` from then on. Read in the same ROM: `BM_WRITE`
+  creates a new file at the header's pointer, not at the walked terminator
+  (`$FAE2`), and `BM_FORMAT` finds the end pointer by write-testing up to
+  8 KiB (`$F867-$F884`).
 - Random images (`research/tools/bram-save/fuzz.py`, pinned emulator, seed
   2): the first 560 images, 0 problems, before the generator itself tripped
   on a short end pointer (fixed); a longer run is pending.
