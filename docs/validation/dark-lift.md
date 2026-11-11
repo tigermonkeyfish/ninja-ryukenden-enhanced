@@ -9,7 +9,11 @@ hardware, audio not listened to. Design:
 before the brightness measurements, the screenshots, the Level Select
 entries and the NES on-screen counts were started; they are listed under
 [Not done](#not-done-next-steps) with their commands. What is below was run
-to the end.
+to the end. The flash and the grey order it left open are taken up in
+[Dark lift 2](#dark-lift-2-the-flash-and-the-shade-order-branch-dark-lift-fix),
+which corrects two statements of this part: the flash's cause (the load
+drops the queue; 91 entries, not ten) and "HELL did not show it" (HELL
+leaves 43-49 entries behind, none on a playfield tile).
 
 The owner found 5-1 and 6-2 too dark and 4-1's parallax background almost
 invisible. A survey of the `hell-1-1` build (`build/dark-survey/`) showed
@@ -198,6 +202,269 @@ captures of `hell-1-1` reproduces the study's "current" column exactly (HELL
 4-1 12.2/57/86/27, SMS 13.8/58/59/20, NES-A 18.9/36/56/21), so it is ready
 for the candidate's captures.
 
+## Dark lift 2: the flash and the shade order (branch `dark-lift-fix`)
+
+Work on the three open points of the record above. **Also incomplete**:
+the host stopped one survey run for low memory, and what had not finished
+is listed under [Not verified](#not-verified-on-the-fix-build) and was not
+rerun.
+
+| Build | SHA-256 | Source |
+| --- | --- | --- |
+| Dark lift (before) | `23871f8fe45ebdd8f2e8fda65a3a585b17248a4af17f27b1805b436b0bdf39d7` | branch `dark-lift`, rebuilt here: the same bytes |
+| Fix build | `1678b2e1b2eaabcb27ae8a23e51dd95d0f411c2e570a1bd3f2e224aa3541e2ae` | branch `dark-lift-fix`, `b045238` (the same bytes from the headered and the headerless original) |
+
+Work folder (private): `build/dark-lift-fix/` (`dl.pce`, `fix2.pce`,
+`trans/` the transition recordings, `capidx/` index captures of all 22
+stages, `hell/` the grey candidates, `hellmock2/` their pictures). New
+probes in [`research/tools/dark-lift/`](../../research/tools/dark-lift):
+`trans.py`, `transreport.py`, `unittest_fade.py`, `leftover_cost.py`,
+`hellorder.py`, `hellmock.py`.
+
+### A. The SMS flash: cause
+
+Read from the game's code (fixed bank and bank 1 of the original) and from
+a per-frame recording of 6-2's exit (`trans.py walk:17`):
+
+1. The stage-end fade-out (bank 1 `$8510`, the only fade-out in gameplay)
+   sets a 58-tick timer (`$2E63`) and starts the native fade (`$F422`): 8
+   steps, brightness `$2A8A` 7 down to 0, one every 7 ticks, each
+   recomputing all 512 colours of the RAM palette under the lock (more than
+   a frame, so the steps are 8 frames apart) and queuing them. The last step
+   (all black) is at tick 50; after it `$2A8A` is `$FF`. The load starts when
+   the timer ends, 8 ticks later.
+2. The mapped upload gives a 512-colour step 130 colours in its first vblank
+   (0.266 x 512 less 6 for the left-over entry before it) and then, as a
+   left-over entry, 16 colours a vblank while the main loop idles: about 240
+   colours per 8-frame step. Every mapped fade therefore runs behind, and
+   of the last step's 512 colours only about 270 have been written when the
+   load begins.
+3. The load holds the lock for 14 frames and, when it starts the fade-in
+   (`$F436`), empties the queue (`$F345` clears `$2260-$2282`). The
+   left-over entry is dropped; the module then finds an empty queue and
+   forgets it too.
+4. The VCE entries the left-over entry had not reached keep the fade's step
+   before black. In 6-2's exit in SMS that is 91 entries: background 2-8,
+   15, 31, 47 and sprite entries 327-463 and 488-495, showing `$080`,
+   `$082`, `$092` (RAM `$040`, `$041`, `$049`). The load draws 6-3's floor
+   with entries 2-8 ten frames into the lock, and it shows until the
+   fade-in's first step (level 0, black again) has uploaded its first 136
+   colours: frames 983-989 of the walk (79-85 of the earlier trace).
+
+So the entries were not "about ten" and the left-over entry had not merely
+"not reached them": the game discards the queue. With candidate A those
+colours (every channel 0 or 1) showed as black, which hid it. **GB DMG has
+had the same flash since the mode exists**: the same entries hold its
+second shade `$090` on its black `$040`. HELL leaves entries behind too
+(43-49 per stage change: 223, 233, 239, the HUD palette's 241-255 and
+sprite entries), but none of them is on a playfield tile during the loads
+recorded.
+
+The **grey step in 6-3's fade-in** (3.5% of the playfield grey for 20 frames,
+then 26 L* darker) is a different thing and is not fixed here. No VCE entry
+is late in those frames: the colour is due. The fade-in passes the floor's
+blue-grey `$04A` (R1 G1 B2) through `$049` (R1 G1 B1), which the dark
+rescue shows as grey `$092` (L* 31), and ends on `$04A`, which the channel
+rule shows as `$002` (L* 4). It is the table, see [C](#c-shade-order-in-sms).
+
+### A. How widespread (the dark-lift build)
+
+`trans.py` on the dark-lift build in Original, GB DMG, HELL and SMS: every
+area exit of all 22 Level Select entries (the exit moved onto Ryu, as the
+survey's warp) and the 11 stored runs, every frame; `transreport.py`. A
+span is a run of gameplay frames in which Original's playfield (screenshot
+rows 50-241) is entirely black; 37 spans, the same frames in every mode.
+
+| Kind of span | Spans | SMS | GB DMG | HELL |
+| --- | --- | --- | --- | --- |
+| Stage-end fade-out into the next stage's load (11 stage changes: 1-1, 2-1, 2-2, 3-1, 3-2, 4-2, 4-3, 5-1, 5-2, 6-1, 6-2; 7 of them in a run and a walk) | 18 | 42-91 entries not black at the load's lock; black 0-26 frames late; a flash in 7 spans | 9-24 entries; 0-26 frames late; a flash in the same 7 spans, the same frames | 43-49 entries; 0-9 frames late; no flash |
+| Stage-end fade-out into a cinema (8 frames) | 12 | black 5-8 frames late (8: never, in 8 spans) | 5-8 frames late | 0-8 frames late |
+| Cut to black after a boss (3-3, 4-4; 16 frames; not a fade: `$F275`/`$F26F` fill the RAM palette) | 2 | 13 frames late | 13 | 8 |
+| Area change that goes entirely black (5-2, 5-3; two spans of 4 frames, two of 2; a fill of colours 0-255 and the load at the next tick) | 4 | the 4-frame spans: not black in any frame; the 2-frame spans: black | not black in any frame | as SMS |
+| 2-2's start (8 frames) | 1 | 6 frames late | 6 | 6 |
+
+The flashes (SMS and GB DMG alike; the share is of the playfield):
+
+| Stage change | Frames | Largest share | Seen in |
+| --- | --- | --- | --- |
+| 4-3 to 4-4 | 16 | 10.76% | walk |
+| 6-2 to 6-3 | 8 | 7.14% | walk |
+| 2-1 to 2-2 | 2 | 1.38% | walk |
+| 3-2 to 3-3 | 12 | 0.29% | run and walk |
+| 5-1 to 5-2 | 3 | 0.08% | walk |
+| 4-2 to 4-3 | 9 | 0.04% | run (the walk: none) |
+
+In SMS they are grey or green on black (`$092`, `$082`); in GB DMG the
+second olive on the darkest (`$090` on `$040`). The HUD band (rows 18-49)
+never flashes; over the 22 walks it stays lit after Original's is black for
+110 frames in SMS, 114 in GB DMG and 469 in HELL (HELL's HUD palette is the
+last the left-over entry reaches, and it often never did).
+
+Area changes inside a stage are mostly not in the table: Ryu stays on
+screen, so Original's playfield is not entirely black. They are a cut, not
+a fade, and the mapped modes have never followed them: the native game
+blacks out colours 0-255 in one vblank and loads at the next tick, the
+mapped upload gets 28 colours of it. That is as it was in every mapped
+mode since GB DMG and is not changed here.
+
+Not looked at: deaths, Continue, Game Over (a `die:` case exists in
+`trans.py` and was not run).
+
+### A. The fix
+
+`src/palette/main.asm`, the mapped uploads only (`mapped_upload` for GB DMG
+and SMS, `hell_upload` for HELL). While the native fade's level `$2A8A` has
+bit 7 set (`$FF`: a fade-out has ended on black and no fade has begun
+since), a left-over entry gets `FADE_CAP` = 136 colours a vblank instead of
+16, under the same condition as before (the main loop idle at this vblank
+and at the last one with work). 136 is what a fade step's 512 colours get
+in their first vblank, so these vblanks are no longer than every fade
+step's first already was. With that first vblank three more complete the
+black: four ticks before the load. The colours still come from the RAM
+palette through the table; the game's state only sets the pace.
+
+The paths without that state take the cycles they took: the idle left-over
+path is the old one cycle for cycle (39 cycles from the branch to
+`next_chunk`, 45 in HELL: a taken branch for a branch and a jump, the
+shared tail inlined, three `nop`s in HELL), the busy path too (a `nop` for
+the branch that is no longer taken). The Original and NES path, the
+new-work path and `palette_now` are the bytes they were at the addresses
+they had (the first changed byte in bank `$46` is at `$5177`, inside
+`mapped_upload`; before it only the operand of `jmp now_hell` at `$50F3`).
+No RAM, no fixed-bank bytes, no new claim: +21 bytes in bank `$46`
+`$5000-$53FF` and its SMS copy in bank `$3B` (code now ends at `$539D`),
++24 in bank `$43` (ends at `$7BEC`; 19 bytes free before the table).
+
+A first build used the whole cap (168 colours). Its fade vblanks ended up
+to 22.45 lines after the interrupt in HELL (21.5 in SMS), too close to the
+display (22.8), so it was not kept.
+
+Cost: in the three or four vblanks after a stage-end fade-out the upload
+runs to about line 18 instead of line 4, while the main loop only counts
+ticks. Nothing else changes. Not fixed by it: the cut after a boss, area
+changes, the fade steps before the last (they still run behind), the grey
+step of 6-3's fade-in.
+
+### A. Evidence on the fix build
+
+- ROM-free: `python3 -m unittest tests.test_tools` (49 tests) and
+  `scripts/audit_public.py` pass.
+- Unit test in place (`unittest_fade.py`: the hell-1-1 harness and model,
+  each case also writing `$2A8A`; levels 8, 0-7 and `$FF`): 1,892 cases with
+  seed 22 (44 of them a left-over entry at the fade's pace) and 1,892 with
+  seed 31 (38), 0 failures. Negative control (the model without the rule):
+  39 failures of 1,892.
+- Timing of one left-over entry (`leftover_cost.py`, five queues, the
+  hardware-event trace): with level 8 the first and the last VCE write and
+  the scanline interrupt's CPU entry are equal to the master clock on the
+  dark-lift build and the fix build, in SMS, GB DMG and HELL. With level
+  `$FF` 136 colours go; the last write is 17.80-17.99 lines after the
+  vblank interrupt in SMS, 17.75-17.93 in GB DMG, at most 18.72 in HELL
+  (1-1, the override loop). The display starts about 22.8 lines after it.
+- 6-2's exit in SMS (`trans.py walk:17`): the VCE is black in every entry 5
+  frames after the last step (4 ticks left on the timer), the queue empty
+  from the next frame, no entry lit at the load's lock, no playfield pixel
+  lit until the fade-in.
+- GB DMG, all 22 walks and 10 of the 11 runs (5-3 was not recorded): no
+  flash in any span (7 before); no entry lit at the load's lock in any of
+  the 18 stage-end spans (9-24 before); the screen is black 0-3
+  frames after Original's in them (0-26 before; 2-1 to 2-2 9 against 13,
+  where Original's dark area is black before the last step). The cut after
+  a boss and the area changes are as before (9 and 4 frames late; 130-195
+  entries). HUD band lit after Original's: 26 frames over the 22 walks (114
+  before).
+- HELL, 12 of the 22 walks (1-1 to 3-2 and 4-1 to 5-1): no entry lit at the
+  load's lock in the 8 stage-end spans (43-49 before); HUD band 24 frames
+  over the 12 walks.
+- **Gameplay against Original, a change to know about.** On the dark-lift
+  build the cinema after a stage begins one frame later in the mapped modes
+  than in Original (`$2240`; the earlier records list it: 4-1, 5-3, 6-3).
+  On the fix build, in GB DMG (the 11 walks that end in a cinema, and the
+  4-1 and 6-3 runs) and in HELL (the 4 such walks recorded), it begins on
+  Original's frame: the recordings have Original's length and gameplay
+  fields in every frame. So against the dark-lift build one frame is gone
+  before each cinema; against Original the mapped modes no longer differ
+  there. Why the frame was there was not traced. The other gameplay
+  differences from Original are the dark-lift build's own, in the same
+  frames: single frames in three walks (2-1 frame 363, 6-2 frame 544, 5-2
+  every eighth frame from 293, seven of them), not in any stored run; they
+  are forced-scroll walks, and the frame after each is equal again.
+
+### Not verified on the fix build
+
+The second survey run (`jobs/trans-round2.txt`) was stopped by the host for
+low memory after 16 of its 30 jobs and was not started again. Missing from
+it:
+
+- SMS: the 22 walks except 6-2's, and the 11 runs.
+- HELL: the walks of 5-2 to 6-4C, and the 11 runs.
+- GB DMG: the 5-3 run.
+
+```sh
+W=build/dark-lift-fix; D=research/tools/dark-lift    # GB_WORK=$W NES_WORK=$W NG_DEBUGGER_FAST=1
+python3 $D/mkjobs.py trans $W $W/fix2.pce $W/dl.pce > $W/jobs/trans.txt
+python3 $D/runjobs.py $W/jobs/trans.txt 2 $W/jobs/log         # 48 jobs; `grep ^trans-new` for the fix build only
+python3 $D/transreport.py $W/trans old,new
+python3 $D/unittest_fade.py $W/fix2.pce 300 22                 # NO_FADE_MODEL=1: control
+python3 $D/leftover_cost.py $W/fix2.pce 0xb8                   # and 0x10, 0x18; dl.pce
+```
+
+### B. HELL's grey order
+
+`hellorder.py` (table) and index captures of every area of all 22 stages
+(`cap.py` warp, 176 captures; `hellorder.py CAP`, `hellmock.py`).
+
+The table: among the 11 greys, `$049` (R1 G1 B1) shows 310 (L* 25.3) and
+the next grey `$092` (R2 G2 B2) shows 100 (L* 3.4). That is the only
+inversion of 3 L* or more the dark lift added. Candidate D already had 7 in
+the grey family (`$124` shows 521, L* 45.2, the seven lighter greys
+`$125-$16D` show 410, L* 32.4) and many in the others (the lava ramp's hot
+step 710 over 620; 2,461 pairs in the blue family, 487 green, 223 warm, 2
+steel); the dark lift removed 224 of the green ones and added none
+elsewhere. On screen, counting pairs of one background palette row: 32
+inverted pairs under candidate D, 31 under the dark lift; `$049`/`$092` is
+the only new one, two green pairs (`$122`, `$123` with `$180`) are gone.
+
+Where `$049` and `$092` are on screen together: 31 of the 176 captures, and
+they touch (4-neighbour pixels) in 26, never in more than 99 pixels (5-1
+area 0: the rune strip of the pillar at the left edge, 0.2% of the
+playfield; then 4-1 area 0 with 32 pixels, 6-2 area 2 with 12, 4-3 and 4-2
+with 8). Elsewhere the two belong to different things (4-3: `$049` 17.9%
+of the playfield, the pillars and floor; `$092` 1.9%, the centre column's
+pattern). Looked at (`build/dark-lift-fix/hellmock2/`: Original, candidate
+D, dark lift, `$092` as 310): in 5-1 the runes are dark marks on a lit
+pillar where Original has light marks on a dark one. It is visible when
+enlarged, on a strip a few pixels wide.
+
+**`hell.json` is not changed**, because no table value keeps both things
+asked for:
+
+| Choice | Order | Cost |
+| --- | --- | --- |
+| `$092` up to 310 (as `$049`) or 220 | restored (310: the two darkest greys one shade, as in candidate D; 220: three steps) | `$092` is 1-1's sidewalk seams and 2-2's dark detail: 2.1-2.3% of 1-1's playfield in area 0 (0.4% in area 1), 1.2%, 0.4% and 1.0% of 2-2's areas 0-2, 5.0-6.1% of 5-3's areas 0-3 change from near-black to mid brown. In 1-1 the seams all but vanish (looked at). 5-1's runes merge into the pillar with 310. |
+| `$049` back to 100 | restored (one shade) | undoes the lift for the darkest grey: 4-1's trunks (8-21% of its playfield), 6-2 (6-18%), 4-3 (8-18%) near-black again |
+| a second override stage in the upload | 1-1 and 2-2 kept, `$092` raised elsewhere | code: the override loops compare one colour in one stage; each further compare is 4 cycles a colour in that stage and changes HELL's timing there |
+| leave it | reversed in at most 99 pixels of a screen | none |
+
+### C. Shade order in SMS
+
+Not asked for, found while tracing the fade-in's grey step, and larger than
+HELL's. The dark rescue lifts four colours (`$040`, `$041`, `$048`, `$049`)
+to SMS level 2 in each channel that holds 1; their neighbours with a
+channel above 1 keep the channel rule, which drops green 1 to 0. So 70
+pairs are inverted by 3 L* or more in the fade's order (one colour at least
+the other's in every channel, shown darker): `$049` shows grey 222 (L*
+30.6), `$04A` (R1 G1 B2) shows 002 (L* 4.2), `$051` (R2 G1 B1) 200 (L*
+11.8), `$08A` (R1 G2 B2) 022 (L* 27.0). Before the dark lift there was
+none. On the survey's captures (`hellorder.py --sms`): 6-2 area 0 has
+`$049` on 12.7% of the playfield and `$04A` on 8.2% in one palette row,
+touching in 4,279 pixel pairs; 4-1 `$049` 18.8% with `$08A` 12.2% (6,590);
+5-1 `$041` with `$042`. So where Original shades from a dark grey up to a
+blue-grey, SMS now shows the darker one clearly lighter, in still pictures
+as well as for the fade steps. Whether that reads as wrong is the owner's
+call; a fix is a palette decision (lift the neighbours with them, or lift
+less), not an upload change.
+
 ## Rerunning
 
 From the repository root, `W=build/dark-lift-rom` holding `original.pce`,
@@ -247,14 +514,13 @@ python3 $D/runjobs.py $W/jobs/onscreen.txt 2 $W/jobs/log     # NES colours on sc
   1-1).
 - **NES on-screen counts** against `hell-1-1` (fade frames, leftover rows),
   and 4-1's RAM palette in the NES modes.
-- The SMS flash: how many transitions show it (every stage and area change,
-  deaths, Continue), and whether to close it in the upload (finish the
-  left-over entry before a load locks the palette, a code change) or by
-  leaving `$049` / `$041` black.
-- HELL's grey order (`$049` lighter than `$092`): look at the stages that
-  use both, and decide whether `$092` should rise with it.
-- Timing, stack and free-ROM probes were not rerun: no code changed, and
-  Original and GB DMG are identical frame for frame.
+- The SMS flash and HELL's grey order: see
+  [Dark lift 2](#dark-lift-2-the-flash-and-the-shade-order-branch-dark-lift-fix)
+  (deaths, Continue and Game Over were still not looked at).
+- Timing, stack and free-ROM probes were not rerun on the dark-lift build:
+  no code changed, and Original and GB DMG are identical frame for frame.
+  The fix build changes code; its stack use is unchanged by construction
+  (no call or push added), which was not measured.
 
 ## Not covered
 
