@@ -34,10 +34,15 @@ select  From a cold boot: exact_cycle in each of the 22 Level Select entries,
         band restored at its first update.
 options Each option row changed and accepted with Run, from 1-1: $2100 and
         $3227 afterwards; GB DMG shows the GB table's colours for the whole
-        RAM palette, and ORIGINAL afterwards the same VCE as a stage start
-        that never left Original. Cancel after changing everything (from
-        Original and from GB DMG) leaves the options and $3227 unchanged
-        and is compared with the run without the menu for LONG frames.
+        RAM palette, HELL the HELL table's for entries 0-239 and the RAM
+        colours for the rest; paths through the palette values (GB DMG then
+        ORIGINAL, HELL then ORIGINAL, HELL, GB DMG, ORIGINAL and the
+        reverse), each accepted with Run, show each mapped mode's table
+        exactly and end with the same VCE as a stage start that never left
+        Original. Cancel after changing everything (from Original with GB
+        DMG or HELL previewed, from GB DMG previewing HELL, from HELL
+        previewing ORIGINAL) leaves the options and $3227 unchanged and is
+        compared with the run without the menu for LONG frames.
 select  also checks, after a cold boot, that the LANGUAGE row reads
         ENGLISH with $3227 = 1.
 
@@ -54,7 +59,7 @@ import tempfile
 from comparison_video import Game, make_seed, start_point, start_stage
 from guide_screenshots import to_gameplay, to_title
 from menu_text import BOX_ROWS, BOX_WIDTH, CODES, layout
-from palette_tables import gb_dmg_table
+from palette_tables import gb_dmg_table, hell_table, load_hell
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNS = ROOT / 'research/comparison-runs'
@@ -565,78 +570,101 @@ def menu_to(game, row, presses, accept=True):
     return game.read(0, 0x2000)
 
 
-def gb_expected(game):
-    """The VCE in GB DMG gameplay: the GB table applied to the RAM palette
-    ($2286), and to the border colour ($2281) at entry $100."""
-    table = gb_dmg_table()
+def mode_expected(game, mode):
+    """The VCE in gameplay for palette bits `mode`: GB DMG ($10) the GB
+    table applied to the RAM palette ($2286) and to the border colour
+    ($2281) at entry $100; HELL ($18) the HELL table applied to entries
+    below its mapped_entries only (the HUD and sprite palettes and the
+    border unchanged)."""
     ram = game.read(0x286, 1024)
     colours = [ram[2 * i] | ram[2 * i + 1] << 8 for i in range(512)]
     border = game.read(0x281, 2)
     colours[0x100] = border[0] | border[1] << 8
-    return b''.join(table[c & 0x1ff].to_bytes(2, 'little') for c in colours)
+    if mode == 0x10:
+        table = gb_dmg_table()
+        words = [table[c & 0x1ff] for c in colours]
+    else:
+        table, mapped = hell_table(), load_hell()['mapped_entries']
+        words = [table[c & 0x1ff] if i < mapped else c for i, c in enumerate(colours)]
+    return b''.join(w.to_bytes(2, 'little') for w in words)
+
+
+def to_level(game, candidate, seed):
+    start_point(game, candidate, seed, enhanced=True)
+    game.write(0x1227, b'\x01')                     # English, Enhanced's reset default
+    start_stage(game, 0)
+    game.step(30)
 
 
 def check_options(emulator, candidate, seed, output):
     work = Path(tempfile.mkdtemp(prefix='menu-options-', dir=output))
     results = {}
+    # PALETTE values in Left/Right order: ORIGINAL, GB_DMG, HELL.
     cases = [('parallax off', 1, ['right'], 0x01, None), ('no damage on', 2, ['right'], 0x02, None),
              ('nes firewheel on', 3, ['right'], 0x04, None), ('palette gb dmg', 4, ['right'], 0x10, None),
-             ('palette wraps left to gb dmg', 4, ['left'], 0x10, None),
+             ('palette hell', 4, ['right', 'right'], 0x18, None),
+             ('palette wraps left to hell', 4, ['left'], 0x18, None),
              ('language japanese', 5, ['right'], 0x00, 0), ('language chinese', 5, ['left'], 0x00, 2)]
     for name, row, presses, bits, language in cases:
         with Game(emulator, work) as game:
-            start_point(game, candidate, seed, enhanced=True)
-            game.write(0x1227, b'\x01')                     # English, Enhanced's reset default
-            start_stage(game, 0)
-            game.step(30)
+            to_level(game, candidate, seed)
             ram = menu_to(game, row, presses)
             entry = {'options': f'{ram[0x100]:#04x}', 'language': ram[0x1227], 'stage': ram[0xe5f]}
             entry['ok'] = (ram[0x100] & 0x1f == bits and ram[0x1227] == (1 if language is None else language)
                            and ram[0xe5f] == 0)
-            if bits == 0x10:
+            if bits in (0x10, 0x18):
                 vce = game.read(0, 1024, area=8)
-                expected = gb_expected(game)
-                entry['vce_is_gb_table'] = vce == expected
+                expected = mode_expected(game, bits)
+                entry['vce_is_mode_table'] = vce == expected
                 entry['ok'] = entry['ok'] and vce == expected and ram[0x100] & 0x80 == 0x80
                 (Path(output) / f'options-{name.replace(" ", "-")}.png').write_bytes(game.screenshot())
             results[name] = entry
             print('option', name, entry, flush=True)
-    # The reference for ORIGINAL: the same two Runs with nothing changed.
+    # The reference for ORIGINAL: the same Runs with nothing changed. Each
+    # path through the mapped modes must end with exactly its VCE; each
+    # accepted mapped mode on the way must show exactly its table.
+    paths = {'original restored exactly (gb dmg, original)': [['right'], ['left']],
+             'original restored exactly (hell, original)': [['left'], ['right']],
+             'hell, gb dmg, original': [['left'], ['left'], ['left']],
+             'gb dmg, hell, original': [['right'], ['right'], ['right']]}
     with Game(emulator, work) as game:
-        start_point(game, candidate, seed, enhanced=True)
-        game.write(0x1227, b'\x01')
-        start_stage(game, 0)
-        game.step(30)
-        menu_to(game, 4, ['right'])
-        menu_to(game, 4, ['right'])
-        gb_back = game.read(0, 1024, area=8)
-    with Game(emulator, work) as game:
-        start_point(game, candidate, seed, enhanced=True)
-        game.write(0x1227, b'\x01')
-        start_stage(game, 0)
-        game.step(30)
-        menu_to(game, 0, [])
-        menu_to(game, 0, [])
+        to_level(game, candidate, seed)
+        for _ in range(3):
+            menu_to(game, 0, [])
         plain = game.read(0, 1024, area=8)
-        ram = game.read(0, 0x2000)
-    results['original restored exactly'] = {'ok': gb_back == plain and ram[0x100] & 0x9f == 0}
-    print('original restored exactly', results['original restored exactly'], flush=True)
+    for name, steps in paths.items():
+        with Game(emulator, work) as game:
+            to_level(game, candidate, seed)
+            on_the_way = []
+            for presses in steps:
+                ram = menu_to(game, 4, presses)
+                mode = ram[0x100] & 0x18
+                if mode:
+                    on_the_way.append((f'{mode:#04x}', game.read(0, 1024, area=8) == mode_expected(game, mode)))
+            for _ in range(3 - len(steps)):
+                menu_to(game, 0, [])
+            back = game.read(0, 1024, area=8)
+            ram = game.read(0, 0x2000)
+        results[name] = {'ok': back == plain and ram[0x100] & 0x9f == 0 and all(ok for _, ok in on_the_way),
+                         'mapped_modes_exact': on_the_way}
+        print(name, results[name], flush=True)
     # Cancel after changing everything: nothing changes. Long comparisons
     # (LONG frames, the stage timer included) show whether the palette
     # module's state bits a cancelled preview may leave have any effect:
-    # from Original (preview GB DMG) and from GB DMG (preview ORIGINAL).
+    # from Original (preview GB DMG, or HELL), from GB DMG (preview HELL)
+    # and from HELL (preview ORIGINAL).
     everything = ['right', 'down', 'right', 'down', 'right', 'down', 'right', 'down', 'right', 'down', 'right']
-    for name, gb_first in (('cancel after changing everything', False),
-                           ('cancel after changing everything, from GB DMG', True)):
+    leftwards = everything[:8] + ['left'] + everything[9:]
+    for name, first, actions in (('cancel after changing everything', None, everything),
+                                 ('cancel after changing everything, palette hell', None, leftwards),
+                                 ('cancel after changing everything, from GB DMG', ['right'], everything),
+                                 ('cancel after changing everything, from HELL', ['left'], everything)):
         with Game(emulator, work) as game:
-            start_point(game, candidate, seed, enhanced=True)
-            game.write(0x1227, b'\x01')
-            start_stage(game, 0)
-            game.step(30)
-            if gb_first:
-                menu_to(game, 4, ['right'])
+            to_level(game, candidate, seed)
+            if first:
+                menu_to(game, 4, first)
             before = game.read(0, 0x2000)
-            found = exact_cycle(game, work, actions=everything, n=LONG) \
+            found = exact_cycle(game, work, actions=actions, n=LONG) \
                 if select_at_hook(game) else {'ok': False, 'problems': ['menu not available']}
             after = game.read(0, 0x2000)
             found['options_and_language_kept'] = after[0x100] & 0x1f == before[0x100] & 0x1f and after[0x1227] == 1
