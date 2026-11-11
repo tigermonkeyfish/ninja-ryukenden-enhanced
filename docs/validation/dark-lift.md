@@ -445,6 +445,18 @@ leave GB DMG exactly as it was, the rule would need a test of the mode in
 the shared code (SMS runs GB DMG's bytes), a few cycles in GB DMG's
 left-over path; not done.
 
+### A. Boot and menu
+
+- `scripts/check_boot.py`: passed (idle frames 1-899 identical to the
+  original, 136 distinct screens, first 1-1 update at frame 163 when mashing
+  Run, defaults English, Enhanced, damage on).
+- `scripts/check_menu.py` (all parts, music as played): **passed**. runs:
+  140 openings in the 11 runs, all exact, stack low-water `$21D7`; sweep:
+  1,393 Select presses, 726 opened and exact, 1 opened and differing only
+  by the timer phase (1-1 2829, the one every record since `all-palettes`
+  lists), 572 refused, 94 not seen: the dark-lift build's counts; select
+  and options: every case passed (stack low-water `$21C5`, HELL).
+
 ### Not verified on the fix build
 
 The second survey run (`jobs/trans-round2.txt`) was stopped by the host for
