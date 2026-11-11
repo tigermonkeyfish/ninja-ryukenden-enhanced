@@ -70,7 +70,7 @@ def managed(stage, data, lay, orig_sets, enh):
         m[0xf1 + k] = [(int(hud[k]['pce'], 16), lay['hud'][k])]
     ryu = data['shared']['sprites'][0]
     for k in range(1, 16):
-        m[256 + k] = [(int(ryu['pce'][k], 16), lay['sprites'][0][1][k])]
+        m[256 + k] = [(int(ryu['entries'][k]['pce'], 16), dict(lay['sprites'])[96][k])]
     rows = {0: [('extra_palette_nes', 1)], 3: [('palette13_nes', 13), ('palette14_nes', 14)]}.get(stage, [])
     for label, row in rows:
         mo, ne = enh[label]
@@ -90,7 +90,7 @@ def at_or_below(c, full):
 def main():
     rom, out, after, animated = sys.argv[1], Path(sys.argv[2]), int(sys.argv[3]), json.loads(Path(sys.argv[4]).read_text())
     names = sys.argv[5].split(',') if len(sys.argv) > 5 else RUN_NAMES
-    original = Path('/workspace/build/nes-palette/original.pce').read_bytes()
+    original = (Path(__import__('os').environ.get('NES_WORK', '/workspace/build/nes-palette')) / 'original.pce').read_bytes()
     original = original[512:] if len(original) % 8192 == 512 else original
     data = NP.load()
     lay = NP.layout(data)
