@@ -76,6 +76,27 @@
   grey `$049` is now lighter than the next grey `$092`
   ([evidence, commands and next steps](validation/dark-lift.md), emulator
   only).
+- **Dark lift 2** (1.11-dev, branch `dark-lift-fix`, from `dark-lift`;
+  **not finished, not delivered**): the flash's cause is the stage load
+  dropping the palette queue while the mapped upload was still writing the
+  fade-out's last step (GB DMG has had the same flash since the mode
+  exists, as its second shade; 6 of the 11 stage changes show it, up to
+  10.8% of the playfield for 16 frames). The mapped uploads now give a
+  left-over entry 136 colours a vblank while the native fade's level
+  `$2A8A` is `$FF`, so the black is complete four ticks before the load;
+  every other path keeps its cycles. Verified so far: the unit test of the
+  upload, the timing of the paths, all stage exits in GB DMG, about half in
+  HELL, 6-2's in SMS. **Not verified**: SMS and the rest of HELL over the
+  stage exits (the host stopped that run for low memory), and whatever of
+  the regression, timing and evidence list the record marks as not run.
+  A change to know: the cinema after a stage now begins on Original's frame
+  in the mapped modes, one frame earlier than on `dark-lift`. HELL's grey
+  order is left as it is (no table value keeps 1-1's sidewalk seams and the
+  lift of `$049` both; four choices with their costs in the record); SMS's
+  dark rescue has the same kind of reversal on a larger scale (`$049`
+  lighter than `$04A`, a fifth of 6-2's picture), which is also why 6-3's
+  fade-in passes through grey: open for the owner
+  ([evidence](validation/dark-lift.md), emulator only).
 - **SMS palette** (1.11-dev, branch `sms-palette`, from `hell-palette`):
   `$2100` = `$38`, menu value `SMS` after HELL: everything on screen in the
   Sega Master System's 64 colours (each channel to the nearest SMS level,

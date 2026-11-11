@@ -1032,7 +1032,7 @@ over several vblanks (a first share, then 16 colours a vblank while the
 main loop idles), so the main loop keeps its slack. After the stage-end
 fade-out the game waits 8 ticks and loads the next stage: the load holds
 the upload lock and, starting its fade-in, empties the queue. The rest of
-the last step (all black) was dropped with it, and up to 160 VCE entries
+the last step (all black) was dropped with it, and up to 91 VCE entries
 kept the step before black while the new stage's tiles were drawn. Nobody
 saw it while the modes' tables showed that step as their black; a table
 that lifted the darkest colours turned it into a grey floor on the black
@@ -1049,7 +1049,8 @@ load. The colours still come from the RAM palette through the table: the
 game state changes the pace, never the colour, so a wrong guess could cost
 time but not show a wrong picture. The paths without that state were kept
 cycle for cycle (a taken branch for a branch and a jump, the shared tail
-inlined), so every other frame of the stored runs is unchanged.
+inlined; measured equal to the master clock), so that only the frames after
+a fade-out can differ.
 
 **Reusable lesson:** when interrupt work is spread over frames to protect
 the main loop, find every place the game discards or blocks that work (a
@@ -1058,8 +1059,10 @@ the frames in which the original shows black, not only the frames with a
 picture, and test with a table whose darkest step is visible. Pace by game
 state, colour by data.
 
-**Confidence/limits:** emulator (Geargrafx `78fc3d7`), every stage and area
-exit of the 22 stages and the 11 stored runs
-([validation/dark-lift.md](../validation/dark-lift.md)); the fade level
+**Confidence/limits:** emulator (Geargrafx `78fc3d7`). The fault was
+measured over every stage and area exit of the 22 stages and the 11 stored
+runs in three modes; the fix over all of them in GB DMG only, about half of
+the stage exits in HELL and one in SMS when this was written
+([validation/dark-lift.md](../validation/dark-lift.md)). The fade level
 byte and the 8-tick wait are Ninja's. Cuts to black that are not fades
 (area changes, the cut after a boss) still arrive late in the mapped modes.
