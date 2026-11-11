@@ -11,6 +11,11 @@ write after its first frame, so the two title screens can match too:
 - mashing Run from power-on reaches the first 1-1 update on the same frame;
 - the candidate starts on English, Enhanced and No Damage off.
 
+Backup RAM is absent in every boot unless `--bram IMAGE` names a 2,048-byte
+image (scripts/bram_image.py makes them): then both games boot with backup
+RAM holding it, the candidate must leave it unchanged, and the image must
+hold no saved settings (the defaults are checked).
+
 Captures remain private in the output folder.
 """
 import argparse
@@ -23,11 +28,10 @@ from comparison_video import Game
 IDLE_FRAMES = 900           # frames 1-899; the title appears at frame 606
 
 
-def boot(emulator, rom, output, mash, english=False):
+def boot(emulator, rom, output, mash, english=False, bram=None):
     """Frame hashes (idle) or the first gameplay-update frame (mash)."""
     with Game(emulator, output) as game:
-        game.call('load_media', {'file_path': str(Path(rom).resolve())})
-        game.call('debug_pause')
+        game.power_on(rom, bram)
         if mash:
             game.call('set_breakpoint', {'address': '2457', 'memory_area': 'rom', 'execute': True})
         hashes = []
@@ -37,6 +41,7 @@ def boot(emulator, rom, output, mash, english=False):
                 gameplay = game.read(0x240, 1)[0] == 0 and frame > 60
                 game.press({'run'} if frame % 20 < 2 and not gameplay else set())
             elif frame == IDLE_FRAMES:
+                assert game.backup_ram() == bram, 'Backup RAM changed during the boot'
                 return hashes
             game.step(1)
             if english and frame == 0:
@@ -45,6 +50,7 @@ def boot(emulator, rom, output, mash, english=False):
                 hashes.append(hashlib.sha256(game.screenshot()).hexdigest())
             elif game.call('debug_get_status').get('pc') == '8457':
                 break
+        assert game.backup_ram() == bram, 'Backup RAM changed during the boot'
         ram = game.read(0, 0x2000)
         # Counted like research/tools/starttiming.py: the step that reaches the
         # gameplay loop's first update is that update's frame.
@@ -56,22 +62,26 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ['emulator', 'original', 'candidate', 'output']:
         parser.add_argument('--' + name, type=Path, required=True)
+    parser.add_argument('--bram', type=Path, help='boot with backup RAM holding this 2,048-byte image '
+                        '(default: no backup RAM)')
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
-    original = boot(args.emulator, args.original, args.output / 'original-idle', False, english=True)
-    candidate = boot(args.emulator, args.candidate, args.output / 'candidate-idle', False)
+    bram = args.bram.read_bytes() if args.bram else None
+    original = boot(args.emulator, args.original, args.output / 'original-idle', False, english=True, bram=bram)
+    candidate = boot(args.emulator, args.candidate, args.output / 'candidate-idle', False, bram=bram)
     first_difference = next((i + 1 for i, (a, b) in enumerate(zip(original, candidate)) if a != b), None)
     assert len(original) == len(candidate) == IDLE_FRAMES - 1
     assert first_difference is None, f'Boot differs from the original at frame {first_difference}'
     assert len(set(original)) > 2, 'Idle boot showed no screens'
-    original_mash = boot(args.emulator, args.original, args.output / 'original-mash', True, english=True)
-    candidate_mash = boot(args.emulator, args.candidate, args.output / 'candidate-mash', True)
+    original_mash = boot(args.emulator, args.original, args.output / 'original-mash', True, english=True, bram=bram)
+    candidate_mash = boot(args.emulator, args.candidate, args.output / 'candidate-mash', True, bram=bram)
     assert original_mash['first_update_frame'] == candidate_mash['first_update_frame'], (original_mash, candidate_mash)
     assert candidate_mash['stage'] == 0 and candidate_mash['health'] == 16, candidate_mash
     assert candidate_mash['options'] == 0 and candidate_mash['language'] == 1, candidate_mash
     report = {
         'rom_sha256': hashlib.sha256(args.candidate.read_bytes()).hexdigest(),
         'emulator_sha256': hashlib.sha256(args.emulator.read_bytes()).hexdigest(),
+        'backup_ram': f'present, image sha256 {hashlib.sha256(bram).hexdigest()}, unchanged' if bram else 'absent',
         'idle_frames_identical_to_original': f'1-{IDLE_FRAMES - 1}',
         'distinct_idle_screens': len(set(original)),
         'mash_run_first_update_frame': candidate_mash['first_update_frame'],

@@ -66,6 +66,15 @@ class Game:
     def call(self, name, arguments=None):
         return unpack(self.emu.call(name, arguments))
 
+    def power_on(self, rom, bram=None):
+        """Cold boot paused at reset: without backup RAM (bram=None) or with
+        backup RAM holding the 2,048-byte image (emulator_session)."""
+        self.emu.power_on(rom, bram)
+
+    def backup_ram(self):
+        """The machine's backup RAM, or None when it has none."""
+        return self.emu.backup_ram()
+
     def step(self, frames=1):
         try:
             return self.call('debug_step_frame', {'frames': frames, 'mode': 'sync'})
