@@ -82,6 +82,45 @@ class PaletteTableTests(unittest.TestCase):
         self.assertEqual(values[0x40], 0x01)                      # gb_lo0[$40]
         self.assertEqual(values[3 * 256 + 0xff], 0x01)            # gb_hi1[$FF]: colour $1FF
 
+    def test_hell_table_is_the_owners_mockup(self):
+        from palette_tables import hell_table, load_hell
+        table = hell_table()
+        self.assertEqual(len(table), 512)
+        self.assertTrue(all(0 <= c <= 0x1ff for c in table))
+        # The 512 colours of candidate C ('Lava', build/hell-mockup/table-C.json,
+        # `by_colour`, the owner's choice) as little-endian words.
+        self.assertEqual(hashlib.sha256(b''.join(c.to_bytes(2, 'little') for c in table)).hexdigest(),
+                         '1388df9dd0928236504e6f48cae44d22e97a6c4a83675e54ca764e9aa241afc7')
+        # GGGRRRBBB: black stays black; white is pale ash; blues become lava,
+        # greens scorched brown, greys dark red, reds stay red.
+        for colour, hell in ((0x000, 0x000), (0x1ff, 0x1ba), (0x007, 0x078), (0x038, 0x030),
+                             (0x1c0, 0x0a0), (0x092, 0x008), (0x124, 0x018), (0x0b6, 0x0b0),
+                             (0x03f, 0x0b0), (0x1f8, 0x0e8)):
+            self.assertEqual(table[colour], hell, hex(colour))
+        self.assertEqual(load_hell()['mapped_entries'], 240)    # background palettes 0-14
+
+    def test_hell_parameters_are_editable(self):
+        import tempfile
+        from palette_tables import HELL_PARAMETERS, generate, hell_table, pages
+        spec = json.loads(HELL_PARAMETERS.read_text())
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'hell.json'
+            spec['ash_ramp'] = [[0.0, 0, 0, 1], [1.0, 0, 0, 7]]      # white ash becomes blue
+            path.write_text(json.dumps(spec))
+            table = hell_table(path)
+            self.assertEqual(table[0x1ff], 0x007)
+            generate(temp, hell_path=path)
+            include = (Path(temp) / 'hell-table.inc').read_text()
+            self.assertIn('\nHELL_MAPPED = 240\n', include)
+            values = [int(b[1:], 16) for line in include.splitlines() if line.startswith(' .db ')
+                      for b in line[5:].split(',')]
+            self.assertEqual(bytes(values), b''.join(pages(table)))
+            for broken in ({'mapped_entries': 250}, {'mapped_entries': 272},
+                           {'lava_ramp': [[0.5, 0, 0, 0], [0.2, 7, 0, 0]]}, {'grey_ramp': [[0.0, 8, 0, 0], [1.0, 0, 0, 0]]}):
+                path.write_text(json.dumps(dict(spec, **broken)))
+                with self.assertRaises(ValueError):
+                    hell_table(path)
+
 
 def pack_half(words):
     """Inverse of the native $F13F packing for one 16-byte half tile: per
