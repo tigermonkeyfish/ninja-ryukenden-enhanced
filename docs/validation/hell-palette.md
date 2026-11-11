@@ -181,6 +181,26 @@ not pixel by pixel.
 
 ## Checks
 
+- `scripts/check_boot.py`: passed (idle frames 1-899 identical to the
+  original, first 1-1 update at frame 163 when mashing Run, defaults
+  English, Enhanced, damage on).
+- `scripts/check_menu.py` (all parts, music as played): `runs` 140 openings
+  in the 11 runs, all exact; `select` all 22 Level Select entries and Run on
+  the next, passed; `options` 16 cases (above), passed. `sweep` reports 8
+  of 727 openings with video state differing for 1-3 frames before an area
+  change (2-2 Select at 784-788 and 3943, 5-3 at 5290 and 6189), so the
+  script's overall verdict is FAILED. They are not HELL's: the `popup-menu`
+  build gives the same outcome case for case (2-2 swept twice on each
+  build; 5-3 once: the same two cases). With the music driver's state
+  copied (`--same-music`) 5-3 is exact on the HELL build, and 2-2 leaves the
+  same two cases on both builds (788: one picture in frame 0; 3943: video
+  state at the end of frame 1). The popup-menu record reported only the two
+  5-3 cases; the 2-2 ones need a look in that work, not here. One sweep of
+  the old build saw 3943 exact and the repeat did not, so single sweep
+  cases can vary between sessions.
+- ROM-free: `python3 -m unittest discover -s tests` (33 tests) and
+  `scripts/audit_public.py` pass.
+
 ## Rerunning
 
 From the repository root, with `GB_WORK` (default here
