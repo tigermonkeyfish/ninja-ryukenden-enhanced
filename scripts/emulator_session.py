@@ -137,7 +137,9 @@ class Emulator:
         or save memory: bank $F7 reads $FF and ignores writes). Otherwise
         backup RAM is present and holds `bram` (2,048 bytes). It is always
         unlocked: this emulator build does not decode $1807/$1803 for a
-        HuCard. Nothing is read from or written to a save file."""
+        HuCard (the test-only build of research/tools/bram-save/
+        locktest_patch.py does, when NG_BRAM_MODEL is set: there the memory
+        starts locked). Nothing is read from or written to a save file."""
         self.call('load_media', {'file_path': str(Path(rom).resolve())})
         self.call('debug_pause')
         if bram is None:

@@ -94,7 +94,19 @@ Each is a case study in [LESSONS.md](LESSONS.md).
 - For a HuCard this build does not decode `$1807`/`$1803`: backup RAM is
   always unlocked, so a game's unlock and lock code is not exercised.
   `research/tools/bram-save/locktest_patch.py` makes a test-only copy that
-  models the lock.
+  models the lock (`NG_BRAM_MODEL` = `lock`, `key`, `readonly` or
+  `openbus`; unset, it behaves like the pinned build). Build it from a
+  copy of the pinned tree with every object file deleted first
+  (`find COPY -name '*.o' -delete`, then `make -C platforms/linux`): the
+  patch adds members to a class, and objects compiled against the old
+  header link without an error. `scripts/check_bram.py --bram-model` drives
+  it and refuses an emulator that does not apply the model. The lock state
+  is not in a save state: it survives a state load, and a probe that must
+  not disturb it may save and reload freely.
+- A System Card ROM loads as an ordinary card in this build (no CD
+  hardware), and its `BM_` routines can be called from a stub once its
+  reset code has run (`research/tools/bram-save/syscard.py`): a way to ask
+  the format's owner about a backup RAM image.
 
 ## Debugger reference (Geargrafx `78fc3d7`)
 

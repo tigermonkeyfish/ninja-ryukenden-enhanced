@@ -194,7 +194,7 @@ the uploads made 5-3 area 2 and 2-2 area 0 miss vblank.
 | `speed` | Shared divisor-8 coordinate and entrance anchor |
 | `selector-hook`, `options` | Stage selection, progression synchronization, the popup menu (all options and the language) and its version/credit line; a chosen stage starts with full health (`$2EAD = 16`, 1.09-dev) |
 | `cinema-sprite` | Cinema sprite-pattern reset (below). Enhanced has no boot screen since 1.10-dev |
-| `bram` | Saved settings (1.11-dev, branch `bram-save`): the reset trampoline with the defaults (the old `english` module: English is `DEFAULT_LANGUAGE`), the loader and the menu's save, in backup RAM ([saved settings](#saved-settings-backup-ram)) |
+| `bram` | Saved settings (1.11-dev): the reset trampoline with the defaults (the old `english` module: English is `DEFAULT_LANGUAGE`), the loader and the menu's save, in backup RAM ([saved settings](#saved-settings-backup-ram)) |
 
 The canonical bank allocations are in
 [`src/modules.json`](../src/modules.json). Do not use old experimental `.sym`
@@ -815,36 +815,95 @@ Re-audit if the HUD, the font loader, the sprite-table code (`$F8E0`,
 
 ## Saved settings (backup RAM)
 
-1.11-dev, branch `bram-save`, module `src/bram`; emulator evidence only, the
-lock sequence untested: status, evidence and open points in
-[validation/bram-save.md](validation/bram-save.md).
+1.11-dev (branch `v111`: `bram-save` with `dark-lift`), module `src/bram`.
+Emulator evidence only; the unlock and lock pass on a test emulator that
+models the lock, hardware has not been tried: status, evidence and open
+points in [validation/bram-save.md](validation/bram-save.md).
 
 `$2100` and `$3227` are kept in the console's backup RAM (bank `$F7`, 2 KiB)
 as a System Card style file `NR ENHANCE` (`$18` bytes with its header:
 version 1, `$2100`, `$3227`, five zero bytes). A HuCard has no BIOS, so the
-module does what the System Card's routines do: `sei`, `csl`, bank `$F7`
-into MPR4, `$48 $75 $80` to `$1807` to unlock, a read of `$1803` to lock,
-`csh`, MPR4 back. It saves and restores zero page `$22-$2C`, X, Y and the
-flags, and by count uses 23 bytes of stack below its caller (not yet
-measured with a guard).
+module does what the System Card's routines do
+([hardware notes](pc-engine/HARDWARE.md#backup-ram-bram-from-a-hucard)):
+`sei`, bank `$F7` into MPR4, `csl`, `$48 $75 $80` to `$1807` to unlock, the
+work, a read of `$1803` to lock, `csh`, MPR4 back. It saves and restores
+zero page `$22-$2C`, X, Y and the flags. Its deepest stack use, measured
+with a guard, reached `$21D5` (the loader at reset, and the save under the
+open menu: 21 bytes below its entry); the watched margin ends at `$213F`.
 
-- Reset: the trampoline at `$FFE6` calls `$4B00` after the native RAM clear
-  (interrupts off). Defaults first (`$3227` = 1), then our entry's values
-  if the directory is sound and the entry checks out. Read only. Its cost
-  must stay below 59,832 master clocks (the time between the first, pending
-  vblank interrupt after the reset code enables interrupts and the next
-  one), or the boot runs one interrupt behind the original's: about 55
-  directory entries at the walk's 950 clocks each.
-- The menu's Run calls `$4B03` after it has set `$2100` and `$3227`, before
-  the stage restarts (window closed, sound still held, interrupts off for
-  the save's length: about 2 ms with a few files).
-- Whoever adds a setting: it is saved if it lives in `$2100` (bit 6 is
+- **Reset:** the trampoline at `$FFE6` (16 bytes, where the 8-byte English
+  initialization was, grown into the free bytes below the vectors) calls
+  `$4B00` after the native RAM clear, with interrupts off, the CPU already
+  at high speed and MPR0/MPR1 set by the native reset code. Defaults first
+  (`$3227` = 1), then our entry's values if the directory is sound and the
+  entry checks out. Read only. A and the flags are free there (the native
+  init at `$FCBE` loads A first); X and Y are kept.
+- **Run:** the menu calls `$4B03` after it has set `$2100` and `$3227`,
+  before the stage restarts (window closed, sound still held, interrupts
+  off for the save's length: about 2 ms with a few files, half a frame for
+  the one format of a blank memory).
+- **What may be written, and when.** Nothing unless "HUBM" is there and the
+  whole directory is sound, or the memory is provably blank and writable
+  (then the 18 header bytes, the tag last). Sound means: end pointer at
+  least `$8000` (only the first 2 KiB is trusted, whatever the pointer
+  says: Geargrafx pre-formats with `$A000`); every entry at least 16 bytes
+  and inside the 2 KiB; a `00 00` terminator that ends at or below
+  min(end, `$8800`); the header's first-free pointer naming that
+  terminator. Nothing is deleted, moved or resized. A new entry goes at the
+  terminator if it and a new terminator fit: everything after its length
+  byte first, then the new terminator, then the length byte (from then on
+  the directory holds the entry), then the header's pointer, high byte
+  first. An existing entry of our length is rewritten in place, data first
+  and checksum last, only when it differs. What was written is read back.
+- **Cut saves.** A power cut between two byte writes leaves either the old
+  directory, or our entry in place with the header's pointer still naming
+  it (low byte; the high byte old or new). The validation accepts exactly
+  that one pointer state, only when our entry is the last one, and the next
+  Run moves the pointer. The pointer's high byte goes first because the
+  other order could leave a pointer below the terminator, inside other
+  games' files; this order can only leave it at our entry or 256 bytes
+  above it in free space. An entry cut mid-rewrite fails its checksum
+  (`ERROR 5`, defaults) and is rewritten by the next Run.
+- **Status** in `$2105` (`ST_` values, the menu's `SAVE:` texts in
+  `src/options/menu.txt` in the same order): `NONE`, `OK`, `READY`, `FULL`,
+  `ERROR 1` unformatted and not blank, `ERROR 2` directory not sound,
+  `ERROR 3` an entry of our name with another length, `ERROR 4` not read
+  back, `ERROR 5` our entry's contents do not check out.
+- **No backup RAM.** With no "HUBM" the save looks at bytes `$8001-$8012`:
+  all alike and neither `$00` nor `$FF` is taken for an unmapped bank
+  (`NONE`); otherwise a write test of byte `$8000` (two patterns, then its
+  old value) comes before the 2 KiB blank check, so a console without the
+  memory leaves after a few instructions with nothing changed.
+- **Boot time.** The loader's cost must stay below 59,832 master clocks
+  (the time between the first, pending vblank interrupt after the reset
+  code enables interrupts and the next one), or the boot runs one interrupt
+  behind the original's. The walk runs at low CPU speed like every access
+  to the memory and costs about 950 clocks an entry, so that happens from
+  57 files when no settings are saved and from 46 other files when they
+  are (18-byte files; real saves are larger and far fewer). Left as it is
+  on purpose
+  ([the decision](validation/bram-save.md#many-files)).
+- **Whoever adds a setting:** it is saved if it lives in `$2100` (bit 6 is
   free; the loader rejects an entry with bit 6 set until its range check is
   extended) or needs a new data byte (bytes 3-7 of the entry are zero and
-  ignored on load) and, for a change of meaning, a new format version.
+  ignored on load) and, for a change of meaning, a new format version. A
+  build that finds another version in an entry of our length treats it as
+  damaged and rewrites it at the next Run, so a version that must coexist
+  with older builds needs another name or length.
 - `$2104` (palette module state) is not saved: zero at reset, and the
-  module is expected to re-upload by itself when a mapped mode is live at the first
-  gameplay vblank (the saved modes at boot are not yet checked: `bootmodes.py`).
+  palette module uploads by itself when a mapped mode is live at the first
+  gameplay vblank (checked for every saved palette mode and language from
+  a cold boot: `research/tools/bram-save/bootmodes.py`).
+- **Checks.** `scripts/check_bram.py` (image matrix, power cycles, cut
+  saves, timing; `--bram-model` for the lock models and `--only lock` for
+  the negative controls, on the test-only emulator of
+  `research/tools/bram-save/locktest_patch.py`), `scripts/bram_image.py`
+  (images, a System Card style reader, the model), `scripts/check_boot.py
+  --bram`, and the probes in `research/tools/bram-save/` (random images,
+  the System Card's own routines on the game's file, boot modes, stack,
+  boot slack, many files). Rerun all of them after any
+  change to `src/bram`; rerun the lock models after any change to the
+  unlock, the lock or the order of the accesses.
 
 ## Cinema VRAM ownership
 
