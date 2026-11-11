@@ -128,6 +128,20 @@ describe `bram-save` as it was stopped.
 - `check_boot.py --bram` with `empty-8800` and with `full` (14 files):
   frames 1-899 identical to the original, first update at frame 163, the
   image unchanged, defaults (`build/v111/boot-empty-8800`, `boot-full`).
+- `readonly` again with the corrected expectation
+  (`build/v111/matrix-readonly2`): 72 of 72.
+- Many files (`research/tools/bram-save/manyfiles.py`,
+  `build/v111/manyfiles.log`, `manyfiles-ours.log`; 18-byte files): with no
+  saved settings the idle boot is identical up to 56 files (loader 58,848
+  clocks) and shows the same pictures exactly one frame later from 57
+  (59,796 clocks); with our entry last and loaded it is identical up to 45
+  other files (59,028) and one frame later from 46 (59,976). The check that
+  mashes Run then reports frame 143 instead of 163 (144 for 164): the
+  presses come 2 frames in every 20, and a boot one frame behind meets an
+  earlier press. `check_bram.py` now compares the boot up to 48 entries
+  without ours and 42 with ours (new matrix image
+  `tiny-entries-41-ours-last`: passes on the pinned emulator and under
+  `lock` and `key`).
 - Random images (`research/tools/bram-save/fuzz.py`, pinned emulator, seed
   2): the first 560 images, 0 problems, before the generator itself tripped
   on a short end pointer (fixed); a longer run is pending.
