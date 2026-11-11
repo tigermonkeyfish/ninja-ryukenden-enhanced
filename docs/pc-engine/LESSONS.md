@@ -1086,3 +1086,35 @@ the state the patch takes over, not only the paths the patch touched.
 against `build/v111/locktest/build.log`); whether the stale-object binary
 misbehaved was not investigated.
 
+## A reset-time loader has a budget, and a mashed button hides the overrun
+
+**Observed:** the saved-settings loader walks the backup RAM directory at
+low CPU speed during reset. The boot stayed the original's frame for frame
+with ordinary directories, but with 112 tiny files the first stage update
+came at frame 143 instead of 163 in the check that mashes Run: twenty
+frames *earlier*.
+
+**Finding/fix:** Ninja's reset code runs about 5.8 frames with interrupts
+off, takes the pending vblank interrupt as soon as it enables them, and
+then waits for the next one, 59,832 master clocks (43.8 lines) later. A
+loader that ends inside that wait changes nothing; a longer one makes the
+whole boot run one vblank interrupt behind. The check presses Run for 2
+frames in every 20, so a boot one frame behind can meet an earlier press:
+the number moved by a whole press period and in the "wrong" direction. The
+real delay shows only in an idle boot compared picture by picture: the
+same pictures, one frame later (`research/tools/bram-save/manyfiles.py`).
+The walk costs about 950 clocks an entry and loading the entry about
+10,600 more, so the boot is the original's up to 56 files with no saved
+settings and up to 45 other files with them; `check_bram.py` asserts 48
+and 42 entries and reports longer directories apart. The delay was left in
+on purpose ([validation/bram-save.md](../validation/bram-save.md), "Many
+files"): reading faster is not known to be safe, and refusing long
+directories would trade a frame for a feature.
+
+**Reusable lesson:** measure a boot hook's slack as "time until the next
+interrupt the boot waits for", in master clocks, and compare idle boots
+before input-driven ones. A check that feeds periodic input can turn a
+one-frame shift into a multiple of its period.
+
+**Confidence/limits:** emulator (Geargrafx `78fc3d7`); Ninja's reset path
+only ([validation/bram-save.md](../validation/bram-save.md), "Many files").

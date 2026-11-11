@@ -85,8 +85,12 @@ TEST_WRITES = {'blank-00-one-byte': 3, 'blank-00-last-byte': 3}
 # Up to this many entries the reset loader ends within the time the native
 # boot leaves before its second vblank interrupt (the timing part and
 # research/tools/bram-save/bootslack.py); with more, the boot runs one
-# interrupt behind the baseline's and its frames are not compared.
+# interrupt behind the baseline's and its frames are not compared. Measured
+# (research/tools/bram-save/manyfiles.py, 18-byte files): the boot is the
+# baseline's up to 56 entries when none is ours, and up to 46 when one is
+# ours and loads (reading and checking it costs about 10,600 clocks more).
 MANY_ENTRIES = 48
+MANY_WITH_OURS = 42
 ROWS = {'parallax': 1, 'no damage': 2, 'firewheel': 3, 'palette': 4, 'language': 5}
 MODEL = None                 # --bram-model: the test-only emulator's NG_BRAM_MODEL
 LOCKING = ('lock', 'key', 'readonly')
@@ -286,7 +290,7 @@ def check_case(emulator, rom, name, image, output, reference, dead=False, locked
             files = None if image is None else others(image)
             # Every entry counts, ours too; exactly MANY_ENTRIES is still compared.
             entries = 0 if files is None else len(bi.Directory(image).files())
-            slow = entries > MANY_ENTRIES and not unreachable
+            slow = entries > (MANY_ENTRIES if entries == len(files) else MANY_WITH_OURS) and not unreachable
             if not slow:
                 expect('first update frame', started['first_update_frame'], reference(options, language))
             expect('backup RAM after the boot', game.backup_ram(), image)
@@ -329,7 +333,8 @@ def check_case(emulator, rom, name, image, output, reference, dead=False, locked
                       'bytes_changed': 0 if image is None else sum(a != b for a, b in zip(image, after)),
                       'first_update_frame': started['first_update_frame'], 'problems': problems}
             if slow:
-                result['boot_not_compared'] = (f'{entries} entries, more than {MANY_ENTRIES}: first update at frame '
+                result['boot_not_compared'] = (f'{entries} entries, more than {MANY_ENTRIES} '
+                                               f'({MANY_WITH_OURS} with ours): first update at frame '
                                                f"{started['first_update_frame']}, the baseline's at "
                                                f'{reference(options, language)} (the boot runs one vblank '
                                                'interrupt behind, which moves the mashed Run presses)')

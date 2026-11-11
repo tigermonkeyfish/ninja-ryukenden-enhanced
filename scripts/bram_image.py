@@ -287,6 +287,7 @@ def matrix():
         'full-with-ours': image(filled(ENTRY_SIZE + 2) + [ours]),
         'tiny-entries': image([other(k, 18) for k in range(112)]),
         'tiny-entries-48': image([other(k, 18) for k in range(48)]),
+        'tiny-entries-41-ours-last': image([other(k, 18) for k in range(41)] + [ours]),
         'smallest-entries': image([other(k, 16) for k in range(126)]),
         'tiny-entries-ours-last': image([other(k, 18) for k in range(110)] + [ours]),
         # Our entry, not usable.
