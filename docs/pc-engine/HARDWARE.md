@@ -70,6 +70,8 @@ the trace log's cycle counts are both master clocks (see EMULATOR.md).
 | Fact | Basis | Confidence |
 | --- | --- | --- |
 | 512 palette entries of 9 bits (3 each of G, R, B); `$0402/$0403` set the entry index, `$0404/$0405` write the colour and advance. Entries 0-255 are background palettes (16 × 16), 256-511 sprite palettes. | documented; game code | high |
+| A TIA to the VCE data port costs 42 master clocks a colour (14 CPU cycles; 512 colours take 15.9 lines); a table-mapped colour loop (`lda [zp],y` twice, two table reads, two port stores) costs 152-156 (the port stores appear to take a cycle more than RAM stores). | emulated (hardware-event trace of VCE writes) | high (emulator) |
+| Geargrafx's `vce.registers`, `vdc.irqs` and `cpu.irqs` trace streams give every colour write and interrupt with its master clock, cheaply enough to trace whole replays. | emulated | high |
 | Games that fade usually keep a RAM palette buffer and copy it to a fade source, then to the VCE. A colour written only to the VCE is lost at the next fade. Ninja's buffer is `$2286` (32 bytes a palette); Enhanced 2-2 writes its two added palettes to the buffer (`$2426`, `$2446`) and to the VCE. | game code | high for Ninja |
 
 ## Cartridge images and identity

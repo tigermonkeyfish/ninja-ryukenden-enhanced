@@ -6,7 +6,7 @@ binary SHA-256 `2de50e51…85e9`), not a hardware report. Builds:
 | Build | SHA-256 | Source |
 | --- | --- | --- |
 | Before (`fire-wheel-fix`) | `4b07211b…8707` | commit `3fe658a` |
-| GB palette | `1c3d4cae…6749` | branch `gb-palette`, commit `8dcd0f9` (same bytes from the headered and the headerless original) |
+| GB palette | `d08e2ec5…0a37` | branch `gb-palette`, commit `ce00af6` and later documentation commits (the same bytes from the headered and the headerless original) |
 
 Method ([EMULATOR.md](../pc-engine/EMULATOR.md)): one start state, a cold boot
 of the original saved at the 1-1 main-loop hook; every replay is a fresh
@@ -41,8 +41,7 @@ after the VDC vblank interrupt, 1365 master clocks each.
 
 `scripts/check_boot.py`: passed (idle frames 1-899 identical to the
 original, first 1-1 update at frame 163 when mashing Run, defaults English,
-Enhanced, No Damage off). `scripts/check_menu.py`: see the report in the
-branch's final notes.
+Enhanced, No Damage off). `scripts/check_menu.py` (Original mode): passed, 121 menu openings across the 11 runs and all 22 Level Select entries.
 
 All 11 stored runs (35,084 frames) recorded on both builds (`record.py`,
 `analyse.py identity`): every gameplay field (Ryu, stage timer, camera,
@@ -70,36 +69,46 @@ builds (1-1, 2-2, 5-3 and 6-3: one each).
 - In-place unit test of the upload against an independent Python model
   (`unittest_upload.py`): 510 cases (queues of 1-8 entries, the cap, the
   fold, wrapping left-over entries, the lock, every mode and state bit,
-  busy and idle main loop, cinema state, `palette_now`), 0 failures; with
-  the model's cap set one lower, it reports failures (negative control).
+  busy and idle main loop, cinema state, `palette_now`), 0 failures with
+  random seeds 22 and 31 on the final build; with the model's cap set one lower, 6 of 170 cases
+  fail (negative control).
 - All 11 runs in GB DMG (`record.py`): every VCE entry equals the table value
   of its RAM colour except while uploads are still queued. The longest a
   single entry lags its RAM colour is 14-46 frames (`lag.py`: 44-46 in the
-  end-of-stage fades of 1-1, 2-2, 3-1, 3-2, 4-2, 5-2, 6-1; 19-29 in 4-1,
+  end-of-stage fades of 1-1, 2-2, 3-1, 3-2, 4-2, 5-2, 6-1; 19-30 in 4-1,
   5-3, 6-3); the original's own lag (lock held across loads) is up to 13.
   Fades therefore run a step or two behind on some palettes.
-- All 22 Level Select entries (`stagestarts.py`, 120 frames): every entry
-  matches within 13-25 frames of the first update; afterwards only
-  palette-animation colours lag for a few frames.
-- Screenshots: [`build/gb-palette/shots/`] (private): `start-1-1-gb.png`,
-  `start-2-2-gb.png`, `start-4-1-gb.png`, `start-5-3-gb.png`,
-  `menu-2-2-gb.png`, `switch-1-1-paused-*.png`, `cinema-after-4-1-*.png`.
+- All 22 Level Select entries (`stagestarts.py`, 120 frames): every VCE
+  entry matches from frame 14-16 after the first update to frame 119 (the
+  stage's fade-in is still catching up before that); Original mode matches
+  the RAM palette in every frame.
+- Cinema after 4-1 (`cinema.py`, 1,105 frames): the VCE differs from the RAM
+  palette in the same 8 frames as in Original mode (the native game's own),
+  so the cinema shows the original colours; screenshot
+  `cinema-after-4-1-0x10.png`. 30 frames into the next stage (4-2), 93
+  colours still await their GB values (the whole palette is re-uploaded at
+  the left-over pace); full catch-up there was not measured.
+- Screenshots (private, `build/gb-palette/shots/`): `start-{1-1,2-2,4-1,5-3}-{gb,original}.png`
+  (120 frames after each entry), `menu-2-2-{gb,original}.png` (menu open in
+  2-2; Run kept `$2100` bits 3-4), `switch-1-1-paused-{original,gb}.png`,
+  `cinema-after-4-1-{0x10,0}.png`.
 
 ## c. Timing in GB DMG mode
 
-- Worst mapped upload end over the 11 runs: 18.16 lines (`timing_trace.py`);
-  over all 22 stage loads: 19.55 (1-1) and otherwise 17.8-18.3; the first
-  display line is at about 22.8. No upload ends after line 22.
+- Worst mapped upload end over the 11 runs: 18.19 lines (`timing_trace.py`);
+  over all 22 stage loads: 19.62; the first display line is at about 22.8.
+  No upload ends after line 22. (2-2's frame with a VCE write at line 59 is
+  the renderer's `palette_now` in the main loop, as before in the old build.)
 - Updates: stage timer, Ryu, camera, area and sprite table identical to
   Original mode in every frame of all 11 runs. `$2240` turns to 1 one frame
   later at the cinema after 4-1, 5-3 and 6-3 (the cinema starts a frame
   later; its frames are the same, shifted). Stage loads from Level Select
   after the mode has settled (`entry_timing.py`, 60 frames): the same number
-  of frames as Original mode in 21 of 22 entries; 4-4 takes one more.
+  of frames as Original mode in all 22 entries.
 - HUD split: scanline-interrupt entries past the cut-off in the same load
-  frames as Original mode (1-1, 5-3, 6-3); 2-2 none (Original one). In
-  normal frames the largest shift against Original mode is +0.57 line, the
-  maximum 70.44.
+  frames as Original mode (1-1, 5-3, 6-3 in the runs; 4-3 among the stage
+  loads); 2-2 none (Original one). In normal frames the largest shift
+  against Original mode is +0.57 line, the maximum 70.44.
 - The cap: 192 colours ended at 23.4 lines and 176 at 21.8 (synthetic
   queues), so the cap is 168 colours less 6 per further entry. The real
   limit turned out to be the main loop's slack: in the frames around an area
@@ -137,8 +146,11 @@ design), Continue and Game Over screens, a boss room other than those in the
 | Bank `$46` `$5400-$57FF` | GB table, 1 KiB | |
 | Bank `$46` | | `$4100-$42FF` (512), `$4400-$4FFF` (3 KiB, contiguous) |
 
-Read/execute watch over the claimed ROM on the old build (`freewatch.py`):
-see the branch's final notes. Stack (`guard.py`, 2-2 with the menu opened
+Read/execute watch over the claimed ROM (file offsets `$1EBE-$1ECE` and
+`$8D000-$8D7FF`) on the old build (`freewatch.py`): 0 stops over a cold boot
+to 600 updates of 1-1 (683 frames) and all 11 runs (35,084 frames); the same
+watch over bank `$46` `$5840-$58FF` (the options module's renderer gate)
+stopped 36 times in the first 20 frames of 1-1 (positive control). Stack (`guard.py`, 2-2 with the menu opened
 four times and a full palette re-queue forced while it was open): low-water
 mark `$215A` in GB DMG mode (26 bytes above the watched margin), `$215B` in
 Original mode and on the old build.
