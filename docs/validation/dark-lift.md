@@ -567,15 +567,53 @@ dE76):
 "Hb", "Na"): every cell above and every trunk figure equals the predicted
 one to the printed digit, in all four modes. Original and GB DMG measure
 exactly as on `hell-1-1` in every scene. The rooms the lift was not for
-stay dark: 6-4A and 6-4B are unchanged in every mode (SMS 4.9 and 5.1 mean
-L*, 70% of the playfield below L* 10), 5-1 area 0 in SMS rises from 4.9 to
-7.5 and still has 58% below L* 10.
+stay dark: 6-4A and 6-4B measure the same in every mode (SMS 4.9 and 5.1
+mean L*, 70% of the playfield below L* 10; one or two more distinct colours
+in SMS and HELL), 5-1 area 0 in SMS rises from 4.9 to 7.5 and still has 58%
+below L* 10.
 
 **4-1's RAM palette in the NES modes** (`nescheck.py` on the five 4-1
 captures of each mode): passed. 120 of the 128 set entries checked (8 are
 written by the game or colour 0), every one the new set-8 colour, the VCE
 equal to the RAM palette; the back trunks' ten entries hold `$080`, `$092`,
 `$080` (NES-B `$090`), `$0A0`, `$090` twice over, all lighter than `$040`.
+
+**Before and after, looked at** (`sheets.py`; private,
+`build/dark-lift-fix/sheets/sheet-<mode>-{4-1,5-1-6-2,regress}.png`: the
+`hell-1-1` build left, the fix build right; 4-1 frames 250, 1150, 1750, 5-1
+area 0, 6-2 areas 0 and 2, 1-1 frame 600, 2-2 frame 400, 5-3 frame 3000).
+Share of the picture that differs:
+
+| Mode | 4-1 (three frames) | 5-1 area 0 | 6-2 area 0, area 2 | 1-1 | 2-2 | 5-3 |
+| --- | --- | --- | --- | --- | --- | --- |
+| SMS | 16.1%, 13.9%, 24.3% | 6.5% | 15.3%, 15.1% | 3.3% | 8.1% | 0.1% |
+| HELL | 17.9%, 16.0%, 28.1% | 6.4% | 16.0%, 37.3% | 0.0% | 0.7% | 2.5% |
+| NES-A | 7.6%, 5.0%, 2.6% | 0.0% | 0.0%, 0.0% | 0.0% | 0.0% | 0.0% |
+| NES-B | 7.6%, 5.0%, 2.6% | 0.0% | 0.0%, 0.0% | 0.0% | 0.0% | 0.0% |
+
+By eye:
+
+- SMS: 4-1's far trunks, vines and ferns are there now (grey trunks, dark
+  green leaves) where the screen was black; 5-1's floor reads as teal
+  cobbles; 6-2's floor is a grey cobble floor and the statues stand out;
+  6-2 area 2's left pillars and floor are grey. The lift is mostly this
+  one grey (`$049` shown as 222). In 4-1 area 1 the rock wall's shadows are
+  that grey too, lighter than the blues beside them, and the wall reads as
+  speckled grey stone rather than blue rock (the reversal under
+  [Shade order in SMS](#shade-order-in-sms)). **1-1 and 2-2 changed too**:
+  1-1's brick in the awning's shade has a green hatch where it was black
+  (3.3% of the picture), and 2-2's shadowed bridge wall is a lighter, flat
+  olive with its mortar lines lifted (8.1%). The study measured these; they
+  are the dark lift's, not this branch's.
+- HELL: 4-1's trunks and ferns show brown on the dark red, the rock wall of
+  area 1 is orange-brown with dark seams; 5-1's and 6-2's floors and
+  statues are lighter; 6-2 area 2's pillars are golden brown with their
+  reliefs visible where they were dark olive (the largest change, 37%).
+  1-1 is identical in the frame compared; 2-2 differs in a few details near
+  the fire bowl; 5-3 in girder details.
+- NES-A and NES-B: only 4-1 changes; the back trunks are a textured brown
+  where they were a flat dark green. Nothing else differs in any picture
+  compared.
 
 ## Rerunning
 
