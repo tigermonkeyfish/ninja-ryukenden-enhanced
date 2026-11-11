@@ -70,6 +70,7 @@ PALETTE_HELL = $18          ; family 11: HELL, or SMS with SMS_FLAG
 SMS_FLAG = $80              ; $2100 bit 7: bits 3-5 are SMS ($38)
 PALETTE_STATE = $2104       ; bits 5-7: this module's state (below)
 MASTER_STATE = $2240        ; 0 gameplay, 1 cinema or title, 2 ending
+VISIBLE_STAGE = $2e5f       ; Level Select numbering: 0 is 1-1 (HELL's override)
 QUEUE_COUNT = $2260
 QUEUE_BYTES_LO = $2261      ; bytes to upload (2 per colour)
 QUEUE_BYTES_HI = $2269
@@ -1224,6 +1225,9 @@ hell_chunk:
  eor #$ff
  inc a
  tay
+ lda VISIBLE_STAGE          ; the stage with an override (1-1) has its
+ cmp #HELL_OVERRIDE_STAGE   ; own loop: 9 cycles a chunk elsewhere
+ beq hell_colour_ovr
 hell_colour:
  lda [PTR],y
  tax
@@ -1245,6 +1249,50 @@ hell_colour_high:
  sta $0405
  iny
  bne hell_colour
+ rts
+
+ ; The per-stage override (1.11-dev, hell.json "stage_overrides"; the
+ ; generated HELL_OVERRIDE_* equates): in the visible stage
+ ; HELL_OVERRIDE_STAGE ($2E5F, Level Select numbering) the colour
+ ; HELL_OVERRIDE_KEY (low half, $001-$0FF) shows HELL_OVERRIDE_LO/HI instead
+ ; of its table colour; the table stays as it is for every other stage (1-1's
+ ; sidewalk fleck and skyline shadow $094 is 2-2's far ridge too). These are
+ ; hell_colour's and now_hell_map's loops with one compare more on the low
+ ; half (cpx #/beq: 4 cycles a colour, in that stage only; a hit costs 4
+ ; fewer than the lookup). No RAM: the stage is read where the loop is
+ ; chosen. A further colour for the stage is one more cpx/beq and hit in
+ ; each loop (4 cycles a low-half colour each).
+hell_colour_ovr:
+ lda [PTR],y
+ tax
+ iny
+ lda [PTR],y
+ lsr a
+ bcs hell_ovr_high
+ cpx #HELL_OVERRIDE_KEY
+ beq hell_ovr_hit
+ lda hell_lo0,x
+ sta $0404
+ lda hell_hi0,x
+ sta $0405
+ iny
+ bne hell_colour_ovr
+ rts
+hell_ovr_hit:
+ lda #HELL_OVERRIDE_LO
+ sta $0404
+ lda #HELL_OVERRIDE_HI
+ sta $0405
+ iny
+ bne hell_colour_ovr
+ rts
+hell_ovr_high:
+ lda hell_lo1,x
+ sta $0404
+ lda hell_hi1,x
+ sta $0405
+ iny
+ bne hell_colour_ovr
  rts
 
  ; CHUNK colours (1-128) of queue entry X unchanged, by a TIA built on the
@@ -1314,11 +1362,15 @@ now_hell:
  bcc now_hell_mapped
  beq now_hell_mapped
  cmp #128
- bcs now_hell_map
+ bcs now_hell_stage
  asl a
  cmp <CHUNK
- bcs now_hell_map
+ bcs now_hell_stage
  sta <CHUNK                 ; their bytes, the end of the mapped part
+now_hell_stage:
+ lda VISIBLE_STAGE          ; as hell_chunk: the override stage's own loop
+ cmp #HELL_OVERRIDE_STAGE
+ beq now_hell_ovr
 now_hell_map:
  lda [PTR],y
  tax
@@ -1347,6 +1399,42 @@ now_hell_mapped:
  jmp now_hell_exit
 now_hell_cinema:
  jmp now_hell_cinema_exit
+
+ ; palette_now in the override stage: now_hell_map with the compare
+ ; (hell_colour_ovr above).
+now_hell_ovr:
+ lda [PTR],y
+ tax
+ iny
+ lda [PTR],y
+ iny
+ lsr a
+ bcs now_ovr_high
+ cpx #HELL_OVERRIDE_KEY
+ beq now_ovr_hit
+ lda hell_lo0,x
+ sta $0404
+ lda hell_hi0,x
+ sta $0405
+ cpy <CHUNK
+ bne now_hell_ovr
+ bra now_hell_mapped
+now_ovr_hit:
+ lda #HELL_OVERRIDE_LO
+ sta $0404
+ lda #HELL_OVERRIDE_HI
+ sta $0405
+ cpy <CHUNK
+ bne now_hell_ovr
+ bra now_hell_mapped
+now_ovr_high:
+ lda hell_lo1,x
+ sta $0404
+ lda hell_hi1,x
+ sta $0405
+ cpy <CHUNK
+ bne now_hell_ovr
+ bra now_hell_mapped
 hell_code_end:
  .if (hell_code_end > HELL_TABLE)
  .fail

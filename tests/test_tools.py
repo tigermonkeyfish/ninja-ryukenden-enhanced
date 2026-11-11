@@ -173,6 +173,45 @@ class PaletteTableTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 mirror(broken)
 
+    def test_hell_stage_override_is_1_1_only(self):
+        # 1-1 shows $094 (its sidewalk fleck and skyline shadow faces) as 210,
+        # 2-2's dark column gold, where the table keeps crimson 601 for 2-2's
+        # far ridge; every other stage sees the table; the upload gets the
+        # override as four equates in hell-table.inc.
+        import tempfile
+        from palette_tables import (HELL_PARAMETERS, generate, hell_override_equates, hell_overrides,
+                                    hell_stage_table, hell_table)
+        table = hell_table()
+        self.assertEqual(hell_overrides(), [(0, 0x094, 0x050)])
+        one_one = hell_stage_table(0)
+        self.assertEqual(one_one[0x094], 0x050)                   # R2 G1 B0
+        self.assertEqual(table[0x094], 0x031)                     # R6 G0 B1, as 2-2 shows it
+        self.assertEqual([c for c in range(512) if one_one[c] != table[c]], [0x094])
+        for stage in range(1, 22):
+            self.assertEqual(hell_stage_table(stage), table)
+        self.assertEqual(hell_override_equates().split('\n'),
+                         ['HELL_OVERRIDE_STAGE = $00', 'HELL_OVERRIDE_KEY = $94',
+                          'HELL_OVERRIDE_LO = $50', 'HELL_OVERRIDE_HI = $00'])
+        spec = json.loads(HELL_PARAMETERS.read_text())
+        with tempfile.TemporaryDirectory() as temp:
+            generate(temp)
+            self.assertIn('HELL_OVERRIDE_KEY = $94', (Path(temp) / 'hell-table.inc').read_text())
+            path = Path(temp) / 'hell.json'
+            plain = {k: v for k, v in spec.items() if k != 'stage_overrides'}
+            path.write_text(json.dumps(plain))
+            self.assertEqual(hell_overrides(path), [])
+            self.assertEqual(hell_stage_table(0, path), table)
+            self.assertIn('HELL_OVERRIDE_STAGE = $ff', hell_override_equates(path))   # never visible
+            for bad in ({'1-1': {'$194': [2, 1, 0]}},                 # high half: not compared
+                        {'1-1': {'$000': [2, 1, 0]}},
+                        {'1-1': {'$094': [2, 1, 8]}},
+                        {'1-1': {'$094': [2, 1, 0], '$095': [2, 1, 0]}},   # one compare
+                        {'1-1': {'$094': [2, 1, 0]}, '2-2': {'$094': [2, 1, 0]}},
+                        {'7-1': {'$094': [2, 1, 0]}}):
+                path.write_text(json.dumps(dict(plain, stage_overrides=bad)))
+                with self.assertRaises(ValueError, msg=str(bad)):
+                    hell_overrides(path)
+
     def test_hell_parameters_are_editable(self):
         import tempfile
         from palette_tables import HELL_PARAMETERS, generate, hell_table, pages

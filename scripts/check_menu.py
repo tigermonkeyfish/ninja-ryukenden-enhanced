@@ -46,8 +46,8 @@ select  From a cold boot: exact_cycle in each of the 22 Level Select entries,
         band restored at its first update.
 options Each option row changed and accepted with Run, from 1-1: $2100 and
         $3227 afterwards; GB DMG shows the GB table's colours for the whole
-        RAM palette, HELL the HELL table's for entries 0-239 and the RAM
-        colours for the rest, SMS the SMS table's for the whole RAM palette;
+        RAM palette, HELL the HELL table's for entries 0-239 (with 1-1's
+        override of $094) and the RAM colours for the rest, SMS the SMS table's for the whole RAM palette;
         NES-A and NES-B: the restarted 1-1 holds that variant's NES colours
         (src/nes-palette) in the RAM palette, uploaded unmapped (the VCE
         equals the RAM palette). Paths through the palette values (each
@@ -78,7 +78,7 @@ import tempfile
 from comparison_video import Game, make_seed, start_point, start_stage
 from guide_screenshots import to_gameplay, to_title
 from menu_text import BOX_ROWS, BOX_WIDTH, CODES, layout
-from palette_tables import gb_dmg_table, hell_table, load_hell, sms_table
+from palette_tables import gb_dmg_table, hell_stage_table, load_hell, sms_table
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNS = ROOT / 'research/comparison-runs'
@@ -714,7 +714,8 @@ def mode_expected(game, mode):
     table applied to the RAM palette ($2286) and to the border colour
     ($2281) at entry $100; HELL ($18) the HELL table applied to entries
     below its mapped_entries only (the HUD and sprite palettes and the
-    border unchanged); SMS ($38) the SMS table, as GB DMG."""
+    border unchanged), with the visible stage's override ($2E5F: 1-1's
+    colour $094); SMS ($38) the SMS table, as GB DMG."""
     ram = game.read(0x286, 1024)
     colours = [ram[2 * i] | ram[2 * i + 1] << 8 for i in range(512)]
     border = game.read(0x281, 2)
@@ -723,7 +724,8 @@ def mode_expected(game, mode):
         table = gb_dmg_table() if mode == 0x10 else sms_table()
         words = [table[c & 0x1ff] for c in colours]
     else:
-        table, mapped = hell_table(), load_hell()['mapped_entries']
+        stage = game.read(0xe5f, 1)[0]              # $2E5F: HELL's per-stage override
+        table, mapped = hell_stage_table(stage), load_hell()['mapped_entries']
         words = [table[c & 0x1ff] if i < mapped else c for i, c in enumerate(colours)]
     return b''.join(w.to_bytes(2, 'little') for w in words)
 

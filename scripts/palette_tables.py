@@ -154,9 +154,65 @@ def hell_colour(colour, spec):
 
 
 def hell_table(path=HELL_PARAMETERS):
-    """The 512 mapped colour words of the HELL mode."""
+    """The 512 mapped colour words of the HELL mode (every stage but the
+    override stage; hell_stage_table)."""
     spec = load_hell(path)
     return [hell_colour(c, spec) for c in range(512)]
+
+
+# Level Select numbering, the visible stage $2E5F (as comparison_video.py).
+STAGES = ['1-1', '1-2', '2-1', '2-2', '2-3', '3-1', '3-2', '3-3', '4-1', '4-2', '4-3',
+          '4-4', '5-1', '5-2', '5-3', '5-4', '6-1', '6-2', '6-3', '6-4A', '6-4B', '6-4C']
+# Colours one stage may override: the upload's override loops compare one key
+# (src/palette/main.asm, hell_colour_ovr and now_hell_ovr); each further one
+# is another compare in both loops.
+HELL_OVERRIDES_MAX = 1
+
+
+def hell_overrides(path=HELL_PARAMETERS):
+    """hell.json "stage_overrides" ({stage: {"$colour": [R, G, B]}}, optional):
+    [(stage number, colour, colour word)]. At most one stage and
+    HELL_OVERRIDES_MAX colours (the upload's override loops); each colour in
+    the low half ($001-$0FF, the half the loops compare)."""
+    spec = json.loads(Path(path).read_text())
+    stages = spec.get('stage_overrides', {})
+    if len(stages) > 1:
+        raise ValueError('hell.json stage_overrides: one stage at most (the upload has one override stage)')
+    out = []
+    for name, colours in stages.items():
+        if name not in STAGES:
+            raise ValueError(f'hell.json stage_overrides: unknown stage {name!r}')
+        if not 0 < len(colours) <= HELL_OVERRIDES_MAX:
+            raise ValueError(f'hell.json stage_overrides {name}: 1 to {HELL_OVERRIDES_MAX} colours '
+                             '(each further one needs a compare in both override loops)')
+        for key, rgb in colours.items():
+            colour = int(key.lstrip('$'), 16)
+            if not 0 < colour < 0x100:
+                raise ValueError(f'hell.json stage_overrides {name} {key}: the low half, $001-$0FF')
+            if len(rgb) != 3 or any(not 0 <= v <= 7 for v in rgb):
+                raise ValueError(f'hell.json stage_overrides {name} {key}: [R, G, B], 0-7 each')
+            out.append((STAGES.index(name), colour, _join(*rgb)))
+    return out
+
+
+def hell_stage_table(stage, path=HELL_PARAMETERS):
+    """The 512 colour words HELL shows in visible stage `stage` (Level Select
+    number): hell_table with that stage's overrides."""
+    table = hell_table(path)
+    for number, colour, word in hell_overrides(path):
+        if number == stage:
+            table[colour] = word
+    return table
+
+
+def hell_override_equates(path=HELL_PARAMETERS):
+    """HELL_OVERRIDE_STAGE / _KEY / _LO / _HI for the upload. Without an
+    override the stage is $FF (never visible) and $000 maps to $000, which
+    the table does anyway."""
+    found = hell_overrides(path)
+    stage, key, word = found[0] if found else (0xff, 0, 0)
+    return '\n'.join([f'HELL_OVERRIDE_STAGE = ${stage:02x}', f'HELL_OVERRIDE_KEY = ${key:02x}',
+                      f'HELL_OVERRIDE_LO = ${word & 0xff:02x}', f'HELL_OVERRIDE_HI = ${word >> 8:02x}'])
 
 
 def load_sms(path=SMS_PARAMETERS):
@@ -246,7 +302,7 @@ def generate(work, path=PARAMETERS, hell_path=HELL_PARAMETERS, sms_path=SMS_PARA
                   ('gb_lo0', 'gb_hi0', 'gb_lo1', 'gb_hi1'), table)
     write_include(Path(work) / 'hell-table.inc', 'src/palette/hell.json',
                   ('hell_lo0', 'hell_hi0', 'hell_lo1', 'hell_hi1'), hell_table(hell_path),
-                  f'HELL_MAPPED = {load_hell(hell_path)["mapped_entries"]}')
+                  f'HELL_MAPPED = {load_hell(hell_path)["mapped_entries"]}\n' + hell_override_equates(hell_path))
     write_include(Path(work) / 'sms-table.inc', 'src/palette/sms.json',
                   ('sms_lo0', 'sms_hi0', 'sms_lo1', 'sms_hi1'), sms_table(sms_path))
     module = Path(work) / 'main.asm'
