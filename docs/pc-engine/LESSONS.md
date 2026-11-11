@@ -1024,3 +1024,65 @@ first.
 **Confidence/limits:** emulator (Geargrafx `78fc3d7`), Ninja's driver
 (`$387E` bits 6-7) and timer (reload `$74`); validation/all-palettes.md.
 Audio was compared as PSG register state, not listened to.
+
+## The emulator never ran the unlock: backup RAM from a HuCard
+
+**Observed:** Ninja's saved settings (1.11-dev) passed more than 200 backup
+RAM images in headless Geargrafx without its unlock and lock code ever
+being exercised: that build does not decode `$1807`/`$1803` for a HuCard,
+so the memory is open whenever the machine has it. A wrong unlock would
+have shown `SAVE: NONE` on the first console and nowhere else.
+
+**Finding/fix:** a test-only copy of the emulator models the lock for
+HuCards in four ways chosen by an environment variable: the MiSTer core's
+rule (bit 7 of a `$1807` write opens, a `$1803` read closes), a stricter one
+that opens only on the three bytes `$48 $75 $80`, a memory that ignores
+writes, and no memory with an open bus. `scripts/check_bram.py --bram-model`
+runs the whole image matrix on it. Three things made the result worth
+believing: the check first proves that the emulator applies the model (a
+copy of the ROM with the unlock removed must see no memory; the pinned
+emulator is refused); negative controls must fail exactly as predicted
+(unlock removed, cut down to `$80`, ending in `$00`, lock read removed); and
+"locked again" is tested by a stub that maps bank `$F7` after every boot
+and save and tries to read and write it, not by reading the emulator's
+flag. The sequence itself was checked against two independent sources, the
+System Card 3.0 ROM's own code and HuC's library
+([HARDWARE.md](HARDWARE.md#backup-ram-bram-from-a-hucard)).
+
+**Reusable lesson:** before trusting a pass, ask which lines of the new code
+the emulator can make fail. For hardware an emulator does not model, build
+the model (from a second implementation's source, not from the code under
+test), make the test refuse an emulator without it, and add a mutant of the
+code for every property claimed. Then say plainly what is left for the
+console: here, whether the Duo's memory answers a card in the slot at all.
+
+**Confidence/limits:** emulated on models read from the MiSTer core's RTL
+and from HuC; the System Card bytes confirm the order of operations on the
+Duo's own software. No hardware run yet
+([validation/bram-save.md](../validation/bram-save.md)).
+
+## A patched emulator linked from stale objects
+
+**Observed:** the first test-only emulator was made by copying the pinned
+emulator's tree with its object files, patching `memory.h` (new members in
+the middle of a class) and `memory.cpp`, and running `make`. It built and
+started. Its build log held link-time warnings that `Memory`'s declaration
+differed between translation units: most objects had been compiled against
+the old header and were reused. Separately, the emulator's CD unit calls
+`Memory::UpdateBackupRam(true)` at every reset after the memory's own
+reset, which would have re-opened the bank behind the lock model on any
+reset of a machine with backup RAM.
+
+**Finding/fix:** rebuilt from a copy with every object deleted (no
+warnings), and the model now also governs `UpdateBackupRam`. The binary was
+never used for evidence before the rebuild.
+
+**Reusable lesson:** a test fixture needs the same review as the code it
+tests. After patching a header in a copied build tree, delete the objects;
+read the build log for type-mismatch warnings; and look for every caller of
+the state the patch takes over, not only the paths the patch touched.
+
+**Confidence/limits:** build logs (`build/bram-save/locktest/build.log`
+against `build/v111/locktest/build.log`); whether the stale-object binary
+misbehaved was not investigated.
+

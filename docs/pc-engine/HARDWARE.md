@@ -82,6 +82,29 @@ the trace log's cycle counts are both master clocks (see EMULATOR.md).
 | Catalogues list either the headered or the headerless CRC32 (Ninja: `A186DFD2` headered, `67573BAC` headerless). Publish patches for both conventions with identical output. | project practice | high |
 | Geargrafx identifies a state's cartridge by the CRC32 of the headerless ROM (see EMULATOR.md for where it sits in a state). | source | high |
 
+## Backup RAM (BRAM) from a HuCard
+
+A HuCard has no BIOS, so a card that wants the console's save memory does
+by hand what the System Card's routines do. Bases used here, besides the
+ones above: **System Card** (bytes read in the Super System Card 3.0 ROM,
+which is the Duo's own code), **HuC** (`include/huc/huc_bram.asm` of the
+pinned HuC checkout), **MiSTer** (the TurboGrafx16 core's RTL, fetched
+2026-11-11: `rtl/cd/cd.vhd`, `rtl/pce_top.vhd`, `TurboGrafx16.sv`).
+Nothing in this section has been seen on a console yet.
+
+| Fact | Basis | Confidence |
+| --- | --- | --- |
+| The memory is 2 KiB at the start of bank `$F7`. Software maps it in MPR4 (`$8000-$87FF`). | System Card; HuC; MiSTer (`CPU_A(20 downto 11) = x"F7"&"00"`) | high |
+| It is locked after reset and reads `$FF` while locked. A write to `$1807` with bit 7 set unlocks it; a read of `$1803` locks it. | MiSTer (`BRAM_LOCK <= not EXT_DI(7)` on a `$07` write, `BRAM_LOCK <= '1'` on a `$03` read and at reset); Geargrafx source for CD games | high for those models; hardware not seen |
+| The System Card writes the single byte `$80`: `lda #$F7 / tam #4 / csl / sei / lda #$80 / sta $1807` (file offsets `$1C72-$1C7E`), and afterwards restores the MPRs, reads `$1803`, then `csh` (`$1CA8-$1CAB`). HuC writes `$48`, `$75`, `$80` ("Hu", then the bit) between `csl` and the access, and reads `$1803` before `csh`. Three writes ending in `$80` satisfy both; the Ten no Koe 2 is said to want the three bytes. | System Card; HuC; the Ten no Koe 2 claim is hearsay | high for the sequence; the Ten no Koe 2 untested |
+| Both run the CPU at low speed (`csl`) for the whole access and keep interrupts off. Nothing we could read shows that the memory may be read at high speed, so do not. | System Card; HuC | high that they do it; the reason is not documented |
+| The MiSTer core also locks on a `$1807` write with bit 7 clear, so only the last write of an unlock sequence counts there. | MiSTer | high |
+| Format (the System Card's and HuC's): `$8000` "HUBM"; `$8004` end of the memory (`$8800`; Geargrafx pre-formats with `$A000`); `$8006` the first free byte, which holds the directory's `00 00` terminator; `$8008-$800F` zero. Entries from `$8010`, back to back: length (2 bytes, the 16-byte entry header included), checksum (2 bytes: minus the 16-bit sum of every byte after it), a 2-byte id, a 10-character name, the data. A new file needs its length plus 2 bytes for the terminator below the end. | HuC (`bm_open`, `bm_create`, `bm_free`, `bm_checksum`); MiSTer's pre-format (`HUBM`, `$8800`, `$8010`) | high |
+| The System Card finds a file by walking the entries from `$8010` to the `00 00` terminator (`$FB96`), but creates a new file at the header's first-free pointer (`$FAE2`) and deletes by moving everything up to that pointer (`$FA1A`). A directory whose pointer and terminator disagree is therefore dangerous: a pointer below the terminator lets the next create overwrite files; one above it makes the next file unreachable. Keep them equal after every write, and when two bytes must change, order the writes so that the pointer is never below the terminator. | System Card (routines at `$F858-$FDA8`), run in the emulator against Ninja's file (`research/tools/bram-save/syscard.py`) | high |
+| `BM_FORMAT` (`$F858`, needs the string `!BM FORMAT!`) zero-fills and write-tests the bank page by page up to 8 KiB and stores the first address that does not take as the end pointer, then writes the tag, `$8010` as first free and the terminator. `BM_WRITE` creates the 16-byte entry before it checks that the data fits, so a game is expected to ask `BM_FREE` (end - first free - `$12`, floor 0) first. | System Card | high |
+| Headless Geargrafx `78fc3d7` gives a HuCard no backup RAM, and when a save state gives it one, does not decode `$1807`/`$1803` for a HuCard: the memory is always open. A card's unlock and lock code is therefore not exercised there. | source; emulated | high |
+| What an unmapped bank `$F7` reads on a console without backup RAM (`$FF`, or the bus's last value) is not established. Design the "no memory" test so that both give the same answer and nothing is written (Ninja: a write test of one byte, entered only when the header bytes read alike). | reasoning; emulated with `$FF` and with an open-bus model | open question |
+
 ## RAM and option design
 
 - **Prove free RAM with a guard, not by inspection.** Fill the candidate range
@@ -89,8 +112,8 @@ the trace log's cycle counts are both master clocks (see EMULATOR.md).
   lifecycle path (boot, menus, every stage entry, combat, death, Continue,
   cinemas) and check that the watchpoint never fired and the sentinel
   survived. Ninja's options live at the bottom of the stack page (`$2100-$2104`;
-  `$2104`, the palette module's state, since 1.11-dev) and the remaining
-  margin `$2105-$213F` is watched; it is a reserved margin,
+  `$2104`, the palette module's state, and `$2105`, the save status, since
+  1.11-dev) and the remaining margin `$2106-$213F` is watched; it is a reserved margin,
   not free RAM, and changes to call depth need the guard rerun. *Basis:
   emulated (REV8-era guards, 2026-09); a watchpoint covers only the paths you
   exercised.*
