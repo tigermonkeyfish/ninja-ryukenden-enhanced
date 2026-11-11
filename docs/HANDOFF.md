@@ -55,6 +55,27 @@
   ([architecture](ARCHITECTURE.md#palette-modes),
   [evidence](validation/hell-1-1.md), emulator only). Open for the owner:
   210 or 2-2's olive 110 for that colour (`build/hell-1-1/choose-094.png`).
+- **Dark lift** (1.11-dev, branch `dark-lift`, from `hell-1-1`; the owner
+  found 5-1 and 6-2 too dark and 4-1's parallax background almost
+  invisible): data only, no code. SMS: the four colours with green 1 that
+  went to black take the darkest SMS green, olive or grey (`sms.json`
+  `dark_rescue`; `$001`, `$008`, `$009` still black). HELL: raised dark
+  ends of the green, grey and steel ramps and a "leaf" ramp for pure greens
+  (21 colours; nothing but black is black; the 1-1 override kept). NES-A
+  and NES-B: 4-1's back trunks take a `backwood` role one NES step above
+  the fill. GB DMG untouched. 50 ROM bytes differ from `hell-1-1`; the
+  tables equal the mock-up study's byte for byte. Original and GB DMG are
+  identical to `hell-1-1` frame for frame in the 11 runs; `check_boot.py`
+  and `check_menu.py` pass. **Unfinished**: brightness measured from real
+  captures, the before/after screenshots (nobody has looked at the stages
+  yet), the 22 Level Select entries and the NES on-screen counts were not
+  run. **Open for the owner**: in SMS, 6-3's floor flashes grey for 7
+  frames on the black screen of the load after 6-2, and 3.5% of 6-3's
+  picture is grey for 20 frames of its fade-in before it settles darker
+  (stale and rescued darkest fade steps, now visible); in HELL the darkest
+  grey `$049` is now lighter than the next grey `$092`
+  ([evidence, commands and next steps](validation/dark-lift.md), emulator
+  only).
 - **SMS palette** (1.11-dev, branch `sms-palette`, from `hell-palette`):
   `$2100` = `$38`, menu value `SMS` after HELL: everything on screen in the
   Sega Master System's 64 colours (each channel to the nearest SMS level,

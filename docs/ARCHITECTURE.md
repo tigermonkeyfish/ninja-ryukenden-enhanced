@@ -391,7 +391,16 @@ The upload goes through the trampoline at `$FEC0` to bank `$46` `$5000`:
   (`src/palette/hell.json`: the owner's mock-up "Lava" retuned as candidate
   D, the owner's choice of 2026-11-11 "1-1 more like 2-2": cool greys and
   dull teals take 2-2's column golds; ported operation for operation), with
-  one per-stage override (below). Each chunk stops at entry 240; from there on (the HUD palette
+  one per-stage override (below) and, since branch `dark-lift`, the dark
+  lift (the dark-lift study's "Hb"): the dark ends of the green, grey and
+  steel ramps are raised and saturated pure greens (hue 100-140 degrees,
+  saturation at least 0.9) have a ramp of their own, the optional "leaf"
+  family (`leaf_ramp`, `leaf_windows`, `leaf_mix`), so 21 colours show
+  lighter and no colour but black shows black (candidate D sent `$040`
+  there and the trunks and fill of 4-1's back layer to one near-black).
+  The darkest grey `$049` now shows R3 G1 B0, lighter than the next grey
+  `$092` (R1 G0 B0, unchanged; open, see
+  [validation/dark-lift.md](validation/dark-lift.md)). Each chunk stops at entry 240; from there on (the HUD palette
   15, the sprite palettes and the border, entry `$100`, which is sprite
   palette 0's transparent colour) the colours go unchanged by a TIA that the
   upload builds on the stack (`tia src,$0404,len / rts`) and calls, at the
@@ -431,7 +440,17 @@ The upload goes through the trampoline at `$FEC0` to bank `$46` `$5000`:
   SMS table (`src/palette/sms.json`: each channel to the nearest of the
   Master System's four levels 0/85/170/255 in linear terms, shown as PC
   Engine 0/2/5/7, so 0-1 → 0, 2-3 → 2, 4-5 → 5, 6-7 → 7; the owner's
-  mock-up candidate A; every output is one of 64 colours). Bank `$3B`
+  mock-up candidate A; every output is one of 64 colours; since branch
+  `dark-lift` with `dark_rescue`, the study's "Sa": a colour that rule
+  sends to black although its luma R × 0.299 + G × 0.587 + B × 0.114 is at
+  least 0.5 of 7 takes level 2 in each channel that holds 1, which is the
+  four colours with green 1 and no channel above 1: `$040` → `$080`,
+  `$041` → `$082`, `$048` → `$090`, `$049` → `$092`; `$001`, `$008` and
+  `$009` still show black. A side effect, open: the darkest fade step is
+  now visible, so VCE entries that the left-over upload has not yet brought
+  to black when a load locks the palette show for some frames, 6-3's floor
+  for 7 frames in the load after 6-2,
+  [validation/dark-lift.md](validation/dark-lift.md)). Bank `$3B`
   `$5000-$57FF` holds a byte-for-byte copy of bank `$46` `$5000-$53FF`
   (assembled from the same source lines, `;@mirror` in `main.asm`, as
   `sms-mirror.inc`; a guard per label checks each copy's address) and the
@@ -503,6 +522,14 @@ NES set and generates the `nes-*.inc` files at build time (prepare step
 `nes-palette`) and the NES versions of the 1-1 / 2-2 merged palettes
 (`nes-enhanced-stage11`, `nes-enhanced-stage22`, after the backdrop steps).
 Swapping the colours needs no code change.
+
+4-1 (set 8, since branch `dark-lift`, the study's "Na"): the bark entries
+of rows 0 and 3 (entries 6 and 8-11, the trunks of the Enhanced back layer)
+have a role of their own, `backwood` (ramp `09`, `18`; strict; `08`
+excluded), so they resolve above the darkest green `08` (`$040`) that the
+fill behind them and the rest of the foliage take: `$080`, `$092`, `$080`
+(NES-B `$090`), `$0A0`, `$090`. Only set 8 differs in the generated
+includes (10 bytes in each variant); `scripts/nes_palette.py` is unchanged.
 
 Resolution keeps detail: within each palette row (16 set entries, one sprite
 palette, one animation set) distinct PC Engine colours of a role go to

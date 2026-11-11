@@ -99,6 +99,11 @@ HELL's candidate D and its 1-1 override (identity of the other five modes
 with `all-palettes`, HELL's colours per stage, timing) are in
 [validation/hell-1-1.md](validation/hell-1-1.md), probes in
 `research/tools/hell-1-1/`.
+The dark lift of SMS, HELL and the NES modes' 4-1 (identity of Original and
+GB DMG with `hell-1-1`, the changed modes' colours in the stored runs, the
+fades; brightness and screenshots still to do) is in
+[validation/dark-lift.md](validation/dark-lift.md), probes in
+`research/tools/dark-lift/`.
 
 ## Outstanding
 
