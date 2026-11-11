@@ -12,7 +12,11 @@ into families by hue, saturation and value and re-coloured from ramps. It is
 the owner's chosen mock-up (candidate C), ported operation for operation in
 double-precision floating point, so the table is the mock-up's exactly; it
 applies to background palettes 0-14 only (the first `mapped_entries` VCE
-entries).
+entries). An optional "steel" family (`steel_ramp`, `steel_windows`: per
+window hue from-to in degrees, maximum saturation, chroma s*v and value;
+`steel_mix`: value and luma weights) takes the coloured colours inside its
+windows before the hue families, for the retuned candidates; without those
+keys the table is the shipped one exactly.
 
 The SMS mode is defined by `src/palette/sms.json`: each channel to the
 nearest of the Sega Master System's four levels, in linear terms, shown as
@@ -79,7 +83,13 @@ def pages(table):
 
 def load_hell(path=HELL_PARAMETERS):
     spec = json.loads(Path(path).read_text())
-    for name in ('lava_ramp', 'green_ramp', 'grey_ramp', 'ash_ramp'):
+    names = ['lava_ramp', 'green_ramp', 'grey_ramp', 'ash_ramp']
+    if 'steel_ramp' in spec:
+        names.append('steel_ramp')
+        for key in ('steel_windows', 'steel_mix'):
+            if key not in spec:
+                raise ValueError(f'hell.json {key}: needed with steel_ramp')
+    for name in names:
         ramp = [tuple(point) for point in spec[name]]
         if len(ramp) < 2 or any(len(p) != 4 for p in ramp) or [p[0] for p in ramp] != sorted(p[0] for p in ramp):
             raise ValueError(f'hell.json {name}: at least two [position, R, G, B] points, positions increasing')
@@ -126,6 +136,10 @@ def hell_colour(colour, spec):
         if v >= spec['ash_v']:
             return _ramp(spec['ash_ramp'], (v - spec['ash_v']) / (1 - spec['ash_v']))
         return _ramp(spec['grey_ramp'], v)
+    if 'steel_ramp' in spec and any(lo <= h <= hi and s <= s_max and s * v <= c_max and v <= v_max
+                                    for lo, hi, s_max, c_max, v_max in spec['steel_windows']):
+        m = spec['steel_mix']
+        return _ramp(spec['steel_ramp'], v * m[0] + y * m[1])
     if spec['blue_hue'][0] <= h <= spec['blue_hue'][1]:
         return _ramp(spec['lava_ramp'], v * spec['lava_mix'][0] + y * spec['lava_mix'][1])
     if spec['green_hue'][0] <= h < spec['green_hue'][1]:
