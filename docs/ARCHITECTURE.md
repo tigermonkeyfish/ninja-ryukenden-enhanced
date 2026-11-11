@@ -430,13 +430,18 @@ no longer in the repository.
 Since 1.11-dev the menu is a popup window over the playfield; the HUD rows
 28-30 are never written. Select in gameplay (hook `$FF70`, unchanged open
 conditions `$2E63 = 0`, `$2201 != 0`) calls bank `$46` `$4400`
-(`src/options`, 1,5xx bytes in `$4400-$4AFF`). Its layout and option
+(`src/options`, 1,530 bytes, `$4400-$49F9`, of the claimed `$4400-$4AFF`). Its layout and option
 values are `src/options/menu.txt`, generated into `menu-text.inc` by
 `scripts/menu_text.py`.
 
-- **Refusal.** The menu returns at once (nothing touched) unless the
+- **Refusal.** The menu returns at once (nothing touched) while Ryu is dead
+  (`$2EAB` = 10 or `$2EAD` = 0: native `$8E57` sets both at every death and
+  they stay until the respawn or continue reloads the stage), and unless the
   playfield's vertical scroll `$2E4D/$2E4E` is 0, which every probed
-  gameplay update shows; the window's rows must stay clear of the HUD's.
+  gameplay update shows (the window's rows must stay clear of the HUD's).
+  The hook's own conditions refuse area changes, fades and stage loads
+  (`$2E63` counting down, `$2201` = 0) but let the death animation through,
+  where the stage reload clears both sprite-table buffers.
 - **Window.** 26 x 10 cells in the HUD font (palette 15, `$F7xx`, opaque:
   the font's colour-4 background), BAT rows 7-16 (screenshot y 106-185),
   starting at BAT column `((BXR >> 3) + 3) & 63` with BXR the playfield's

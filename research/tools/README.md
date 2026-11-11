@@ -128,3 +128,14 @@ session, queue and palette helpers; each script's docstring gives its usage.
 | `unittest_upload.py` | In-place test of the vblank upload and `palette_now` against a Python model |
 | `switch.py`, `stagestarts.py`, `cinema.py`, `menu_shot.py`, `capture.py`, `pngdiff.py` | Mode switching, Level Select entries, cinemas, the menu, screenshots |
 | `guard.py`, `freewatch.py`, `readers.py`, `ramdiff.py`, `qwatch.py`, `idlepc.py`, `pausepc.py`, `bootstates.py`, `traceprobe.py`, `vdcregs.py` | Stack low-water mark, free-ROM watch, RAM readers and differences, queue watch, interrupted PCs, boot states |
+
+## Popup menu (1.11-dev)
+
+`popup-menu/` (set `GEARGRAFX` and `NINJA_SEED_STATE`, a seed made by
+`comparison_video.make_seed` from the original): `identity.py BASE CANDIDATE
+OUT` replays the stored runs on two builds with the menu never opened and
+hashes every frame (screenshot, RAM, sprite table, palette; VRAM every 30
+frames); `language.py ROM OUT` checks that the LANGUAGE row's choice is the
+language of the next cinema; `shots.py ROM OUT run:frame[:options] ...`
+takes before/open screenshots of the popup. The menu checks themselves are
+`scripts/check_menu.py`.
