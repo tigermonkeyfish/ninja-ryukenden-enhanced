@@ -83,6 +83,14 @@ class PaletteTableTests(unittest.TestCase):
         self.assertEqual(values[0x40], 0x01)                      # gb_lo0[$40]
         self.assertEqual(values[3 * 256 + 0xff], 0x01)            # gb_hi1[$FF]: colour $1FF
 
+    # hell.json before the dark-lift pass (candidate D): these ramps, no leaf family.
+    HELL_D = {'green_ramp': [[0.0, 0, 0, 0], [0.3, 1, 1, 0], [0.6, 3, 2, 0], [1.0, 5, 3, 0]],
+              'grey_ramp': [[0, 0, 0, 0], [0.14, 1, 0, 0], [0.29, 1, 0, 0], [0.43, 3, 2, 0], [0.57, 5, 2, 1],
+                            [0.71, 4, 1, 0], [0.8, 4, 1, 0]],
+              'steel_ramp': [[0, 0, 0, 0], [0.14, 1, 0, 0], [0.22, 2, 1, 0], [0.3, 2, 1, 0], [0.34, 3, 2, 0],
+                             [0.44, 3, 2, 0], [0.48, 4, 2, 0], [0.52, 4, 2, 0], [0.54, 4, 3, 0], [0.62, 4, 3, 0],
+                             [0.81, 7, 6, 2], [1.0, 7, 7, 3]]}
+
     def test_hell_table_is_the_owners_choice(self):
         from palette_tables import hell_table, load_hell
         table = hell_table()
@@ -90,35 +98,96 @@ class PaletteTableTests(unittest.TestCase):
         self.assertTrue(all(0 <= c <= 0x1ff for c in table))
         # The 512 colours of the retuned candidate D (the mock-up 'Lava',
         # candidate C, with the 'steel' family: cool greys and dull teals take
-        # 2-2's column golds; build/hell-tune/gen/cand-D.json, the owner's
-        # choice for 1-1 "more like 2-2") as little-endian words.
+        # 2-2's column golds; the owner's choice for 1-1 "more like 2-2") with
+        # the dark lift "Hb" (floor plus leaf family; the dark-lift study's
+        # gen/hell-Hb-floor-leaf.json) as little-endian words.
         self.assertEqual(hashlib.sha256(b''.join(c.to_bytes(2, 'little') for c in table)).hexdigest(),
-                         '1435b5a189bdbbeb6964c1a8df4981883fe309b7a819506397d080766944d641')
+                         '7be5da494c0f33287da585b598f64571cab956623eb1143cd361bbd8663c272b')
         # GGGRRRBBB: black stays black; white is pale ash; blues become lava,
         # greys gold-brown, reds stay red; 1-1's wall and sidewalk greys take
         # 2-2's golds ($0DB -> 320, $0DC -> 420 as R G B); $094 stays crimson
-        # in the table (2-2's far ridge; 1-1 overrides it in the upload).
+        # in the table (2-2's far ridge; 1-1 overrides it in the upload);
+        # pure green is the leaf ramp's 641.
         for colour, hell in ((0x000, 0x000), (0x1ff, 0x1ba), (0x007, 0x078), (0x038, 0x030),
-                             (0x1c0, 0x0a0), (0x092, 0x008), (0x124, 0x0a9), (0x0b6, 0x0b0),
+                             (0x1c0, 0x131), (0x092, 0x008), (0x124, 0x0a9), (0x0b6, 0x0b0),
                              (0x03f, 0x0b0), (0x1f8, 0x0e8), (0x0db, 0x098), (0x0dc, 0x0a0),
                              (0x094, 0x031)):
             self.assertEqual(table[colour], hell, hex(colour))
         self.assertEqual(load_hell()['mapped_entries'], 240)    # background palettes 0-14
 
+    def test_hell_dark_lift_changes_21_colours_and_none_goes_black(self):
+        # The dark lift: no colour but black becomes black (candidate D sent
+        # the darkest green $040 there), the darkest grey is a brown, and the
+        # saturated pure greens ('leaf': 4-1's trunks and canopy, 5-1's and
+        # 6-2's greens) have a ramp of their own. Exactly 21 colours differ
+        # from candidate D; the 1-1 override and the 240 mapped entries stay.
+        import tempfile
+        from palette_tables import HELL_PARAMETERS, channels, hell_overrides, hell_table, load_hell
+        table = hell_table()
+        self.assertEqual([c for c in range(1, 512) if table[c] == 0], [])
+        self.assertEqual(table[0], 0)
+        spec = json.loads(HELL_PARAMETERS.read_text())
+        self.assertEqual(spec['leaf_windows'], [[100, 140, 0.9]])
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'hell.json'
+            before = {k: v for k, v in dict(spec, **self.HELL_D).items() if not k.startswith('leaf_')}
+            path.write_text(json.dumps(before))
+            d = hell_table(path)
+            self.assertEqual(hashlib.sha256(b''.join(c.to_bytes(2, 'little') for c in d)).hexdigest(),
+                             '1435b5a189bdbbeb6964c1a8df4981883fe309b7a819506397d080766944d641')
+            self.assertEqual([c for c in range(1, 512) if d[c] == 0], [0x040])
+            self.assertEqual(hell_overrides(path), hell_overrides())
+            self.assertEqual(load_hell(path)['mapped_entries'], load_hell()['mapped_entries'])
+            rgb = lambda word: '%d%d%d' % channels(word)
+            self.assertEqual({f'{c:03X}': f'{rgb(d[c])}>{rgb(table[c])}' for c in range(512) if d[c] != table[c]},
+                             {'040': '000>110', '041': '100>210', '049': '100>310', '080': '110>310',
+                              '0C0': '110>320', '0C1': '110>320', '100': '210>420', '101': '220>420',
+                              '108': '220>420', '140': '320>430', '141': '320>430', '148': '320>430',
+                              '180': '320>530', '181': '320>530', '182': '320>530', '188': '420>530',
+                              '1C0': '420>641', '1C1': '420>641', '1C2': '430>641', '1C8': '430>641',
+                              '1D0': '430>641'})
+            # The leaf family is optional and needs its windows and mix; a
+            # window over every hue takes every coloured colour steel leaves.
+            plain = {k: v for k, v in spec.items() if not k.startswith('leaf_')}
+            path.write_text(json.dumps(plain))
+            no_leaf = hell_table(path)
+            self.assertNotEqual(no_leaf[0x1c0], table[0x1c0])        # pure green: leaf only with the keys
+            self.assertEqual(no_leaf[0x049], table[0x049])           # a grey: never leaf
+            leaf = dict(spec, leaf_ramp=[[0.0, 0, 0, 1], [1.0, 0, 0, 7]], leaf_windows=[[0, 360, 0.0]],
+                        leaf_mix=[1.0, 0.0])
+            path.write_text(json.dumps(leaf))
+            wide = hell_table(path)
+            self.assertEqual(wide[0x038], 0x007)                     # pure red: the leaf ramp's top
+            self.assertEqual(wide[0x1ff], table[0x1ff])              # white is ash: unchanged
+            self.assertEqual(wide[0x0dc], table[0x0dc])              # steel comes first
+            for key in ('leaf_windows', 'leaf_mix'):
+                broken = dict(leaf)
+                del broken[key]
+                path.write_text(json.dumps(broken))
+                with self.assertRaises(ValueError):
+                    hell_table(path)
+
     def test_sms_table_is_the_owners_mockup(self):
-        from palette_tables import load_sms, sms_colours, sms_table
+        import tempfile
+        from palette_tables import SMS_PARAMETERS, load_sms, sms_colours, sms_table
         table = sms_table()
         self.assertEqual(len(table), 512)
         # The 512 colours of candidate A (build/sms-mockup/table-A.json,
-        # `by_colour`, the owner's choice) as little-endian words.
+        # `by_colour`, the owner's choice) with the dark lift "Sa" (the
+        # dark-lift study's gen/sms-Sa-rescue.json) as little-endian words.
         self.assertEqual(hashlib.sha256(b''.join(c.to_bytes(2, 'little') for c in table)).hexdigest(),
-                         'bb0779db843cfb9ee7094e11f7cf95dad5fdc8038092048ee281a0080ae8d927')
+                         '9323ab4aef90dac5ea3b2d82fb1505a8d8780190bf89acbeca15e109f1acb314')
         # Channel by channel, independently of the parameters: PC Engine
-        # 0,1 -> 0; 2,3 -> 2; 4,5 -> 5; 6,7 -> 7 (GGGRRRBBB).
+        # 0,1 -> 0; 2,3 -> 2; 4,5 -> 5; 6,7 -> 7 (GGGRRRBBB), except the four
+        # rescued dark colours (green 1; luma at least 0.5 of 7), whose
+        # channels at 1 take 2 instead of vanishing into black.
+        rescued = {0x040: 0x080, 0x041: 0x082, 0x048: 0x090, 0x049: 0x092}
         q = [0, 0, 2, 2, 5, 5, 7, 7]
         for colour in range(512):
             g, r, b = colour >> 6, (colour >> 3) & 7, colour & 7
-            self.assertEqual(table[colour], q[g] << 6 | q[r] << 3 | q[b], hex(colour))
+            self.assertEqual(table[colour], rescued.get(colour, q[g] << 6 | q[r] << 3 | q[b]), hex(colour))
+        # Only black and the three darkest blue/red/purple colours are black.
+        self.assertEqual([c for c in range(512) if table[c] == 0], [0x000, 0x001, 0x008, 0x009])
         # Every output is one of the 64 SMS colours, all 64 occur, and an SMS
         # colour maps to itself.
         sms64 = {g << 6 | r << 3 | b for g in (0, 2, 5, 7) for r in (0, 2, 5, 7) for b in (0, 2, 5, 7)}
@@ -126,6 +195,42 @@ class PaletteTableTests(unittest.TestCase):
         self.assertEqual(set(table), sms64)
         self.assertTrue(all(table[c] == c for c in sms64))
         self.assertEqual(load_sms()[1], [0, 2, 5, 7])
+        # Without dark_rescue the table is candidate A exactly.
+        spec = json.loads(SMS_PARAMETERS.read_text())
+        self.assertEqual(spec['dark_rescue'], {'min_luma': '0.5'})
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'sms.json'
+            path.write_text(json.dumps({k: v for k, v in spec.items() if k != 'dark_rescue'}))
+            plain = sms_table(path)
+            self.assertEqual(hashlib.sha256(b''.join(c.to_bytes(2, 'little') for c in plain)).hexdigest(),
+                             'bb0779db843cfb9ee7094e11f7cf95dad5fdc8038092048ee281a0080ae8d927')
+            self.assertEqual({c: table[c] for c in range(512) if table[c] != plain[c]}, rescued)
+
+    def test_sms_dark_keys_stay_within_the_64_colours(self):
+        import tempfile
+        from palette_tables import SMS_PARAMETERS, sms_colours, sms_table
+        spec = json.loads(SMS_PARAMETERS.read_text())
+        base = {k: v for k, v in spec.items() if k != 'dark_rescue'}
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'sms.json'
+            # The luma threshold is exact: $040 has luma 0.587 precisely.
+            for luma, word in (('0.587', 0x080), ('0.5871', 0x000)):
+                path.write_text(json.dumps(dict(base, dark_rescue={'min_luma': luma})))
+                self.assertEqual(sms_table(path)[0x040], word, luma)
+            # true: every colour that would vanish is rescued; only black is black.
+            path.write_text(json.dumps(dict(base, dark_rescue=True)))
+            table = sms_table(path)
+            self.assertEqual([c for c in range(512) if table[c] == 0], [0])
+            self.assertEqual((table[0x001], table[0x008], table[0x009]), (0x002, 0x010, 0x012))
+            self.assertTrue(set(table) <= sms_colours(path))
+            # dark_map: single colours, applied last, SMS colours only.
+            path.write_text(json.dumps(dict(spec, dark_map={'$001': '$002', '$040': '$090'})))
+            table = sms_table(path)
+            self.assertEqual((table[0x001], table[0x040], table[0x041]), (0x002, 0x090, 0x082))
+            self.assertTrue(set(table) <= sms_colours(path))
+            path.write_text(json.dumps(dict(spec, dark_map={'$001': '$001'})))
+            with self.assertRaisesRegex(ValueError, 'not an SMS colour'):
+                sms_table(path)
 
     def test_sms_parameters_are_editable(self):
         import tempfile
@@ -409,6 +514,31 @@ class NesPaletteTests(unittest.TestCase):
         self.assertEqual(t['nes_b_variant_hi'][6], 'HIGH(nes_b_variant_6+$2000)')
         # They fit bank $3B $4200-$4FFF.
         self.assertLessEqual(sum(len(v) for v in s.values()), 0x5000 - 0x4200)
+
+    def test_4_1_back_trunks_resolve_above_the_darkest_green(self):
+        # Dark lift "Na": in 4-1 (set 8) the bark entries of rows 0 and 3
+        # (the Enhanced parallax trunks) take the `backwood` role, so they
+        # resolve to lighter NES colours than the fill's 08 ($040) in NES-A
+        # and NES-B; no other record of the set changes role.
+        import nes_palette as NP
+        data = NP.load()
+        stage = next(d for d in data['stages'] if d['set'] == 8 and not d.get('variant_of'))
+        self.assertEqual(stage['stage'], '4-1')
+        role = stage['roles']['backwood']
+        self.assertEqual((role['ramp'], role['strict'], role['exclude']), (['09', '18'], True, ['08']))
+        back = [e for e in stage['entries'] if e['role'] == 'backwood']
+        self.assertEqual([(e['row'], e['entry']) for e in back],
+                         [(row, entry) for row in (0, 3) for entry in (6, 8, 9, 10, 11)])
+        self.assertEqual([(e['pce'], e['nes'], e['out']) for e in back],
+                         2 * [('041', '09', '080'), ('04A', '00', '092'), ('048', '09', '080'),
+                              ('051', '17', '0A0'), ('049', '18', '090')])
+        a, b = NP.layout(data), NP.layout(NP.relit(data))
+        fill = NP.lightness(0x040)
+        for lay, want in ((a, [0x080, 0x092, 0x080, 0x0a0, 0x090]), (b, [0x080, 0x092, 0x090, 0x0a0, 0x090])):
+            for row in (0, 3):
+                got = [lay['sets'][8][row * 16 + entry] for entry in (6, 8, 9, 10, 11)]
+                self.assertEqual(got, want)
+                self.assertTrue(all(c in NP.NES_COLOURS and NP.lightness(c) > fill for c in got))
 
     def test_detail_keeps_distinct_colours_distinct_in_lightness_order(self):
         import nes_palette as NP

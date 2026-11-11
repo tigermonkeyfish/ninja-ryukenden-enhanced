@@ -18,12 +18,21 @@ window hue from-to in degrees, maximum saturation, chroma s*v and value;
 `steel_mix`: value and luma weights) takes the coloured colours inside its
 windows before the hue families (candidate D's cool greys and dull teals);
 without those keys no colour takes it, and with candidate C's parameters the
-table is the first HELL build's exactly.
+table is the first HELL build's exactly. An optional "leaf" family
+(`leaf_ramp`, `leaf_windows`: per window hue from-to in degrees and minimum
+saturation; `leaf_mix`) takes the saturated pure greens after steel and
+before the hue families (1.11-dev "dark lift": with the raised dark ends of
+the green, grey and steel ramps no colour but black becomes black, and the
+dark greens of 4-1, 5-1 and 6-2 get a ramp of their own).
 
 The SMS mode is defined by `src/palette/sms.json`: each channel to the
 nearest of the Sega Master System's four levels, in linear terms, shown as
 PC Engine channel values (the owner's chosen mock-up, candidate A); every
-output is one of 64 colours. It applies to every VCE entry, as GB DMG.
+output is one of 64 colours. It applies to every VCE entry, as GB DMG. The
+optional `dark_rescue` (1.11-dev "dark lift") keeps a visible dark colour
+from becoming black: a colour at or above a luma that the channel rule
+sends to black takes the second SMS level in each channel that holds 1
+(still one of the 64).
 
 `generate(work)` writes `gb-table.inc`, `hell-table.inc` and
 `sms-table.inc`: each four 256-byte pages, the low and high bytes of the
@@ -86,11 +95,12 @@ def pages(table):
 def load_hell(path=HELL_PARAMETERS):
     spec = json.loads(Path(path).read_text())
     names = ['lava_ramp', 'green_ramp', 'grey_ramp', 'ash_ramp']
-    if 'steel_ramp' in spec:
-        names.append('steel_ramp')
-        for key in ('steel_windows', 'steel_mix'):
-            if key not in spec:
-                raise ValueError(f'hell.json {key}: needed with steel_ramp')
+    for fam in ('steel', 'leaf'):
+        if f'{fam}_ramp' in spec:
+            names.append(f'{fam}_ramp')
+            for key in (f'{fam}_windows', f'{fam}_mix'):
+                if key not in spec:
+                    raise ValueError(f'hell.json {key}: needed with {fam}_ramp')
     for name in names:
         ramp = [tuple(point) for point in spec[name]]
         if len(ramp) < 2 or any(len(p) != 4 for p in ramp) or [p[0] for p in ramp] != sorted(p[0] for p in ramp):
@@ -142,6 +152,10 @@ def hell_colour(colour, spec):
                                     for lo, hi, s_max, c_max, v_max in spec['steel_windows']):
         m = spec['steel_mix']
         return _ramp(spec['steel_ramp'], v * m[0] + y * m[1])
+    # 'leaf' (dark lift): saturated pure greens, windows [hue_lo, hue_hi, min_saturation]
+    if 'leaf_ramp' in spec and any(lo <= h <= hi and s >= s_min for lo, hi, s_min in spec['leaf_windows']):
+        m = spec['leaf_mix']
+        return _ramp(spec['leaf_ramp'], v * m[0] + y * m[1])
     if spec['blue_hue'][0] <= h <= spec['blue_hue'][1]:
         return _ramp(spec['lava_ramp'], v * spec['lava_mix'][0] + y * spec['lava_mix'][1])
     if spec['green_hue'][0] <= h < spec['green_hue'][1]:
@@ -235,10 +249,31 @@ def sms_channel(c, sms, pce):
 
 
 def sms_table(path=SMS_PARAMETERS):
-    """The 512 mapped colour words of the SMS mode."""
+    """The 512 mapped colour words of the SMS mode.
+
+    Optional dark-lift keys (sms.json): `dark_rescue` (true, or {"min_luma":
+    "Y"}: a colour that is not black, with luma R*0.299 + G*0.587 + B*0.114 on
+    the 0-7 scale at least Y, but would become black takes pce_levels[1] in
+    every channel at 1, so no visible colour vanishes; exact decimals); `dark_map`
+    ({"$colour": "$SMS colour"}: explicit choices applied last, each checked
+    to be one of the 64)."""
     sms, pce = load_sms(path)
+    spec = json.loads(Path(path).read_text())
     q = [sms_channel(c, sms, pce) for c in range(8)]
-    return [_join(*[q[v] for v in channels(c)]) for c in range(512)]
+    table = [_join(*[q[v] for v in channels(c)]) for c in range(512)]
+    rescue = spec.get('dark_rescue')
+    if rescue:
+        min_y = Fraction(str(rescue.get('min_luma', 0))) if isinstance(rescue, dict) else 0
+        weights = [Fraction('0.299'), Fraction('0.587'), Fraction('0.114')]
+        for c in range(1, 512):
+            if table[c] == 0 and sum(w * v for w, v in zip(weights, channels(c))) >= min_y:
+                table[c] = _join(*[pce[1] if v == 1 else q[v] for v in channels(c)])
+    for key, word in spec.get('dark_map', {}).items():     # explicit colour -> SMS colour
+        c, w = int(key.lstrip('$'), 16), int(str(word).lstrip('$'), 16)
+        if w not in {_join(r, g, b) for r in pce for g in pce for b in pce}:
+            raise ValueError(f'sms.json dark_map {key}: {word} is not an SMS colour')
+        table[c] = w
+    return table
 
 
 def sms_colours(path=SMS_PARAMETERS):
