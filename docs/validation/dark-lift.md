@@ -265,7 +265,7 @@ then 26 L* darker) is a different thing and is not fixed here. No VCE entry
 is late in those frames: the colour is due. The fade-in passes the floor's
 blue-grey `$04A` (R1 G1 B2) through `$049` (R1 G1 B1), which the dark
 rescue shows as grey `$092` (L* 31), and ends on `$04A`, which the channel
-rule shows as `$002` (L* 4). It is the table, see [C](#c-shade-order-in-sms).
+rule shows as `$002` (L* 4). It is the table, see [Shade order in SMS](#shade-order-in-sms).
 
 ### A. How widespread (the dark-lift build)
 
@@ -513,7 +513,7 @@ asked for:
 | a second override stage in the upload | 1-1 and 2-2 kept, `$092` raised elsewhere | code: the override loops compare one colour in one stage; each further compare is 4 cycles a colour in that stage and changes HELL's timing there |
 | leave it | reversed in at most 99 pixels of a screen | none |
 
-### C. Shade order in SMS
+### Shade order in SMS
 
 Not asked for, found while tracing the fade-in's grey step, and larger than
 HELL's. The dark rescue lifts four colours (`$040`, `$041`, `$048`, `$049`)
@@ -531,6 +531,51 @@ blue-grey, SMS now shows the darker one clearly lighter, in still pictures
 as well as for the fade steps. Whether that reads as wrong is the owner's
 call; a fix is a palette decision (lift the neighbours with them, or lift
 less), not an upload change.
+
+### C. The evidence that had not run (on the fix build)
+
+The fix build's tables are the dark-lift build's byte for byte, so these
+measure the dark lift itself.
+
+**Brightness** (`cap.py` through `mkjobs.py caps`, the survey's 33 captures
+in each of the six modes; `measure.py` against the survey's captures of
+`hell-1-1`). Cells: mean L* / % of the playfield below L* 10 / below L* 20
+(/ distinct colours), the index reading, mean over a scene's captures.
+
+| Scene | SMS before | SMS after | HELL before | HELL after | NES-A before | NES-A after | NES-B before | NES-B after |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 4-1 (5 frames) | 13.8/58/59/20 | 20.0/37/38/20 | 12.2/57/86/27 | 16.6/36/70/28 | 18.9/36/56/21 | 19.8/36/51/21 | 20.3/36/56/22 | 21.2/36/51/22 |
+| 5-1 area 0 | 4.9/67/96/16 | 7.5/58/87/16 | 6.7/62/97/23 | 8.2/52/96/23 | 11.1/47/74/22 | the same | 29.7/27/34/22 | the same |
+| 6-2 areas 0-4 | 10.7/58/78/17 | 14.1/47/67/17 | 10.6/55/81/20 | 15.0/44/58/21 | 16.3/37/69/18 | the same | 19.4/37/61/20 | the same |
+| 6-2 area 0 | 3.8/82/92 | 9.1/64/75 | 6.5/73/87 | 10.2/56/73 | 10.0/47/88 | the same | 11.3/47/82 | the same |
+| 6-4A | 4.9/70/95/22 | 4.9/70/95/22 | 7.4/67/87/31 | 7.4/67/87/32 | 9.5/60/78/23 | the same | 13.8/46/67/23 | the same |
+| 6-4B | 5.1/69/95/17 | 5.1/69/95/19 | 7.7/66/87/27 | 7.7/66/87/28 | 9.9/58/77/18 | the same | 14.3/44/67/20 | the same |
+| 6-4C | 16.0/38/63/19 | 16.7/36/60/19 | 20.7/13/34/22 | 20.7/13/34/22 | 23.2/13/51/18 | the same | 34.8/6/16/18 | the same |
+
+4-1's back trunks against the fill behind them (L* of the trunk entry
+`$03B` minus the fill's; pixel-weighted over the trunk and bark entries;
+dE76):
+
+| Mode | Before | After | Original mode |
+| --- | --- | --- | --- |
+| SMS | 0.0 / 2.0 / 0.0 (trunk and fill both black) | 30.6 / 24.6 / 30.6 (trunk `$092` on black) | 13.0 / 13.1 / 25.4 |
+| HELL | 0.0 / 4.2 / 0.0 (both 100) | 21.9 / 18.0 / 41.1 (310 on 100) | |
+| NES-A | 11.0 / 11.0 / 29.0 (`$040` on black) | 29.4 / 29.4 / 48.8 (`$090` on black) | |
+| NES-B | 11.0 / 11.0 / 29.0 | 29.4 / 29.6 / 48.8 | |
+
+**Against the study's predictions** (`build/dark-lift/numbers/`: "Sa",
+"Hb", "Na"): every cell above and every trunk figure equals the predicted
+one to the printed digit, in all four modes. Original and GB DMG measure
+exactly as on `hell-1-1` in every scene. The rooms the lift was not for
+stay dark: 6-4A and 6-4B are unchanged in every mode (SMS 4.9 and 5.1 mean
+L*, 70% of the playfield below L* 10), 5-1 area 0 in SMS rises from 4.9 to
+7.5 and still has 58% below L* 10.
+
+**4-1's RAM palette in the NES modes** (`nescheck.py` on the five 4-1
+captures of each mode): passed. 120 of the 128 set entries checked (8 are
+written by the game or colour 0), every one the new set-8 colour, the VCE
+equal to the RAM palette; the back trunks' ten entries hold `$080`, `$092`,
+`$080` (NES-B `$090`), `$0A0`, `$090` twice over, all lighter than `$040`.
 
 ## Rerunning
 
