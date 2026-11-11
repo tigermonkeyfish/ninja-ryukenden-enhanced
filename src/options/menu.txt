@@ -25,10 +25,8 @@
 # mode: $00 Original, $08 NES-A, $28 NES-B, $10 GB DMG, $18 HELL, $38 SMS;
 # $20 and $30 unassigned; see src/palette/main.asm; the menu sets $2100 bit 7
 # with SMS); bits 6-7 the language ($3227: 0 Japanese, 1 English, 2 Chinese).
-# Once the NES palettes are merged (nes-palette branch), make the PALETTE
-# line: @ $38 $00=ORIGINAL $08=NES-A $28=NES-B $10=GB_DMG $18=HELL $38=SMS
 @ $01 $00=ON $01=OFF
 @ $02 $00=OFF $02=ON
 @ $04 $00=OFF $04=ON
-@ $38 $00=ORIGINAL $10=GB_DMG $18=HELL $38=SMS
+@ $38 $00=ORIGINAL $08=NES-A $28=NES-B $10=GB_DMG $18=HELL $38=SMS
 @ $c0 $40=ENGLISH $00=JAPANESE $80=CHINESE

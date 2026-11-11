@@ -1,0 +1,79 @@
+{
+  "name": "Jaquio (6-4A): body 107, the statue orb 75, fireballs 100 (also 6-4B)",
+  "nes": "NES Jaquio (stage $6D 19, room 45): body/cloak 37 (tan) and 06 (dark red), cape/staff/mask accents 13 (blue-violet) 37, outline 0F; fireballs 37 06 / 13 37; the demon orb 16 26 30",
+  "roles": {
+    "outline": {"ramp": ["0F"]},
+    "gold": {"ramp": ["37", "27", "17"], "note": "NES Jaquio tan 37: the PC Engine gold mask and armour"},
+    "cloak": {"ramp": ["06", "16"], "note": "NES Jaquio dark red 06"},
+    "cape": {"ramp": ["13", "03", "23"], "note": "NES accent 13: the PC Engine blue cape"},
+    "orb": {"ramp": ["16", "06", "26"], "note": "NES demon orb 16 26 30: the PC Engine green orb"},
+    "shine": {"ramp": ["30", "10"], "note": "NES orb highlight 30"},
+    "fire": {"ramp": ["13", "23", "37"], "note": "NES Jaquio fireballs 13 37 (06): the PC Engine purple flames"}
+  },
+  "notes": ["PC Engine 107: 121 gold, 0A0 brown, 058 red-brown, 0D5 / 08C / 044 blues, 001 outline. 75: 052 / 080 / 0C0 / 100 green orb, 093 / 0DC / 16D greys, 1FF white. 100 (= Ryu's 97): the purple fireballs."],
+  "palettes": [
+    {
+      "palette": 75, "name": "statue orb",
+      "entries": [
+        {"entry": 0, "pce": "052", "role": "unused", "nes": "0C", "out": "042"},
+        {"entry": 1, "pce": "080", "role": "orb", "nes": "06", "out": "010", "override": "06"},
+        {"entry": 2, "pce": "0C0", "role": "orb", "nes": "16", "out": "060", "override": "16"},
+        {"entry": 3, "pce": "100", "role": "orb", "nes": "26", "out": "0FB", "override": "26"},
+        {"entry": 4, "pce": "000", "role": "orb", "nes": "36", "out": "17E", "override": "36"},
+        {"entry": 5, "pce": "1C0", "role": "outline", "nes": "32", "out": "1B7"},
+        {"entry": 6, "pce": "093", "role": "orb", "nes": "30", "out": "1FF", "override": "30"},
+        {"entry": 7, "pce": "0DC", "role": "shine", "nes": "1C", "out": "0C4"},
+        {"entry": 8, "pce": "16D", "role": "shine", "nes": "10", "out": "16D"},
+        {"entry": 9, "pce": "16D", "role": "shine", "nes": "10", "out": "16D"},
+        {"entry": 10, "pce": "16D", "role": "shine", "nes": "10", "out": "16D"},
+        {"entry": 11, "pce": "16D", "role": "shine", "nes": "10", "out": "16D"},
+        {"entry": 12, "pce": "16D", "role": "shine", "nes": "10", "out": "16D"},
+        {"entry": 13, "pce": "16D", "role": "shine", "nes": "10", "out": "16D"},
+        {"entry": 14, "pce": "16D", "role": "shine", "nes": "10", "out": "16D"},
+        {"entry": 15, "pce": "1FF", "role": "shine", "nes": "3C", "out": "1AE"}
+      ]
+    },
+    {
+      "palette": 100, "name": "Jaquio fireballs",
+      "entries": [
+        {"entry": 0, "pce": "0DB", "role": "unused", "nes": "00", "out": "092"},
+        {"entry": 1, "pce": "133", "role": "fire", "nes": "33", "out": "177"},
+        {"entry": 2, "pce": "030", "role": "fire", "nes": "17", "out": "0A0"},
+        {"entry": 3, "pce": "058", "role": "fire", "nes": "07", "out": "010"},
+        {"entry": 4, "pce": "0B1", "role": "fire", "nes": "26", "out": "0FB"},
+        {"entry": 5, "pce": "0F9", "role": "fire", "nes": "27", "out": "130"},
+        {"entry": 6, "pce": "0A8", "role": "fire", "nes": "16", "out": "060"},
+        {"entry": 7, "pce": "184", "role": "fire", "nes": "37", "out": "1BD"},
+        {"entry": 8, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 9, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 10, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 11, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 12, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 13, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 14, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 15, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"}
+      ]
+    },
+    {
+      "palette": 107, "name": "Jaquio",
+      "entries": [
+        {"entry": 0, "pce": "0DB", "role": "unused", "nes": "00", "out": "092"},
+        {"entry": 1, "pce": "001", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 2, "pce": "121", "role": "gold", "nes": "37", "out": "1BD", "override": "37"},
+        {"entry": 3, "pce": "0D5", "role": "cape", "nes": "23", "out": "0EF", "override": "23"},
+        {"entry": 4, "pce": "0A0", "role": "gold", "nes": "17", "out": "0A0", "override": "17"},
+        {"entry": 5, "pce": "044", "role": "cape", "nes": "03", "out": "00C", "override": "03"},
+        {"entry": 6, "pce": "058", "role": "cloak", "nes": "06", "out": "010", "override": "06"},
+        {"entry": 7, "pce": "08C", "role": "cape", "nes": "13", "out": "01F", "override": "13"},
+        {"entry": 8, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 9, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 10, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 11, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 12, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 13, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 14, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 15, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"}
+      ]
+    }
+  ]
+}

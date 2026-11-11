@@ -1,0 +1,34 @@
+{
+  "name": "Basaquer (3-3)",
+  "nes": "NES Basaquer (stage $6D 7, room 12): armour/body 16 (red), highlights/skin/spikes 36 (pale peach), outline 0F; blades accent 23 34",
+  "roles": {
+    "outline": {"ramp": ["0F"]},
+    "armour": {"ramp": ["16", "06", "26"], "note": "NES Basaquer red 16"},
+    "skin": {"ramp": ["36", "26"], "note": "NES Basaquer pale 36"},
+    "accent": {"ramp": ["23", "34"], "note": "NES blade accent 23 34: the PC Engine teal"}
+  },
+  "notes": ["PC Engine 104: 0E2 tan and 12C pale, 068 / 058 red-brown and 099 brown armour, 0C4 teal, 000 outline."],
+  "palettes": [
+    {
+      "palette": 104, "name": "Basaquer",
+      "entries": [
+        {"entry": 0, "pce": "0DB", "role": "unused", "nes": "00", "out": "092"},
+        {"entry": 1, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 2, "pce": "0E2", "role": "skin", "nes": "26", "out": "0FB", "override": "26"},
+        {"entry": 3, "pce": "12C", "role": "skin", "nes": "36", "out": "17E", "override": "36"},
+        {"entry": 4, "pce": "068", "role": "armour", "nes": "16", "out": "060", "override": "16"},
+        {"entry": 5, "pce": "099", "role": "armour", "nes": "17", "out": "0A0", "override": "17"},
+        {"entry": 6, "pce": "058", "role": "armour", "nes": "06", "out": "010", "override": "06"},
+        {"entry": 7, "pce": "0C4", "role": "accent", "nes": "23", "out": "0EF", "override": "23"},
+        {"entry": 8, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 9, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 10, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 11, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 12, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 13, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 14, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 15, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"}
+      ]
+    }
+  ]
+}

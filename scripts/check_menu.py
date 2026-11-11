@@ -36,13 +36,18 @@ options Each option row changed and accepted with Run, from 1-1: $2100 and
         $3227 afterwards; GB DMG shows the GB table's colours for the whole
         RAM palette, HELL the HELL table's for entries 0-239 and the RAM
         colours for the rest, SMS the SMS table's for the whole RAM palette;
-        paths through the palette values (each mapped mode then ORIGINAL;
-        every mode in Left order and in Right order; GB DMG and SMS straight
-        after each other), each accepted with Run, show each mapped mode's
-        table exactly and end with the same VCE as a stage start that never
-        left Original. Cancel after changing everything (from Original with
-        GB DMG, HELL or SMS previewed, from GB DMG, HELL and SMS previewing
-        another value) leaves the options and $3227 unchanged and is
+        NES-A and NES-B: the restarted 1-1 holds that variant's NES colours
+        (src/nes-palette) in the RAM palette, uploaded unmapped (the VCE
+        equals the RAM palette). Paths through the palette values (each
+        mode then ORIGINAL; every mode in Left order and in Right order; GB
+        DMG and SMS straight after each other; NES modes between mapped
+        ones), each accepted with Run, show each mapped mode's table and
+        each NES mode's colours exactly (after an NES mode, the original
+        colours back in the RAM palette) and end with the same VCE as a
+        stage start that never left Original. Cancel after changing
+        everything (from Original with NES-A, NES-B, GB DMG, HELL or SMS
+        highlighted, from GB DMG, HELL, SMS, NES-A and NES-B previewing
+        other values) leaves the options and $3227 unchanged and is
         compared with the run without the menu for LONG frames.
 select  also checks, after a cold boot, that the LANGUAGE row reads
         ENGLISH with $3227 = 1.
@@ -608,15 +613,78 @@ def to_level(game, candidate, seed):
     game.step(30)
 
 
-def check_options(emulator, candidate, seed, output):
+def nes_data(variant):
+    """The NES palette data of `variant` ('a' NES-A, 'b' NES-B, the re-lit
+    version of the same role data: scripts/nes_palette.py)."""
+    import nes_palette as NP
+    data = NP.load()
+    return NP.relit(data) if variant == 'b' and hasattr(NP, 'relit') else data
+
+
+def nes_expected(original, variant='a'):
+    """1-1 in NES mode (src/nes-palette, `variant` 'a' or 'b'): {RAM palette
+    index: colour} for the NES copy of set 1 (rows 0 and 2-14; row 1 is the
+    Enhanced merged palette, row 15 the HUD's), the NES HUD entries
+    $F1-$F7 and Ryu's sprite row 0; entries the game animates in 1-1 (r9:7,
+    r9:d, r11:f) left out. Returns (NES colours, original colours) by index;
+    only entries whose NES colour differs from the original are in the
+    second."""
+    import nes_palette as NP
+    data = nes_data(variant)
+    lay = NP.layout(data)
+    set1 = next(d for d in data['stages'] if d['set'] == 1)
+    orig = {i: int(e['pce'], 16) for i, e in enumerate(set1['entries'])}
+    want = {i: c for i, c in enumerate(lay['sets'][1]) if i < 240 and not 16 <= i < 32 and (i % 16 or i == 0)}
+    for i in (0x97, 0x9d, 0xbf):
+        want.pop(i, None)
+    want.update({0xf1 + k: c for k, c in enumerate(lay['hud'])})
+    orig.update({0xf1 + k: int(e['pce'], 16) for k, e in enumerate(data['shared']['hud']['entries'])})
+    want.update({256 + k: c for k, c in enumerate(dict(lay['sprites'])[96]) if k})
+    orig.update({256 + e['entry']: int(e['pce'], 16) for e in data['shared']['sprites'][0]['entries']})
+    if original is not None:
+        kw = {'variant': variant} if variant == 'b' and hasattr(NP, 'relit') else {}
+        m, n = NP.enhanced_palettes('stage11', original, **kw)['extra_palette_nes']
+        want.update({16 + k: n[k] for k in range(1, 16)})
+        orig.update({16 + k: m[k] for k in range(1, 16)})
+    return want, {i: orig[i] for i in want if orig[i] != want[i]}
+
+
+def mode_ok(game, ram, mode, nes):
+    """After a Run into palette bits `mode`: a mapped mode's VCE is exactly
+    its table over the RAM palette (mode_expected), with $2104 bit 7 set; an
+    NES mode's RAM palette holds that variant's NES colours (nes: {'a': ...,
+    'b': ...} from nes_expected) and the VCE equals the RAM palette; in a
+    mapped mode the RAM palette holds the original colours wherever an NES
+    variant differs from them (nothing of an earlier NES mode is left).
+    $2100 bit 7 is set exactly with SMS."""
+    pal = palette_words(ram)
+    vce = game.read(0, 1024, area=8)
+    if ram[0x100] & 0x80 != (0x80 if mode == 0x38 else 0):
+        return False
+    if mode & 0x18 == 0x08:
+        want, _ = nes[('a', 'b')[mode >> 5 & 1]]
+        return all(pal[i] == c for i, c in want.items()) and vce[:512] == ram[0x286:0x486]
+    originals = {i: c for v in nes.values() for i, c in v[1].items()}
+    pal_ok = all(pal[i] == originals[i] for i in originals)
+    return pal_ok and vce == mode_expected(game, mode) and ram[0x104] & 0x80 == 0x80
+
+
+def palette_words(ram):
+    return [ram[0x286 + 2 * i] | ram[0x287 + 2 * i] << 8 for i in range(512)]
+
+
+def check_options(emulator, candidate, seed, output, original=None):
     work = Path(tempfile.mkdtemp(prefix='menu-options-', dir=output))
     results = {}
-    # PALETTE values in Left/Right order: ORIGINAL, GB_DMG, HELL, SMS.
+    nes = {variant: nes_expected(original, variant) for variant in ('a', 'b')}
+    # PALETTE values in Left/Right order: ORIGINAL, NES-A, NES-B, GB_DMG,
+    # HELL, SMS.
     cases = [('parallax off', 1, ['right'], 0x01, None), ('no damage on', 2, ['right'], 0x02, None),
-             ('nes firewheel on', 3, ['right'], 0x04, None), ('palette gb dmg', 4, ['right'], 0x10, None),
-             ('palette hell', 4, ['right', 'right'], 0x18, None),
-             ('palette sms', 4, ['right', 'right', 'right'], 0x38, None),
+             ('nes firewheel on', 3, ['right'], 0x04, None), ('palette nes-a', 4, ['right'], 0x08, None),
+             ('palette nes-b', 4, ['right'] * 2, 0x28, None), ('palette gb dmg', 4, ['right'] * 3, 0x10, None),
+             ('palette hell', 4, ['right'] * 4, 0x18, None), ('palette sms', 4, ['right'] * 5, 0x38, None),
              ('palette wraps left to sms', 4, ['left'], 0x38, None),
+             ('palette nes-a by left', 4, ['left'] * 5, 0x08, None),
              ('language japanese', 5, ['right'], 0x00, 0), ('language chinese', 5, ['left'], 0x00, 2)]
     for name, row, presses, bits, language in cases:
         with Game(emulator, work) as game:
@@ -625,24 +693,32 @@ def check_options(emulator, candidate, seed, output):
             entry = {'options': f'{ram[0x100]:#04x}', 'language': ram[0x1227], 'stage': ram[0xe5f]}
             entry['ok'] = (ram[0x100] & 0x3f == bits and ram[0x1227] == (1 if language is None else language)
                            and ram[0xe5f] == 0)
-            if bits in (0x10, 0x18, 0x38):
-                vce = game.read(0, 1024, area=8)
-                expected = mode_expected(game, bits)
-                entry['vce_is_mode_table'] = vce == expected
-                entry['ok'] = entry['ok'] and vce == expected and ram[0x104] & 0x80 == 0x80
+            if row == 4:
+                entry['mode_exact'] = mode_ok(game, ram, bits, nes)
+                entry['ok'] = entry['ok'] and entry['mode_exact']
+                if bits & 0x18 == 0x08:
+                    pal = palette_words(ram)
+                    entry['nes_colours_wrong'] = [i for i, c in nes[('a', 'b')[bits >> 5 & 1]][0].items()
+                                                  if pal[i] != c][:10]
                 (Path(output) / f'options-{name.replace(" ", "-")}.png').write_bytes(game.screenshot())
             results[name] = entry
             print('option', name, entry, flush=True)
     # The reference for ORIGINAL: the same Runs with nothing changed. Each
-    # path through the mapped modes must end with exactly its VCE; each
-    # accepted mapped mode on the way must show exactly its table.
-    paths = {'original restored exactly (gb dmg, original)': [['right'], ['left']],
-             'original restored exactly (hell, original)': [['right', 'right'], ['left', 'left']],
-             'original restored exactly (sms, original)': [['left'], ['right']],
-             'sms, hell, gb dmg, original': [['left'], ['left'], ['left'], ['left']],
-             'gb dmg, hell, sms, original': [['right'], ['right'], ['right'], ['right']],
-             'sms, gb dmg, original': [['left'], ['left', 'left'], ['left']],
-             'gb dmg, sms, original': [['right'], ['right', 'right'], ['right']]}
+    # path must end with exactly its VCE; each accepted mode on the way must
+    # show exactly its colours (mode_ok).
+    R, L = 'right', 'left'
+    paths = {'original restored exactly (nes-a, original)': [[R], [L]],
+             'original restored exactly (nes-b, original)': [[R] * 2, [L] * 2],
+             'original restored exactly (gb dmg, original)': [[R] * 3, [L] * 3],
+             'original restored exactly (hell, original)': [[R] * 4, [L] * 4],
+             'original restored exactly (sms, original)': [[L], [R]],
+             'sms, hell, gb dmg, nes-b, nes-a, original': [[L]] * 6,
+             'nes-a, nes-b, gb dmg, hell, sms, original': [[R]] * 6,
+             'sms, gb dmg, original': [[L], [L, L], [L] * 3],
+             'gb dmg, sms, original': [[R] * 3, [R, R], [R]],
+             'nes-a, gb dmg, original': [[R], [R, R], [L] * 3],
+             'sms, nes-b, hell, nes-a, original': [[L], [L] * 3, [R, R], [L] * 3, [L]],
+             'nes-b, sms, nes-a, original': [[R, R], [L] * 3, [R, R], [L]]}
     runs = max(len(steps) for steps in paths.values())
     with Game(emulator, work) as game:
         to_level(game, candidate, seed)
@@ -657,32 +733,36 @@ def check_options(emulator, candidate, seed, output):
                 ram = menu_to(game, 4, presses)
                 mode = ram[0x100] & 0x38
                 if mode:
-                    on_the_way.append((f'{mode:#04x}', game.read(0, 1024, area=8) == mode_expected(game, mode)))
+                    on_the_way.append((f'{mode:#04x}', mode_ok(game, ram, mode, nes)))
             for _ in range(runs - len(steps)):
                 menu_to(game, 0, [])
             back = game.read(0, 1024, area=8)
             ram = game.read(0, 0x2000)
-        results[name] = {'ok': back == plain and ram[0x100] & 0x3f == 0 and ram[0x104] & 0x80 == 0
-                         and all(ok for _, ok in on_the_way),
-                         'mapped_modes_exact': on_the_way}
+        results[name] = {'ok': back == plain and ram[0x100] & 0xbf == 0 and ram[0x104] & 0x80 == 0
+                         and all(ok for _, ok in on_the_way) and len(on_the_way) == len(steps) - 1,
+                         'modes_exact': on_the_way}
         print(name, results[name], flush=True)
     # Cancel after changing everything: nothing changes. Long comparisons
     # (LONG frames, the stage timer included) show whether the palette
-    # module's state a cancelled preview may leave has any effect: from
-    # Original (preview GB DMG, HELL or SMS), from GB DMG (preview HELL),
-    # from HELL (preview SMS), from SMS (preview ORIGINAL) and from SMS
-    # (preview GB DMG: the same code, another table).
-    everything = ['right', 'down', 'right', 'down', 'right', 'down', 'right', 'down', 'right', 'down', 'right']
-    leftwards = everything[:8] + ['left'] + everything[9:]
-    hell = everything[:8] + ['right', 'right'] + everything[9:]
-    sms_to_gb = everything[:8] + ['left', 'left'] + everything[9:]
-    for name, first, actions in (('cancel after changing everything', None, everything),
-                                 ('cancel after changing everything, palette hell', None, hell),
-                                 ('cancel after changing everything, palette sms', None, leftwards),
-                                 ('cancel after changing everything, from GB DMG', ['right'], everything),
-                                 ('cancel after changing everything, from HELL', ['right', 'right'], everything),
-                                 ('cancel after changing everything, from SMS', ['left'], everything),
-                                 ('cancel after changing everything, from SMS to GB DMG', ['left'], sms_to_gb)):
+    # module's state a cancelled preview may leave has any effect. The
+    # PALETTE row is stepped by `steps` from the opening mode: an NES value
+    # on the way keeps the colours; opened in an NES mode, the RAM palette
+    # holds NES colours, which ORIGINAL shows unmapped and the mapped modes map.
+    def everything(steps):
+        return [R, 'down', R, 'down', R, 'down', R, 'down'] + steps + ['down', R]
+    for name, first, actions in (
+            ('cancel after changing everything, palette nes-a', None, everything([R])),
+            ('cancel after changing everything, palette nes-b', None, everything([R] * 2)),
+            ('cancel after changing everything, palette gb dmg', None, everything([R] * 3)),
+            ('cancel after changing everything, palette hell', None, everything([R] * 4)),
+            ('cancel after changing everything, palette sms', None, everything([L])),
+            ('cancel after changing everything, from GB DMG to HELL', [R] * 3, everything([R])),
+            ('cancel after changing everything, from GB DMG to NES-B', [R] * 3, everything([L])),
+            ('cancel after changing everything, from HELL to SMS', [R] * 4, everything([R])),
+            ('cancel after changing everything, from SMS to ORIGINAL', [L], everything([R])),
+            ('cancel after changing everything, from SMS to GB DMG', [L], everything([L, L])),
+            ('cancel after changing everything, from NES-A via NES-B to HELL', [R], everything([R] * 3)),
+            ('cancel after changing everything, from NES-B via NES-A to SMS', [R] * 2, everything([L] * 3))):
         with Game(emulator, work) as game:
             to_level(game, candidate, seed)
             if first:
@@ -691,7 +771,7 @@ def check_options(emulator, candidate, seed, output):
             found = exact_cycle(game, work, actions=actions, n=LONG) \
                 if select_at_hook(game) else {'ok': False, 'problems': ['menu not available']}
             after = game.read(0, 0x2000)
-            found['options_and_language_kept'] = after[0x100] & 0x3f == before[0x100] & 0x3f and after[0x1227] == 1
+            found['options_and_language_kept'] = after[0x100] & 0xbf == before[0x100] & 0xbf and after[0x1227] == 1
             found['ok'] = found['ok'] and found['options_and_language_kept']
             results[name] = found
             print(name, found, flush=True)
@@ -739,7 +819,9 @@ def main():
     if 'runs' in parts:
         actions = None
         if args.preview:
-            actions = ['down', 'right', 'down', 'right', 'down', 'right', 'down', 'right', 'down', 'right', 'down']
+            # PALETTE stepped three times: NES-A and NES-B (colours kept), then GB DMG.
+            actions = ['down', 'right', 'down', 'right', 'down', 'right', 'down', 'right', 'right', 'right', 'down',
+                       'right', 'down']
         if args.shots:
             args.shots.mkdir(parents=True, exist_ok=True)
         report['runs'] = check_runs(args.emulator, args.candidate, seed, args.every, args.output,
@@ -753,7 +835,9 @@ def main():
         report['level_select'] = check_level_select(args.emulator, args.candidate, args.output)
         oks += [e['ok'] for e in report['level_select']]
     if 'options' in parts:
-        report['options'] = check_options(args.emulator, args.candidate, seed, args.output)
+        rom = args.original.read_bytes()
+        report['options'] = check_options(args.emulator, args.candidate, seed, args.output,
+                                          rom[512:] if len(rom) % 8192 == 512 else rom)
         oks += [e['ok'] for e in report['options'].values()]
     report['ok'] = all(oks)
     (args.output / 'report.json').write_text(json.dumps(report, indent=2) + '\n')

@@ -75,6 +75,15 @@ HUD font, window lines of the wrong width, a band line over 32 columns, a
 STAGE field not 5 wide, values wider than their field or outside their
 bits, and overlapping bits fail the build.
 
+The NES palette mode's colours are editable data too:
+`src/nes-palette/stages/*.json` and `shared.json` hold roles (NES palette
+codes) and per-entry role names; `scripts/nes_palette.py` resolves them,
+checks the files' original colours against the original ROM and writes the
+packed tables (`nes-palette` prepare step) and the NES versions of the 1-1
+and 2-2 merged palettes. After editing a role, run
+`python3 scripts/nes_palette.py resolve` to refresh the stored results the
+build checks; `python3 scripts/nes_palette.py check` shows stale ones.
+
 This is a **source rebuild from the original game**: no byte comes from a
 release patch.
 

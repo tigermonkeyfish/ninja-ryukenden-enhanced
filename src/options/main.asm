@@ -84,8 +84,12 @@ renderer_gate_end:
 MENU_ENTRY = $4400          ; the hook's jsr target (src/selector-hook)
 OPTION_BITS = $3f           ; draft bits copied to $2100 on Run
 PALETTE_BITS = $38          ; previewed live while the menu is open
+PALETTE_FAMILY = $18        ; the upload family (src/palette): $08 NES-A and NES-B
+PALETTE_NES = $08           ; reloads palette data (src/nes-palette): shown after Run
 PALETTE_SMS = $38
 SMS_FLAG = $80              ; $2100 bit 7: set exactly with SMS (src/palette)
+OPENED_OPTIONS = $2103      ; ,X after tsx in preview_palette: $2100 as the menu opened
+                            ; (menu_open pushed it; above it preview_palette's return)
 LANGUAGE = $3227            ; native: 0 Japanese, 1 English, 2 Chinese
 BOX_TOP = 7                 ; BAT row of the window's top row
 BOX_LEFT = 3                ; screen column of its left edge
@@ -246,14 +250,19 @@ choose:
  lda <STAGE
  cmp #$ff
  beq cancelled
- ; Run: the draft's options, and its language.
+ ; Run: the draft's options, and its language. The palette mode first,
+ ; through set_palette: an NES value was not previewed (the live mode is
+ ; still the one the menu opened in), and set_palette writes bit 7 with it.
+ lda DRAFT
+ and #PALETTE_BITS
+ jsr set_palette
  lda DRAFT
  and #OPTION_BITS
  sta <SCRATCH
  php
  sei
  lda OPTIONS
- and #$ff - OPTION_BITS
+ and #$ff - OPTION_BITS     ; bit 7 as set_palette left it
  ora <SCRATCH
  sta OPTIONS
  plp
@@ -313,9 +322,24 @@ selection_return:
  rts
 
  ; The live palette mode follows the draft's, so the choice shows at once;
- ; cancel puts the old mode back.
+ ; cancel puts the old mode back. NES colours (NES-A, NES-B) are not a
+ ; mapping of the RAM palette but other palette data, loaded with the stage
+ ; (src/nes-palette): they show after Run, which restarts the stage. While
+ ; an NES value is highlighted, the live mode is the one the menu opened in,
+ ; so the colours on screen do not change. (Opened in an NES mode, the RAM
+ ; palette holds NES colours: ORIGINAL shows them unmapped, the mapped modes
+ ; map them.)
 preview_palette:
  lda DRAFT
+ and #PALETTE_FAMILY
+ cmp #PALETTE_NES
+ bne preview_draft
+ tsx
+ lda OPENED_OPTIONS,x       ; $2100 as the menu found it (pushed in menu_open)
+ bra preview_masked
+preview_draft:
+ lda DRAFT
+preview_masked:
  and #PALETTE_BITS
  ; A = palette bits: make them the live mode. When they change, all 512
  ; colours are queued (native $F394, under the palette lock) and src/palette

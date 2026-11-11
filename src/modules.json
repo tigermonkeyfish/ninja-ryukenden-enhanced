@@ -8,7 +8,7 @@
         555008
       ]
     ],
-    "prepare": "native-stage11"
+    "prepare": "native-stage11+nes-enhanced-stage11"
   },
   {
     "name": "stage31",
@@ -76,7 +76,7 @@
         606208
       ]
     ],
-    "prepare": "native-stage22"
+    "prepare": "native-stage22+nes-enhanced-stage22"
   },
   {
     "name": "stage42",
@@ -162,7 +162,7 @@
     "ranges": [
       [
         566272,
-        573440
+        569856
       ]
     ]
   },
@@ -398,5 +398,44 @@
       ]
     ],
     "prepare": "palette-tables"
+  },
+  {
+    "name": "nes-palette",
+    "source": "src/nes-palette/main.asm",
+    "ranges": [
+      [
+        4572,
+        4575
+      ],
+      [
+        4660,
+        4663
+      ],
+      [
+        9155,
+        9174
+      ],
+      [
+        457776,
+        458752
+      ],
+      [
+        565248,
+        566272
+      ],
+      [
+        569856,
+        573440
+      ],
+      [
+        28312,
+        28317
+      ],
+      [
+        29696,
+        31232
+      ]
+    ],
+    "prepare": "nes-palette"
   }
 ]

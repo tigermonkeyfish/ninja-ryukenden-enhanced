@@ -74,6 +74,30 @@
   data choice tests bit 5; the NES menu code's `PALETTE_BITS`/`OPENED_OPTIONS`
   logic must use the `$38` mask and compare the family (`and #$18`) to
   `$08`; see the [merge notes](validation/sms-palette.md#merging-with-nes-palette-2).
+
+- **NES palette** (1.11-dev, branches `nes-palette`, then `nes-palette-2`):
+  the PALETTE row's NES value (`$2100` bits 3-4 = 01) shows the game in NES
+  master-palette colours only (the 47 9-bit 2C02G colours; the build fails
+  on any other) with the PC Engine's detail, read like NES Ninja Gaiden.
+  Draft 2 (2026-11-11, owner: "all the bosses should be 8 bit and all the
+  rooms should follow"; NES colours only, TG16 detail): every stage set,
+  Ryu (re-mapped, distinct shades), the HUD, all 54 sprite palettes loaded
+  in gameplay (Ryu's effects, items, enemies by hue class, each boss by part
+  from its captured NES fight) and the game's animated colours (an NES copy
+  of bank 3's animation table). Distinct colours of a palette row stay
+  distinct unless that would shift a colour by more than about 30 L*. The
+  colours are data (`src/nes-palette/`: `stages/`, `sprites/`,
+  `shared.json`, `animations.json`; roles and colour values only;
+  `scripts/nes_palette.py`). Cinemas and the title stay original. Still a
+  **draft** the maintainer has not reviewed; review sheets are private in
+  `build/nes-palette-2/sheets/`. Open: fade steps (area changes, loads,
+  deaths) dim NES colours by channel, so those frames show non-NES colours;
+  a few tiles of 4-3, 5-2 and 6-3 use rows their set does not load
+  (leftovers), which hold original colours after a mode switch or a Level
+  Select entry. Code and data in bank `$45`, bank `$37`'s free tail and
+  bank 3 `$D400-$D9FF`; no fixed-bank free bytes
+  ([architecture](ARCHITECTURE.md#nes-palette-mode),
+  [evidence](validation/nes-palette.md), emulator only).
 - **Popup menu** (1.11-dev, branch `popup-menu`): Select opens a 26 x 10
   window over the playfield (BAT rows 7-16) instead of covering the HUD:
   STAGE, SMOOTH PARALLAX, NO DAMAGE, NES FIREWHEEL, PALETTE, LANGUAGE, then
@@ -144,6 +168,15 @@
    evidence. Never change the published patches.
 
 ## Next useful work
+
+- NES palette: the maintainer's review of draft 2 (sheets private in
+  `build/nes-palette-2/sheets/`: bosses, the four once-uncaptured stages'
+  areas, Ryu before/after). Then: NES-only fade steps (map fade colours to
+  the nearest NES colour in the upload, best after `hell-palette`'s upload
+  rewrite is merged, since it changes `src/palette`); the leftover rows
+  (pad the short NES sets or snap rows past a set's end at its load);
+  enemies per stage from the NES enemy palettes if the hue-class pass is
+  not enough; the NES final form (not reached in the NES captures).
 
 - After any change that could affect timing, rerun
   `scripts/comparison_video.py make` and `cinema` on all runs; a run that no
