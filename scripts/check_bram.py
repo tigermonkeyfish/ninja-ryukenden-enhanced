@@ -283,7 +283,9 @@ def check_case(emulator, rom, name, image, output, reference, dead=False, locked
             expect('$2100', started['options'], options)
             expect('$3227', started['language'], language)
             files = None if image is None else others(image)
-            slow = files is not None and len(files) + 1 > MANY_ENTRIES and not unreachable
+            # Every entry counts, ours too; exactly MANY_ENTRIES is still compared.
+            entries = 0 if files is None else len(bi.Directory(image).files())
+            slow = entries > MANY_ENTRIES and not unreachable
             if not slow:
                 expect('first update frame', started['first_update_frame'], reference(options, language))
             expect('backup RAM after the boot', game.backup_ram(), image)
@@ -326,9 +328,10 @@ def check_case(emulator, rom, name, image, output, reference, dead=False, locked
                       'bytes_changed': 0 if image is None else sum(a != b for a, b in zip(image, after)),
                       'first_update_frame': started['first_update_frame'], 'problems': problems}
             if slow:
-                result['boot_not_compared'] = (f'more than {MANY_ENTRIES} entries: first update at frame '
+                result['boot_not_compared'] = (f'{entries} entries, more than {MANY_ENTRIES}: first update at frame '
                                                f"{started['first_update_frame']}, the baseline's at "
-                                               f'{reference(options, language)}')
+                                               f'{reference(options, language)} (the boot runs one vblank '
+                                               'interrupt behind, which moves the mashed Run presses)')
     except Exception as error:                     # a hang or a crash is a result too
         result = {'case': name, 'problems': problems + [f'{type(error).__name__}: {error}']}
     shutil.rmtree(work, ignore_errors=True)

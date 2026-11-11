@@ -56,7 +56,10 @@ describe `bram-save` as it was stopped.
   under `key`; lock read removed: works, and the probe reports the bank
   open after the boot and after each Run
   (`build/v111/lock-neg-lock`, `lock-neg-key`).
-  Full matrix under `lock` and `key`, `readonly` and `openbus`: running.
+  Full matrix under `lock` (`--only matrix --bram-model lock --shard K/3`,
+  `build/v111/matrix-lock`): 210 of 210 pass, the bank locked after the
+  boot and after both Runs in all 209 images (the 210th is no backup RAM).
+  `key`, `readonly` and `openbus`: running.
 - Independent check of the sequence: the Super System Card 3.0 ROM itself
   (the Duo's own code) maps bank `$F7` in MPR4, executes `csl`, `sei`,
   writes the single byte `$80` to `$1807`, and afterwards reads `$1803`
