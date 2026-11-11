@@ -305,8 +305,8 @@
     ]
   },
   {
-    "name": "english",
-    "source": "src/english/main.asm",
+    "name": "bram",
+    "source": "src/bram/main.asm",
     "ranges": [
       [
         44,
@@ -314,7 +314,11 @@
       ],
       [
         8166,
-        8174
+        8182
+      ],
+      [
+        576256,
+        577536
       ]
     ]
   },

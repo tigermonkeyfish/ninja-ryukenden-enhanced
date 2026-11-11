@@ -14,6 +14,10 @@ character:
   the draft-byte bits the field owns, then `value=TEXT` choices in
   Left/Right order (`_` is a space in TEXT). Adding a choice is adding one
   `value=TEXT` item to its line.
+- `?` line: the texts of the save status field (the one run of '?' in the
+  window; not selectable), one per status of src/bram/main.asm (ST_NONE
+  first), `_` a space. The window must hold exactly one such field, wide
+  enough for every text.
 
 `#` starts a comment line.
 """
@@ -27,6 +31,7 @@ CODES.update({str(i): 0xa0 + i for i in range(10)})
 BOX_WIDTH, BOX_ROWS = 26, 10
 BAND_WIDTH = 32
 STAGE_WIDTH = 5
+STATUS_COUNT = 9            # the ST_ values of src/bram/main.asm
 CREDITS = ('GITHUB.COM/TIGERMONKEYFISH', 'TIGERMONKEYFISH')
 # Draft bits the option rows may own: bits 0-5 are copied to $2100 on Run,
 # bits 6-7 hold the language ($3227) (src/options/main.asm).
@@ -41,28 +46,44 @@ def encode(text, what):
 
 
 def box(lines):
-    """(window bytes, [(row, column, width)] value fields) for the `|` lines."""
+    """(window bytes, [(row, column, width)] value fields, the status field
+    (row, column, width)) for the `|` lines."""
     if len(lines) != BOX_ROWS:
         raise ValueError(f'The menu window needs {BOX_ROWS} lines, found {len(lines)}')
-    data, fields = bytearray(), []
+    data, fields, status = bytearray(), [], []
     for row, line in enumerate(lines):
         if len(line) != BOX_WIDTH + 2 or not line.endswith('|'):
             raise ValueError(f'Window line {row + 1} must be {BOX_WIDTH} columns between bars: {line!r}')
         line = line[1:-1]
         column = 0
         while column < BOX_WIDTH:
-            if line[column] == '#':
+            if line[column] in '#?':
                 end = column
-                while end < BOX_WIDTH and line[end] == '#':
+                while end < BOX_WIDTH and line[end] == line[column]:
                     end += 1
-                fields.append((row, column, end - column))
+                (fields if line[column] == '#' else status).append((row, column, end - column))
                 column = end
             else:
                 column += 1
-        data += encode(line.replace('#', ' '), f'Window line {row + 1}')
+        data += encode(line.replace('#', ' ').replace('?', ' '), f'Window line {row + 1}')
     if not fields or fields[0][2] != STAGE_WIDTH:
         raise ValueError(f'The first value field is STAGE, {STAGE_WIDTH} wide')
-    return bytes(data), fields
+    if len(status) != 1:
+        raise ValueError(f"The window needs exactly one save status field (a run of '?'), found {len(status)}")
+    return bytes(data), fields, status[0]
+
+
+def statuses(lines, width):
+    """The save status texts, padded to the field: one per status."""
+    if len(lines) != 1:
+        raise ValueError('The layout needs exactly one ? (save status) line')
+    texts = [text.replace('_', ' ') for text in lines[0][1:].split()]
+    if len(texts) != STATUS_COUNT:
+        raise ValueError(f'{STATUS_COUNT} save statuses need as many texts, found {len(texts)}')
+    for text in texts:
+        if len(text) > width:
+            raise ValueError(f'{text!r} is wider than the save status field ({width})')
+    return [encode(text.ljust(width), 'A save status') for text in texts]
 
 
 def band(template, version):
@@ -103,16 +124,17 @@ def choices(lines, widths):
 def layout(text, version):
     """Everything the menu module needs, from menu.txt's text."""
     lines = [line for line in text.splitlines() if line and not line.startswith('#')]
-    window, fields = box([line for line in lines if line.startswith('|')])
+    window, fields, status = box([line for line in lines if line.startswith('|')])
     bands = [line[1:].strip() for line in lines if line.startswith('=')]
     if len(bands) != 1:
         raise ValueError('The layout needs exactly one = (band) line')
     band_bytes, band_text = band(bands[0], version)
     rows = choices([line for line in lines if line.startswith('@')], [w for _, _, w in fields[1:]])
-    if any(not line.startswith(('|', '=', '@')) for line in lines):
-        raise ValueError('Every line must start with |, =, @ or #')
+    if any(not line.startswith(('|', '=', '@', '?')) for line in lines):
+        raise ValueError('Every line must start with |, =, @, ? or #')
     return {'window': window, 'fields': fields, 'band': band_bytes, 'band_text': band_text,
-            'choices': rows}
+            'choices': rows, 'status': status,
+            'status_texts': statuses([line for line in lines if line.startswith('?')], status[2])}
 
 
 def db(values):
@@ -146,5 +168,8 @@ def generate(directory, version):
     out += 'choice_value:\n' + db(values)
     out += 'choice_text_at:\n' + db(text_at)
     out += 'choice_text:\n' + db(text)
+    row, column, width = menu['status']
+    out += f'STATUS_ROW = {row}\nSTATUS_COL = {column}\nSTATUS_WIDTH = {width}\nSTATUS_COUNT = {STATUS_COUNT}\n'
+    out += 'status_text:\n' + ''.join(db(text) for text in menu['status_texts'])
     (directory / 'menu-text.inc').write_text(out)
     return menu

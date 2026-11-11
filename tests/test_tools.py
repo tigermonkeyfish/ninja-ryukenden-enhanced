@@ -771,9 +771,105 @@ class ReleaseTests(unittest.TestCase):
                        source.replace('@ $04 $00=OFF $04=ON', '@ $04 $00=OFF $02=ON'),              # value outside its bits
                        source.replace('@ $04 $00=OFF $04=ON', '@ $02 $00=OFF $02=ON'),              # bits owned twice
                        source.replace('@ $04 $00=OFF $04=ON\n', ''),                                # a field without values
-                       source.replace('|                          |\n', '', 1)):                    # nine rows
+                       source.replace('|                          |\n', '', 1),                     # nine rows
+                       source.replace('| SAVE: ????????           |', '| SAVE:                    |'),  # no status field
+                       source.replace('| SAVE: ????????           |', '| SAVE: ????? ??          |'),  # two
+                       source.replace('| SAVE: ????????           |', '| SAVE: ??????            |'),  # ERROR 1 does not fit
+                       source.replace(' ERROR_5\n', '\n'),                                          # a status without a text
+                       source.replace('? NONE OK', '? NONE O!K')):                                  # not in the HUD font
             with self.assertRaises(ValueError):
                 layout(broken, '1.11')
+        # The save status: one field in the window's last row, a text for
+        # each status of src/bram, in its order.
+        from bram_image import STATUS
+        self.assertEqual(menu['status'], (9, 7, 8))
+        self.assertEqual(menu['status_texts'], [bytes(CODES[c] for c in text.ljust(8)) for text in STATUS])
+        self.assertIn(f'STATUS_ROW = 9\nSTATUS_COL = 7\nSTATUS_WIDTH = 8\nSTATUS_COUNT = {len(STATUS)}\n', include)
+
+
+class SavedSettingsTests(unittest.TestCase):
+    """The backup RAM images and the model the emulator check compares the
+    game with (scripts/bram_image.py): ROM-free."""
+
+    def test_status_values_are_the_modules(self):
+        import re
+        import bram_image as bi
+        source = (ROOT / 'src/bram/main.asm').read_text()
+        values = {name: int(value) for name, value in re.findall(r'^ST_(\w+) = (\d+)', source, re.M)}
+        self.assertEqual(values, {'NONE': bi.NONE, 'OK': bi.OK, 'READY': bi.READY, 'FULL': bi.FULL,
+                                  'UNFORMATTED': bi.UNFORMATTED, 'CORRUPT': bi.CORRUPT, 'SIZE': bi.WRONG_SIZE,
+                                  'VERIFY': bi.UNVERIFIED, 'DATA': bi.BAD_DATA, 'COUNT': len(bi.STATUS)})
+        self.assertIn(f'ENTRY_SIZE = ${bi.ENTRY_SIZE:02x}\n', source)
+        self.assertIn(' .db ' + ','.join(f'${c:02x}' for c in bi.NAME) + '\n', source)
+        # Its claims: the reset call, the trampoline up to the vectors, and
+        # bank $46 $4B00-$4FFF.
+        module = next(m for m in json.loads((ROOT / 'src/modules.json').read_text()) if m['name'] == 'bram')
+        self.assertEqual(module['ranges'], [[0x2c, 0x2f], [0x1fe6, 0x1ff6], [0x8cb00, 0x8d000]])
+
+    def test_entry_is_a_system_card_file(self):
+        import bram_image as bi
+        raw = bi.settings_entry(0xb9, 2)
+        self.assertEqual(raw[:2], b'\x18\x00')
+        self.assertEqual(raw[4:16], b'\0\0NR ENHANCE')
+        self.assertEqual(raw[16:], bytes([1, 0xb9, 2, 0, 0, 0, 0, 0]))
+        self.assertEqual((sum(raw[4:]) + int.from_bytes(raw[2:4], 'little')) & 0xffff, 0)
+        card = bi.Directory(bi.image([bi.other(0, 0x40), raw, bi.other(1, 0x33)]))
+        self.assertEqual([(at, length, good) for at, length, _, good in card.files()],
+                         [(0x8010, 0x40, True), (0x8050, 0x18, True), (0x8068, 0x33, True)])
+        self.assertEqual(card.read(b'\0\0NR ENHANCE'), raw[16:])
+        self.assertEqual(card.free(), 0x800 - 0x10 - 0x40 - 0x18 - 0x33 - 0x12)
+        card.delete(b'\0\0NR ENHANCE')
+        self.assertEqual(bytes(card.data[:0x83 + 2]), bi.image([bi.other(0, 0x40), bi.other(1, 0x33)])[:0x83 + 2])
+
+    def test_model_of_load_and_save_over_the_matrix(self):
+        import bram_image as bi
+        cases = bi.matrix()
+        self.assertGreaterEqual(len(cases), 200)
+        ours = b'\0\0' + bi.NAME
+        for name, image in cases.items():
+            status, options, language = bi.expected_load(image)
+            if status != bi.OK:
+                self.assertEqual((options, language), bi.DEFAULTS, name)
+            saved, after = bi.expected_save(image, 0x0b, 2)
+            if image is None:
+                self.assertEqual((status, saved, after), (bi.NONE, bi.NONE, None))
+                continue
+            self.assertEqual(len(image), bi.SIZE, name)
+            if saved != bi.OK:
+                self.assertEqual(after, image, name)             # nothing written
+                continue
+            # A save: the entry reads back for a System Card style reader,
+            # every other file is where and as it was, a boot loads it, and
+            # saving the same again changes nothing.
+            card = bi.Directory(after)
+            self.assertEqual(card.read(ours), bytes([1, 0x0b, 2, 0, 0, 0, 0, 0]), name)
+            self.assertEqual(card.word(0x8006), card.terminator(), name)
+            before = bi.Directory(image)
+            if before.formatted():
+                first = next(at for at, _, found, _ in card.files() if found == ours)
+                self.assertEqual([f for f in before.files() if f[0] != first],
+                                 [f for f in card.files() if f[0] != first], name)
+                for at, length, _, _ in before.files():
+                    if at != first:
+                        self.assertEqual(after[at - bi.BASE:at - bi.BASE + length],
+                                         image[at - bi.BASE:at - bi.BASE + length], name)
+            self.assertEqual(bi.expected_load(after), (bi.OK, 0x0b, 2), name)
+            self.assertEqual(bi.expected_save(after, 0x0b, 2), (bi.OK, after), name)
+        # The statuses of the named cases.
+        wanted = {'absent': 'NONE', 'empty-8800': 'READY', 'empty-a000': 'READY', 'full': 'FULL',
+                  'full-one-short': 'FULL', 'exact-room': 'READY', 'others-before': 'OK', 'ours-bad-checksum': 'ERROR 5',
+                  'ours-short': 'ERROR 3', 'ours-version-2': 'ERROR 5', 'ours-mode-20': 'ERROR 5',
+                  'ours-language-3': 'ERROR 5', 'pointer-stale': 'OK', 'pointer-low': 'ERROR 2', 'end-zero': 'ERROR 2',
+                  'entry-overruns': 'ERROR 2', 'no-terminator': 'ERROR 2', 'terminator-early': 'ERROR 2',
+                  'blank-00': 'NONE', 'blank-ff': 'NONE', 'garbage': 'NONE'}
+        for name, text in wanted.items():
+            self.assertEqual(bi.STATUS[bi.expected_load(cases[name])[0]], text, name)
+        for name, text in {'blank-00': 'OK', 'blank-ff': 'OK', 'garbage': 'ERROR 1', 'blank-aa': 'NONE', 'open-bus-80': 'NONE', 'blank-aa-one-byte': 'ERROR 1',
+                           'blank-00-one-byte': 'ERROR 1', 'format-cut-tag': 'OK', 'full': 'FULL',
+                           'exact-room': 'OK', 'ours-short': 'ERROR 3', 'pointer-low': 'ERROR 2'}.items():
+            self.assertEqual(bi.STATUS[bi.expected_save(cases[name], 0, 1)[0]], text, name)
+        # Memory that ignores writes is never formatted.
+        self.assertEqual(bi.expected_save(cases['blank-ff'], 0, 1, writable=False), (bi.NONE, cases['blank-ff']))
 
 
 class ComparisonRunTests(unittest.TestCase):

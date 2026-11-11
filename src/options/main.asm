@@ -7,6 +7,8 @@
 ; downward from $21FF; validation watches the reserved low margin.
 OPTIONS = $2100
 DRAFT = $2101
+SAVE_STATUS = $2105         ; src/bram: what the backup RAM said (ST_ values)
+SAVE_SETTINGS = $4b03       ; src/bram, this bank: save $2100 and $3227
 NES_FIREWHEEL = 4
 ; The protection rule (src/nes-firewheel, bank 3, mapped at $C000 whenever
 ; the gate's callers run): carry clear = no damage and no knockback.
@@ -288,6 +290,10 @@ choose:
  lsr a
  lsr a
  sta LANGUAGE
+ ; The settings to the backup RAM, if there is one (src/bram; interrupts
+ ; off for its length: the window is closed, the sound still held, and the
+ ; stage restarts next).
+ jsr SAVE_SETTINGS
  bra closed
 cancelled:
  ; Select: the palette mode as it was (the preview may have changed it).
@@ -612,6 +618,40 @@ draw_next:
  lda <BAT_ROW
  cmp #BOX_TOP+BOX_ROWS
  bne draw_row
+ ; The save status (src/bram), in its field: what the reset found in the
+ ; backup RAM, or what the last Run's save came to.
+ lda #BOX_TOP+STATUS_ROW
+ sta <BAT_ROW
+ jsr box_column
+ clc
+ adc #STATUS_COL
+ and #63
+ sta <BAT_COL
+ jsr seek
+ lda SAVE_STATUS
+ cmp #STATUS_COUNT
+ bcc status_known
+ cla
+status_known:
+ ; A x STATUS_WIDTH, in Y.
+ tax
+ cla
+ clc
+status_offset:
+ dex
+ bmi status_draw
+ adc #STATUS_WIDTH
+ bra status_offset
+status_draw:
+ tay
+ lda #STATUS_WIDTH
+ sta <SCRATCH
+status_loop:
+ lda status_text,y
+ jsr put
+ iny
+ dec <SCRATCH
+ bne status_loop
  ; The band under the HUD: version and credit.
  jsr band_address
 band_loop:
@@ -856,5 +896,9 @@ menu_end:
  .endif
  ; Clear of the HUD (BAT rows 28-31) at vertical scroll 0.
  .if (BOX_TOP + BOX_ROWS > 28)
+ .fail
+ .endif
+ ; The status texts are indexed with one byte.
+ .if (STATUS_COUNT * STATUS_WIDTH > 256)
  .fail
  .endif

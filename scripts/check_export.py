@@ -41,17 +41,25 @@ with tempfile.TemporaryDirectory(prefix='ng-enhanced-export-') as temp:
     checked((directory / 'dist/Ninja Ryukenden - development.pce').read_bytes(), manifest['target'], 'Clean export source build')
 
     # Prove that edits are assembled rather than silently ignored behind the BPS.
-    english = directory / 'src/english/main.asm'
-    text = english.read_text()
-    assert text.count(' lda #1') == 1
-    english.write_text(text.replace(' lda #1', ' lda #0'))
+    # The reset default language: one operand byte. Releases up to 1.10 set
+    # it in src/english ($FFE7); since the saved settings, src/bram does
+    # (DEFAULT_LANGUAGE, the first instruction of its reset loader).
+    english, saved = directory / 'src/english/main.asm', directory / 'src/bram/main.asm'
+    if saved.is_file():
+        text, old, new, where = saved.read_text(), 'DEFAULT_LANGUAGE = 1\n', 'DEFAULT_LANGUAGE = 0\n', None
+        saved.write_text(text.replace(old, new))
+    else:
+        text, old, new, where = english.read_text(), ' lda #1', ' lda #0', 0x1fe7
+        english.write_text(text.replace(old, new))
+    assert text.count(old) == 1
     changed_patch = directory / 'dist/modified.bps'
     run(directory, 'scripts/project.py', 'build', '--rom', str(args.rom.resolve()),
         '--assembler', str(args.assembler.resolve()), '--bps-output', str(changed_patch))
     altered = (directory / 'dist/Ninja Ryukenden - development.pce').read_bytes()
     pristine = (directory / f'dist/Ninja Ryukenden - Enhanced v{manifest["version"]}.pce').read_bytes()
-    assert [i for i, (a,b) in enumerate(zip(pristine, altered)) if a != b] == [0x1fe7]
-    assert altered[0x1fe7] == 0 and apply(source, changed_patch.read_bytes()) == altered
+    changed = [i for i, (a, b) in enumerate(zip(pristine, altered)) if a != b]
+    assert len(changed) == 1 and where in (None, changed[0]), changed
+    assert (pristine[changed[0]], altered[changed[0]]) == (1, 0) and apply(source, changed_patch.read_bytes()) == altered
     run(directory, 'scripts/project.py', 'verify', str(directory / 'dist/Ninja Ryukenden - development.pce'), success=False)
 
     # The headerless original is a supported input with its own patch.
