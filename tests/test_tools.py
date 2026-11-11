@@ -41,7 +41,8 @@ class AssetTransformTests(unittest.TestCase):
         from asset_transforms import PREPARE
         for module in json.loads((ROOT / 'src/modules.json').read_text()):
             if 'prepare' in module:
-                self.assertIn(module['prepare'], PREPARE)
+                for step in module['prepare'].split('+'):
+                    self.assertIn(step, PREPARE)
 
 
 class PaletteTableTests(unittest.TestCase):
@@ -98,6 +99,99 @@ def pack_half(words):
                     lanes[lane] = v
         out += bytes([ctrl]) + data
     return out
+
+
+class NesPaletteTests(unittest.TestCase):
+    """src/nes-palette: role data -> packed tables (scripts/nes_palette.py)."""
+
+    @staticmethod
+    def labelled_bytes(text):
+        """{label: [byte or expression, ...]} from the generated .db lines."""
+        out, label = {}, None
+        for line in text.splitlines():
+            line = line.split(';')[0].rstrip()
+            if line.endswith(':'):
+                label = line[:-1]
+                out[label] = []
+            elif line.startswith(' .db '):
+                out[label] += [int(v[1:], 16) if v.startswith('$') else (int(v) if v.isdigit() else v)
+                               for v in line[5:].split(',')]
+            elif line.startswith(' .dw '):
+                for v in line[5:].split(','):
+                    w = int(v[1:], 16)
+                    out[label] += [w & 0xff, w >> 8]
+        return out
+
+    def test_stored_results_are_what_the_roles_give(self):
+        import nes_palette as NP
+        self.assertEqual(NP.check(NP.load()), [])
+
+    def test_packed_tables_decode_back_to_the_role_data(self):
+        import nes_palette as NP
+        data = NP.load()
+        tables, sets = NP.includes(data)
+        t, s = self.labelled_bytes(tables), self.labelled_bytes(sets)
+        files = {d['set']: d for d in data['stages'] if not d.get('variant_of')}
+        self.assertEqual(len(files), 18)
+        for n in range(NP.SETS):
+            if n in files:
+                want = [int(e['out'], 16) for e in files[n]['entries']]
+                self.assertEqual(NP.unpack(bytes(s[f'nes_set_{n}']), len(want)), want)
+                self.assertEqual(t['nes_set_hi'][n], f'HIGH(nes_set_{n}+$2000)')
+            else:
+                # Title and cinema sets (0, 19-21): no NES copy, the original is used.
+                self.assertIn(n, (0, 19, 20, 21))
+                self.assertEqual((t['nes_set_lo'][n], t['nes_set_hi'][n]), (0, 0))
+        variant = next(d for d in data['stages'] if d.get('variant_of'))
+        self.assertEqual((variant['stage'], variant['set'], variant['level_select']), ('3-2', 6, [6]))
+        self.assertEqual(t['nes_variant_set'], [6 if st == 6 else 0xff for st in range(22)])
+        self.assertEqual(NP.unpack(bytes(t['nes_variant_6']), 192), [int(e['out'], 16) for e in variant['entries']])
+        ryu = data['shared']['sprites'][0]
+        self.assertEqual(ryu['palette'], 96)
+        self.assertEqual(t['nes_sprite_src_lo'] + t['nes_sprite_src_hi'], ['LOW($7840)', 'HIGH($7840)'])  # $7180 + 18 x 96
+        decoded = NP.unpack(bytes(t['nes_sprite_96']), 16)
+        for e in ryu['entries']:
+            self.assertEqual(decoded[e['entry']], int(e['out'], 16))
+        hud = t['nes_hud_colours']
+        self.assertEqual([hud[2 * k] | hud[2 * k + 1] << 8 for k in range(7)],
+                         [int(e['out'], 16) for e in data['shared']['hud']['entries']])
+        # The NES copies fit the module's ranges (bank $45 $5200-$5FFF; tables below $4400).
+        self.assertLessEqual(sum(len(v) for v in s.values()), 0x5fff - 0x5200 + 1)
+
+    def test_packing_puts_bit_eight_first(self):
+        import nes_palette as NP
+        cols = [0x1ff, 0, 0x100, 0x0ff, 0x123, 0x1a5, 0x005, 0x180]
+        raw = NP.pack(cols)
+        self.assertEqual(raw[0], 0b10101101)
+        self.assertEqual(NP.unpack(raw, 8), cols)
+        with self.assertRaises(NP.NesPaletteError):
+            NP.pack(cols[:7])
+
+    def test_roles_resolve_by_lightness_with_nes_hues(self):
+        import nes_palette as NP
+        self.assertEqual(NP.nes9(0x30), 0x1ff)           # NES white
+        self.assertEqual(NP.nes9(0x0f), 0x000)           # NES black
+        fixed = NP.resolve_role({'ramp': ['25'], 'mode': 'fixed'}, {0x0b8, 0x038})
+        self.assertEqual(set(fixed.values()), {0x25})
+        grey = NP.resolve_role({'ramp': ['00', '10', '30'], 'strict': True}, {0x000, 0x092, 0x1ff, 0x0c4})
+        self.assertEqual((grey[0x000], grey[0x1ff]), (0x0f, 0x30))
+        self.assertTrue(set(grey.values()) <= {0x00, 0x10, 0x30, 0x0f})
+        # Black only for near-black, near-neutral colours.
+        red = NP.resolve_role({'ramp': ['16', '26']}, {0x008, 0x038})
+        self.assertNotEqual(red[0x038], 0x0f)
+        # An edited role changes the result, and the check names the stale entry.
+        data = NP.load()
+        d = data['stages'][0]
+        d['roles'][d['entries'][0]['role']]['ramp'] = ['16']
+        d['roles'][d['entries'][0]['role']].pop('strict', None)
+        self.assertTrue(any('run nes_palette.py resolve' in p for p in NP.check(data)))
+
+    def test_data_holds_only_colours_and_role_names(self):
+        import nes_palette as NP
+        for p in sorted((ROOT / 'src/nes-palette').rglob('*.json')):
+            text = p.read_text()
+            for word in ('"captures"', '"prefix"', '"seen"', '.idx', '/workspace', '/home'):
+                self.assertNotIn(word, text, p.name)
 
 
 class NativeGfxTests(unittest.TestCase):
@@ -383,11 +477,10 @@ class ReleaseTests(unittest.TestCase):
         with self.assertRaises(ValueError): band('V{version} {credit}', '1.11-development-build')
         self.assertEqual(len(menu['band']), 32)
         palette = menu['choices'][3]
-        self.assertEqual((palette[0], [v for v, _ in palette[1]]), (0x18, [0x00, 0x10]))
-        # Offering NES is one more value=TEXT item on the PALETTE line.
-        nes = source.replace('@ $18 $00=ORIGINAL $10=GB_DMG', '@ $18 $00=ORIGINAL $08=NES $10=GB_DMG')
-        self.assertEqual([v for v, _ in layout(nes, '1.11')['choices'][3][1]], [0x00, 0x08, 0x10])
-        self.assertEqual(layout(nes, '1.11')['choices'][3][1][1][1][:3], bytes(CODES[c] for c in 'NES'))
+        # PALETTE offers Original, NES (src/nes-palette) and GB DMG, in that order.
+        self.assertIn('\n@ $18 $00=ORIGINAL $08=NES $10=GB_DMG\n', source)
+        self.assertEqual((palette[0], [v for v, _ in palette[1]]), (0x18, [0x00, 0x08, 0x10]))
+        self.assertEqual(palette[1][1][1][:3], bytes(CODES[c] for c in 'NES'))
         for broken in (source.replace('| STAGE: #####             |', '| STAGE: ####              |'),  # STAGE width
                        source.replace('| NO DAMAGE: ###           |', '| NO DAMAGE: ###            |'),  # 27 columns
                        source.replace('LANGUAGE', 'LANGUAGE!'),

@@ -82,6 +82,9 @@ renderer_gate_end:
 MENU_ENTRY = $4400          ; the hook's jsr target (src/selector-hook)
 OPTION_BITS = $1f           ; draft bits copied to $2100 on Run
 PALETTE_BITS = $18          ; previewed live while the menu is open
+PALETTE_NES = $08           ; reloads palette data (src/nes-palette): shown after Run
+OPENED_OPTIONS = $2103      ; ,X after tsx in preview_palette: $2100 as the menu opened
+                            ; (menu_open pushed it; above it preview_palette's return)
 LANGUAGE = $3227            ; native: 0 Japanese, 1 English, 2 Chinese
 BOX_TOP = 7                 ; BAT row of the window's top row
 BOX_LEFT = 3                ; screen column of its left edge
@@ -312,10 +315,21 @@ selection_return:
 
  ; The live palette mode follows the draft's (src/palette re-uploads every
  ; colour at the next vblanks when the mode changes), so the choice shows at
- ; once; cancel puts the old mode back.
+ ; once; cancel puts the old mode back. NES colours are not a mapping of the
+ ; RAM palette but other palette data, loaded with the stage (src/nes-palette):
+ ; they show after Run, which restarts the stage. While NES is highlighted in
+ ; a menu opened in another mode, the live mode stays the one it opened in,
+ ; so the colours on screen do not change. (Opened in NES mode, the RAM
+ ; palette holds NES colours: ORIGINAL shows them unmapped, GB DMG maps them.)
 preview_palette:
  lda DRAFT
  and #PALETTE_BITS
+ cmp #PALETTE_NES
+ bne preview_set
+ tsx
+ lda OPENED_OPTIONS,x       ; $2100 as the menu found it (pushed in menu_open)
+ and #PALETTE_BITS
+preview_set:
  sta <SCRATCH
  php
  sei
