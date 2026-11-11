@@ -28,7 +28,29 @@ def palette_tables(work, original):
 PREPARE['palette-tables'] = palette_tables
 
 
+def nes_palette(work, original):
+    from nes_palette import generate
+    generate(work, original)
+
+
+def nes_enhanced(module):
+    def step(work, original):
+        from nes_palette import enhanced
+        enhanced(module, work, original)
+    return step
+
+
+# NES palette mode: the colour sets and their tables from src/nes-palette
+# (scripts/nes_palette.py), and the NES versions of the 1-1 and 2-2 merged
+# palettes, traced through the original backdrops.
+PREPARE['nes-palette'] = nes_palette
+PREPARE.update({'nes-enhanced-' + module: nes_enhanced(module) for module in ('stage11', 'stage22')})
+
+
 def prepare(name, work, original):
-    if name not in PREPARE:
-        raise ValueError(f'Unknown module prepare step: {name}')
-    PREPARE[name](work, original)
+    """Run a module's prepare step; `a+b` runs a, then b."""
+    for part in name.split('+'):
+        if part not in PREPARE:
+            raise ValueError(f'Unknown module prepare step: {part}')
+    for part in name.split('+'):
+        PREPARE[part](work, original)
