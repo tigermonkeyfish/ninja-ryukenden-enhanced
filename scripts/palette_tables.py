@@ -8,15 +8,17 @@ nothing is stored as an opaque table. Exact decimal arithmetic decides each
 threshold, so a colour that lands exactly on one goes to the lighter shade.
 
 The HELL mode ('Lava') is defined by `src/palette/hell.json`: colours sorted
-into families by hue, saturation and value and re-coloured from ramps. It is
-the owner's chosen mock-up (candidate C), ported operation for operation in
-double-precision floating point, so the table is the mock-up's exactly; it
-applies to background palettes 0-14 only (the first `mapped_entries` VCE
+into families by hue, saturation and value and re-coloured from ramps: the
+owner's chosen mock-up (candidate C) retuned as candidate D (1.11-dev, the
+owner's choice: 1-1 "more like 2-2"), ported operation for operation in
+double-precision floating point, so the table is the tuning study's exactly;
+it applies to background palettes 0-14 only (the first `mapped_entries` VCE
 entries). An optional "steel" family (`steel_ramp`, `steel_windows`: per
 window hue from-to in degrees, maximum saturation, chroma s*v and value;
 `steel_mix`: value and luma weights) takes the coloured colours inside its
-windows before the hue families, for the retuned candidates; without those
-keys the table is the shipped one exactly.
+windows before the hue families (candidate D's cool greys and dull teals);
+without those keys no colour takes it, and with candidate C's parameters the
+table is the first HELL build's exactly.
 
 The SMS mode is defined by `src/palette/sms.json`: each channel to the
 nearest of the Sega Master System's four levels, in linear terms, shown as

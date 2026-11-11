@@ -83,20 +83,25 @@ class PaletteTableTests(unittest.TestCase):
         self.assertEqual(values[0x40], 0x01)                      # gb_lo0[$40]
         self.assertEqual(values[3 * 256 + 0xff], 0x01)            # gb_hi1[$FF]: colour $1FF
 
-    def test_hell_table_is_the_owners_mockup(self):
+    def test_hell_table_is_the_owners_choice(self):
         from palette_tables import hell_table, load_hell
         table = hell_table()
         self.assertEqual(len(table), 512)
         self.assertTrue(all(0 <= c <= 0x1ff for c in table))
-        # The 512 colours of candidate C ('Lava', build/hell-mockup/table-C.json,
-        # `by_colour`, the owner's choice) as little-endian words.
+        # The 512 colours of the retuned candidate D (the mock-up 'Lava',
+        # candidate C, with the 'steel' family: cool greys and dull teals take
+        # 2-2's column golds; build/hell-tune/gen/cand-D.json, the owner's
+        # choice for 1-1 "more like 2-2") as little-endian words.
         self.assertEqual(hashlib.sha256(b''.join(c.to_bytes(2, 'little') for c in table)).hexdigest(),
-                         '1388df9dd0928236504e6f48cae44d22e97a6c4a83675e54ca764e9aa241afc7')
+                         '1435b5a189bdbbeb6964c1a8df4981883fe309b7a819506397d080766944d641')
         # GGGRRRBBB: black stays black; white is pale ash; blues become lava,
-        # greens scorched brown, greys dark red, reds stay red.
+        # greys gold-brown, reds stay red; 1-1's wall and sidewalk greys take
+        # 2-2's golds ($0DB -> 320, $0DC -> 420 as R G B); $094 stays crimson
+        # in the table (2-2's far ridge; 1-1 overrides it in the upload).
         for colour, hell in ((0x000, 0x000), (0x1ff, 0x1ba), (0x007, 0x078), (0x038, 0x030),
-                             (0x1c0, 0x0a0), (0x092, 0x008), (0x124, 0x018), (0x0b6, 0x0b0),
-                             (0x03f, 0x0b0), (0x1f8, 0x0e8)):
+                             (0x1c0, 0x0a0), (0x092, 0x008), (0x124, 0x0a9), (0x0b6, 0x0b0),
+                             (0x03f, 0x0b0), (0x1f8, 0x0e8), (0x0db, 0x098), (0x0dc, 0x0a0),
+                             (0x094, 0x031)):
             self.assertEqual(table[colour], hell, hex(colour))
         self.assertEqual(load_hell()['mapped_entries'], 240)    # background palettes 0-14
 
@@ -191,23 +196,28 @@ class PaletteTableTests(unittest.TestCase):
                     hell_table(path)
 
     def test_hell_steel_family_is_optional(self):
-        # The retuned HELL candidates add a "steel" family (steel_ramp,
-        # steel_windows, steel_mix); without those keys the table is the
-        # shipped one (test_hell_table_is_the_owners_mockup pins it).
+        # The retuned HELL table uses the optional "steel" family (steel_ramp,
+        # steel_windows, steel_mix); without those keys no colour takes it,
+        # and steel_ramp needs the other two.
         import tempfile
         from palette_tables import HELL_PARAMETERS, hell_table
         spec = json.loads(HELL_PARAMETERS.read_text())
-        self.assertNotIn('steel_ramp', spec)
+        self.assertIn('steel_ramp', spec)
         shipped = hell_table()
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / 'hell.json'
+            plain = {k: v for k, v in spec.items() if not k.startswith('steel_')}
+            path.write_text(json.dumps(plain))
+            table = hell_table(path)
+            self.assertNotEqual(table, shipped)
+            self.assertEqual(table[0x0db], shipped[0x0db])           # grey (R3 G3 B3): never steel
+            self.assertNotEqual(table[0x0dc], shipped[0x0dc])        # a cool grey-blue: steel only with the keys
             # One window over every hue (degrees), saturation, chroma and value:
             # every coloured (non-grey) colour goes to the steel ramp by value.
             steel = dict(spec, steel_ramp=[[0.0, 0, 0, 1], [1.0, 3, 3, 7]], steel_windows=[[0, 360, 1.0, 1.0, 1.0]],
                          steel_mix=[1.0, 0.0])
             path.write_text(json.dumps(steel))
             table = hell_table(path)
-            self.assertNotEqual(table, shipped)
             self.assertEqual(table[0x007], 0x0df)                    # pure blue: the ramp's top (G3 R3 B7)
             self.assertEqual(table[0x1ff], shipped[0x1ff])           # white is grey: unchanged
             for key in ('steel_windows', 'steel_mix'):
