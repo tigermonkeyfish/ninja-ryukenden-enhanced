@@ -121,6 +121,9 @@ describe `bram-save` as it was stopped.
   creates a new file at the header's pointer, not at the walked terminator
   (`$FAE2`), and `BM_FORMAT` finds the end pointer by write-testing up to
   8 KiB (`$F867-$F884`).
+- `check_boot.py --bram` with `empty-8800` and with `full` (14 files):
+  frames 1-899 identical to the original, first update at frame 163, the
+  image unchanged, defaults (`build/v111/boot-empty-8800`, `boot-full`).
 - Random images (`research/tools/bram-save/fuzz.py`, pinned emulator, seed
   2): the first 560 images, 0 problems, before the generator itself tripped
   on a short end pointer (fixed); a longer run is pending.
