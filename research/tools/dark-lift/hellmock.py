@@ -39,8 +39,11 @@ def stage_of(name):
 
 
 def draw(base, path):
-    mapped = PT.load_hell(path)['mapped_entries']
-    table = np.array(PT.hell_stage_table(stage_of(Path(base).name), path))
+    if path.name == 'original':        # LABEL=original: the RAM palette's own colours
+        mapped, table = 512, np.arange(512)
+    else:
+        mapped = PT.load_hell(path)['mapped_entries']
+        table = np.array(PT.hell_stage_table(stage_of(Path(base).name), path))
     ram = Path(base + '.ram').read_bytes()
     pal = np.array([(ram[2 * i] | ram[2 * i + 1] << 8) & 0x1ff for i in range(512)])
     vce = Path(base + '.vce').read_bytes()
