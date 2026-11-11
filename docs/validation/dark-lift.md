@@ -401,6 +401,7 @@ against the dark-lift build's recordings of its own record (`rec/dl-*`):
 | --- | --- | --- |
 | Original | **identical**: picture, VCE, sprite table, game RAM, gameplay fields, every frame of every run | |
 | NES-A | **identical**, the same | |
+| NES-B | **identical**, the same | |
 | GB DMG | sprite table identical in every frame; gameplay fields identical except the one frame the cinema begins in 4-1, 5-3, 6-3; picture, VCE and RAM differ in one window per run (below); 5-4, which has no stage end: nothing differs | gameplay fields and sprite table equal to Original in **every** frame of every run (`$2240` included); frames not yet due 128, 127, 94, 118, 78, 118, 137, 203, 14, 116, 135 (1-1 … 6-3; 145, 144, 111, 135, 84, 135, 154, 209, 14, 133, 141 before); longest lag 18 frames (42-46 before in the runs that end in a stage change, 19 in 4-1), 14 in 5-4 and 28 and 30 in 5-3 and 6-3 as before |
 | SMS | as GB DMG | as GB DMG, the same counts; no gameplay frame with a VCE entry or a pixel outside the 64 colours |
 | HELL | as GB DMG | gameplay equal to Original in every frame; frames not yet due 118, 116, 83, 104, 67, 106, 125, 163, 4, 104, 110 (136, 134, 101, 122, 74, 124, 143, 170, 4, 122, 117 before); longest lag 10-13 frames (33-37 before; 4-1 11), 21 in 5-3 and 6-3 and 4 in 5-4 as before |
