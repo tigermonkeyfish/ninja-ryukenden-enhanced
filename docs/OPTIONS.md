@@ -17,20 +17,9 @@ defaults:
 | NES Firewheel | OFF | In-game menu |
 | Palette | Original | In-game menu |
 
-Since 1.11-dev (branch `bram-save`, emulator evidence only so far) the
-settings are saved when the console has backup RAM (a Duo, a CD-ROM unit, a
-Ten no Koe 2, or a flash cartridge or emulator that provides it): pressing
-**Run** in the in-game menu stores every setting of the table except the
-stage in a small file named `NR ENHANCE` (26 bytes) beside the saves of
-other games, and the next power-on starts with them. Select (cancel) saves
-nothing, and a language chosen on the title screen is stored by the next
-Run. Without backup RAM, or when it is full or damaged, nothing is written
-and the game starts with these defaults. The menu's last line shows which
-it is (`SAVE: OK`, `READY`, `NONE`, `FULL` or `ERROR` with a number); the
-[hardware checklist](validation/bram-save-hardware-checklist.md) lists the
-meanings, and [the validation record](validation/bram-save.md) what each
-platform needs (MiSTer: "Save Backup RAM" in the OSD; Turbo EverDrive Pro on
-a console without CD: Default EXP Device `TNK2` or `CDROM`).
+Since 1.11-dev the settings are kept when the console has backup RAM: see
+[Saving your settings](#saving-your-settings). Without it the game starts
+with these defaults every time, as before.
 
 ## Language
 
@@ -164,6 +153,70 @@ screen's switch. The new language is used from the next story scene or title
 screen on.
 
 Press **Run** to apply.
+
+## Saving your settings
+
+Since 1.11-dev. Tested in emulators only so far, including a test
+emulator that models the backup RAM's lock and the System Card's own
+routines reading the game's file; the first test on a console is still to
+come, so treat this section as what is expected, not as what was seen on
+hardware.
+
+Pressing **Run** in the in-game menu saves every setting of the menu except
+the stage: smooth parallax, No Damage, NES Firewheel, the palette and the
+language. They go to the console's backup RAM, the memory CD games keep
+their saves in, as one small file named `NR ENHANCE` (26 bytes) beside the
+other games' saves. At the next power-on or reset the game starts with
+them.
+
+- **Select** (cancel) saves nothing.
+- A language chosen on the title screen is saved by the next **Run** in the
+  menu.
+- The game never deletes, moves or changes another game's save. If the
+  memory is full or looks damaged it writes nothing and tells you so.
+- To forget the saved settings, delete the file `NR ENHANCE` in a backup
+  manager (the System Card's, or your cartridge's or emulator's).
+
+### The SAVE line
+
+The menu's last line shows what the game found at power-on, and after a
+**Run** what the save came to. Open the menu again in the restarted stage
+to see the result of that Run.
+
+| Text | Meaning | What to do |
+| --- | --- | --- |
+| `SAVE: OK` | Before Run: the saved settings were loaded. After Run: the settings were saved and read back. | Nothing. |
+| `SAVE: READY` | Backup RAM is there and formatted; no settings saved yet. | Press Run to save. |
+| `SAVE: NONE` | No backup RAM was found, or it is blank. Nothing was written (a blank, writable memory is formatted by the first Run and then shows OK). | See the platform notes below. Without backup RAM the game works as before, with the defaults at every start. |
+| `SAVE: FULL` | The backup RAM has no room for the 26 bytes. Nothing was written. | Delete a save you no longer need in a backup manager. |
+| `SAVE: ERROR 1` | After Run: the memory is not formatted but not blank either. Nothing was written. | Format it in the System Card's backup manager (this erases what is there). |
+| `SAVE: ERROR 2` | The list of saves is damaged (sizes or pointers that do not add up). Nothing was written. | Check the other saves in a backup manager; formatting clears it. |
+| `SAVE: ERROR 3` | A file named `NR ENHANCE` of another size is there. Nothing was written. | Delete that file. |
+| `SAVE: ERROR 4` | The settings were written but did not read back. | The memory does not hold what is written to it (write-protected or failing). |
+| `SAVE: ERROR 5` | At power-on: the file is there but its contents do not check out; the defaults are used. | Press Run: the file is written again. |
+
+### What each platform needs
+
+| Platform | What to do | Status |
+| --- | --- | --- |
+| PC Engine Duo, Duo-R, Duo-RX, TurboDuo (built-in backup RAM), any flash cartridge | Nothing, if the backup RAM was ever formatted (a CD game or the System Card does that). On the Turbo EverDrive Pro the cartridge's own CD functions are off in these consoles, so the game uses the console's memory. | Expected; not yet tested on hardware |
+| A console with a CD-ROM unit, a Ten no Koe 2 or a Backup Booster | The same. | Expected (the same registers; the game sends the three-byte unlock those units' software uses) |
+| Turbo EverDrive Pro on a console without CD | In the cartridge's Options set **Default EXP Device** to `TNK2` or `CDROM` (its manual). With `OFF` the menu shows `SAVE: NONE`. | From the manual; not yet tested |
+| MiSTer (TurboGrafx16 core) | Backup RAM is always there. The core writes its save file only when you choose **Save Backup RAM** in the OSD, or with **Autosave** on when the OSD is opened after a save: do one of the two before switching off. | Read from the core's source; not tested |
+| Geargrafx (desktop) | Nothing: "Force Backup RAM" is on by default. | The headless build was tested with backup RAM images |
+| Other emulators | Works where the emulator gives a HuCard backup RAM. | Not tested |
+| A console with nothing attached | `SAVE: NONE`; the game plays as before. | Emulated |
+
+The first save to a blank memory formats it first, which takes about half
+a frame longer, once. With an unusually long list of saves (more than 56
+files, or more than 45 beside the game's own; real saves do not come near
+that in this memory) the game's boot runs one frame later; nothing else
+changes.
+
+The details and the evidence are in
+[the validation record](validation/bram-save.md); the maintainer's console
+test list is the
+[hardware checklist](validation/bram-save-hardware-checklist.md).
 
 ---
 
