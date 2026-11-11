@@ -106,6 +106,49 @@ at a time.
 - `check_menu.py --only options` (`$W/menu-options`): all 36 cases pass;
   the log equals `v111`'s line for line. **Pass.**
 
+- Stored runs, backup RAM absent, mode by the probes' debugger write
+  (`MODES="sms:0xb8 hell:0x18" JOBS=1 sh research/tools/dark-lift/recall.sh $W $W/final.pce vf`,
+  then `analyse.py $W/rec identity fx-sms vf-sms` and `fx-hell vf-hell`
+  against the fix build's recordings copied from
+  `build/dark-lift-fix/rec`): all 11 runs in SMS and all 11 in HELL
+  (35,084 frames a mode; more than the one run a mode asked for, since a
+  run takes seconds) are identical to the fix build's in every field of
+  every frame: picture, VCE, sprite table, RAM, gameplay
+  (`$W/identity-sms.txt`, `identity-hell.txt`). The seven stage ends with a
+  load and the three with a cinema are among them. **Pass.**
+- **A mode that came from backup RAM**
+  (`research/tools/v111-final/savedboot.py $W/final.pce $W/saved saved-MODE OPTIONS 6-1`,
+  one session each for `original 0x00`, `sms 0xb8`, `hell 0x18`; then
+  `transreport.py $W/saved saved --modes sms,hell --all`): the machine is
+  powered on with backup RAM holding the game's own file with that mode;
+  controller input alone takes it through the title into 1-1; `$2100` is
+  the saved mode, the status `OK` and backup RAM unchanged (asserted; no
+  debugger write to `$2100` anywhere in the session). The 6-1 run is then
+  entered as the stored-run probes enter a stage (the Level Select's
+  debugger writes) and replayed to its end, the load of 6-2
+  (1,793 frames, stage 17 at the end, `$2100` and backup RAM still as
+  booted). Original's playfield is black in frames 1725-1758:
+
+  | Saved mode | Late (frames until the playfield is black) | Flash | VCE entries lit at the load's lock | Gameplay against the saved-Original boot |
+  | --- | --- | --- | --- | --- |
+  | SMS | 3 (0.15% and 0.12% of the playfield, the fade-out's last step; 1-3 a run on the fix build) | none | 0 | equal in every frame |
+  | HELL | 0 (its HUD band two frames more, as on the fix build) | none | 0 | equal in every frame |
+
+  From frame 1728 (SMS) and 1727 (HELL) to the first step of 6-2's fade-in
+  every VCE entry due is black and the playfield and the HUD band are
+  black: six and seven frames before the stage changes at 1734 and the load
+  takes the lock at 1735. Against the fix build's seed-state recordings of
+  the same run (`fx-sms-6-1`, `fx-hell-6-1`, `fx-orig-6-1`) the pictures are
+  the same in every frame except the first 15 (SMS) and 5 (HELL) of the
+  run, and in all of them for Original. Those first frames are the probes'
+  stage entry, not the game: it jumps into the stage from inside 1-1
+  without a fade, and the upload then catches up from whatever the VCE held,
+  which is 1-1 in the saved mode here and 1-1 in Original's colours in the
+  seed-state probes (they write `$2100` after the boot). **Pass.** Limits:
+  one run (a stage end with a load), the stage entered by debugger writes,
+  the pinned emulator (backup RAM always unlocked); the lock-modelling
+  emulator was not used for a played run.
+
 PENDING
 
 ## Delivered
