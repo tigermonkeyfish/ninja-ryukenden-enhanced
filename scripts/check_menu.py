@@ -127,12 +127,14 @@ PREVIEW_SCRATCH = set(range(0x205, 0x20d)) | {0x284, 0x285} | set(range(0x261, 0
 
 
 STATE_IN_2104 = True        # main(): False for builds before the SMS palette
+STATUS_IN_2105 = True       # main(): False for builds before the saved settings (src/bram)
 
 
 def stack_fill():
-    """The first byte of the watched stack margin ($2104, or $2105 once $2104
-    holds the palette module's state), offset from $2000."""
-    return 0x105 if STATE_IN_2104 else 0x104
+    """The first byte of the watched stack margin ($2104; $2105 once $2104
+    holds the palette module's state; $2106 once $2105 holds the save
+    status), offset from $2000."""
+    return 0x106 if STATUS_IN_2105 else 0x105 if STATE_IN_2104 else 0x104
 
 
 def module_state_only(i, a, b):
@@ -167,12 +169,17 @@ def window_words(game, c0):
 
 
 def window_problems(game, c0):
-    """Differences between the BAT window and menu.txt (value fields: any font cell)."""
+    """Differences between the BAT window and menu.txt (value fields: any
+    font cell; the save status field: the text of the status in $2105)."""
     fields = {(r, c + k) for r, c, w in MENU['fields'] for k in range(w)}
+    window = bytearray(MENU['window'])
+    row, column, width = MENU['status']
+    status = game.read(0x105, 1)[0]
+    window[row * BOX_WIDTH + column:][:width] = MENU['status_texts'][status if status < len(MENU['status_texts']) else 0]
     problems = []
     for j, row in enumerate(window_words(game, c0)):
         for i, word in enumerate(row):
-            expected = MENU['window'][j * BOX_WIDTH + i]
+            expected = window[j * BOX_WIDTH + i]
             if word[1] != 0xf7 or ((j, i) not in fields and word[0] != expected):
                 problems.append(f'window cell {j},{i} = {word.hex()}')
     return problems[:8]
@@ -923,7 +930,7 @@ def main():
     args.output = args.output.resolve()
     args.output.mkdir(parents=True, exist_ok=True)
     parts = set(args.only or ('runs', 'sweep', 'select', 'options'))
-    global SAME_MUSIC, STATE_IN_2104, STRICT
+    global SAME_MUSIC, STATE_IN_2104, STATUS_IN_2105, STRICT
     SAME_MUSIC = args.same_music
     STRICT = args.strict
     rom = args.candidate.read_bytes()
@@ -933,6 +940,11 @@ def main():
     # bank $46 $5000-$53FF reads lda $2104), $2100 bits 5-7 before.
     STATE_IN_2104 = bytes.fromhex('ad0421') in rom[0x46 * 0x2000 + 0x1000:0x46 * 0x2000 + 0x1400]
     print('palette module state in', '$2104' if STATE_IN_2104 else '$2100 bits 5-7', flush=True)
+    # The save status: $2105 once the menu calls src/bram's save (jsr $4B03).
+    STATUS_IN_2105 = bytes.fromhex('20034b') in rom[MENU_ENTRY:MENU_ENTRY + 0x700]
+    if not STATUS_IN_2105:
+        raise SystemExit("This check reads the current menu.txt (with the save status row); "
+                         "check an older build with that build's own scripts")
     report = {
         'rom_sha256': hashlib.sha256(args.candidate.read_bytes()).hexdigest(),
         'emulator_sha256': hashlib.sha256(args.emulator.read_bytes()).hexdigest(),
