@@ -7,8 +7,10 @@ original.pce.
 
 Palette modes since the SMS build: $2100 bits 3-5 ($00 Original, $08 NES-A,
 $28 NES-B, $10 GB DMG, $18 HELL, $38 SMS; $20 uploads as Original, $30 as
-GB DMG); the palette module's state is $2104 bits 5-7 (before: $2100 bits
-5-7). mode_due(flags) gives the mapping a mode's gameplay is due for."""
+GB DMG) and bit 7 set exactly with SMS (so SMS is $B8 in $2100); the
+palette module's state is $2104 bits 5-7 (before: $2100 bits 5-7).
+mode_due(flags) gives the mapping a $2100 value's gameplay is due for, as
+the upload dispatches: $2100 & $98 compared with $10."""
 import os
 import sys
 from pathlib import Path
@@ -27,16 +29,19 @@ HELL = hell_table()
 HELL_MAPPED = load_hell()['mapped_entries']
 SMS = sms_table()
 SMS64 = sms_colours()
-SMS_MODE = 0x38
+SMS_FLAGS = 0xb8            # $2100 for SMS: mode $38 and bit 7
 
 
 def mode_due(flags):
     """0 (raw), 0x10 (GB DMG), 0x18 (HELL) or 0x38 (SMS) for $2100 = flags in
-    gameplay: bits 3-4 choose the family, bit 5 only within family 11."""
-    family = flags & 0x18
-    if family == 0x18:
-        return flags & 0x38
-    return 0x10 if family == 0x10 else 0
+    gameplay, as the upload's dispatch decides: m = flags & $98; below $10
+    raw, $10 GB DMG, above it HELL if m - $10 < $80, else SMS."""
+    m = flags & 0x98
+    if m < 0x10:
+        return 0
+    if m == 0x10:
+        return 0x10
+    return 0x38 if (m - 0x10) & 0x80 else 0x18
 
 
 def hell_entry(i, colour):

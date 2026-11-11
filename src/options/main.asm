@@ -1,6 +1,7 @@
 ; Active flags: bit 0 = original background, bit 1 = no contact damage,
-; bit 2 = Use NES Firewheel logic, bits 3-5 = palette mode (src/palette);
-; bits 6-7 unassigned (zero). Before 1.11-dev's SMS mode bits 5-7 were the
+; bit 2 = Use NES Firewheel logic, bits 3-5 = palette mode (src/palette),
+; bit 7 = set with the SMS palette mode only (a copy src/palette tests);
+; bit 6 unassigned (zero). Before 1.11-dev's SMS mode bits 5-7 were the
 ; palette module's state; that is in $2104 now (see docs/ARCHITECTURE.md).
 ; Two bytes at the bottom of the CPU stack page. The native stack grows
 ; downward from $21FF; validation watches the reserved low margin.
@@ -83,6 +84,8 @@ renderer_gate_end:
 MENU_ENTRY = $4400          ; the hook's jsr target (src/selector-hook)
 OPTION_BITS = $3f           ; draft bits copied to $2100 on Run
 PALETTE_BITS = $38          ; previewed live while the menu is open
+PALETTE_SMS = $38
+SMS_FLAG = $80              ; $2100 bit 7: set exactly with SMS (src/palette)
 LANGUAGE = $3227            ; native: 0 Japanese, 1 English, 2 Chinese
 BOX_TOP = 7                 ; BAT row of the window's top row
 BOX_LEFT = 3                ; screen column of its left edge
@@ -319,16 +322,24 @@ preview_palette:
  ; re-uploads them in the new mode's colours at the next vblanks: its state
  ; bit tells only whether the VCE holds mapped colours, not which table
  ; (GB DMG, HELL or SMS), so a change between those needs the full queue.
+ ; $2100 bit 7 is set with SMS and only then (src/palette tells SMS from
+ ; HELL by it).
 set_palette:
  sta <SCRATCH
  lda OPTIONS
  and #PALETTE_BITS
  cmp <SCRATCH
  beq palette_kept
+ lda <SCRATCH
+ cmp #PALETTE_SMS
+ bne palette_flagged
+ ora #SMS_FLAG
+ sta <SCRATCH
+palette_flagged:
  php
  sei
  lda OPTIONS
- and #$ff - PALETTE_BITS
+ and #$ff - PALETTE_BITS - SMS_FLAG
  ora <SCRATCH
  sta OPTIONS
  plp

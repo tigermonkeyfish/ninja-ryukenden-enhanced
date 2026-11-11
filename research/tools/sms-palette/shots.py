@@ -32,7 +32,7 @@ def main():
     for spec in sys.argv[3:]:
         name, frame, *extra = spec.split(':')
         run, frame = load_run(name), int(frame)
-        for flags, tag in ((0x38, 'sms'), (0x00, 'original')):
+        for flags, tag in ((0xb8, 'sms'), (0x00, 'original')):
             with Session(rom, flags) as g:
                 g.write(0x1227, b'\x01')
                 cv.start_stage(g, run['stage'])

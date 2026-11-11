@@ -2,9 +2,10 @@
 included (docs/pc-engine/EMULATOR.md, "Unit-test a small routine in place"),
 against an independent Python model. The HELL probe of the same name with
 the SMS build's layout: the mode is $2100 bits 3-5 (family bits 3-4, variant
-bit 5: $38 SMS, every entry and the border mapped through the SMS table, as
-GB DMG; $30 uploads as GB DMG, $20 and $28 as Original) and the module's
-state is $2104 bits 5-7; a case writes both and checks that $2100 comes
+bit 5: $38 SMS, stored with bit 7 as $B8, every entry and the border mapped
+through the SMS table, as GB DMG; $30 uploads as GB DMG, $20 and $28 as
+Original; $38 without bit 7 as HELL) and the module's state is $2104 bits
+5-7; a case writes both and checks that $2100 comes
 back unchanged and $2104 as the model says. HELL ($18): entries 0 to
 HELL_MAPPED-1 mapped through the HELL table, the rest and the border
 written unchanged, unmapped chunks charged n/4 + n/32 + RAW_SETUP budget
@@ -163,7 +164,8 @@ def random_case(rng):
             n = rng.randint(1, 512 - idx)
         queue.append((idx, n))
     return {'pal': pal, 'queue': queue, 'border': rng.randrange(0x200), 'lock': 0,
-            'opts': rng.choice([0x38, 0x38, 0x38, 0x18, 0x18, 0x10, 0x30, 0x00, 0x08, 0x20, 0x28]) | rng.randrange(8),
+            'opts': rng.choice([0xb8, 0xb8, 0xb8, 0x18, 0x18, 0x10, 0x30, 0x00, 0x08, 0x20, 0x28, 0x38, 0x98])
+            | rng.randrange(8),
             'st': rng.choice([0x80, 0x80, 0xa0, 0xe0, 0xc0, 0x00, 0x20, 0x40]),
             'master': rng.choice([0, 0, 0, 1]),
             'pc': rng.choice([0xfd69, 0xfd6b, 0xfd6d, 0xfd6f, 0xfd70, 0x4f52, 0xfd66])}
@@ -171,7 +173,7 @@ def random_case(rng):
 
 def edge_cases():
     pal = list(range(512))
-    base = {'pal': pal, 'border': 0x123, 'lock': 0, 'opts': 0x38, 'st': 0x80, 'master': 0}
+    base = {'pal': pal, 'border': 0x123, 'lock': 0, 'opts': 0xb8, 'st': 0x80, 'master': 0}
     cases = []
     queues = ([(0, 512)], [(0, 240)], [(0, 239)], [(0, 241)], [(239, 2)], [(240, 16)], [(224, 32)],
               [(100, 128)], [(200, 128)], [(383, 129)], [(511, 1)], [(256, 256)], [(240, 272)],
@@ -179,17 +181,17 @@ def edge_cases():
               [(256, 16), (272, 16), (288, 16)], [(500, 12), (0, 200), (16, 16)],
               [(368, 16), (384, 16), (320, 16), (400, 16), (304, 16), (352, 16), (416, 16), (432, 16)],
               [(0, 512), (0, 512)], [(256, 128), (384, 128), (0, 240)], [(240, 128)], [(250, 6)])
-    for opts in (0x38, 0x18, 0x10):
+    for opts in (0xb8, 0x18, 0x10):
         for q in queues:
             cases.append(dict(base, queue=q, opts=opts))
     cases.append(dict(base, queue=[], border=0x1ff))
     cases.append(dict(base, queue=[(0, 512)], lock=1))
-    for opts in (0x00, 0x08, 0x10, 0x18, 0x20, 0x28, 0x30, 0x38, 0x07, 0x1f, 0x3f, 0x3c):
+    for opts in (0x00, 0x08, 0x10, 0x18, 0x20, 0x28, 0x30, 0x38, 0xb8, 0x98, 0x07, 0x1f, 0xbf, 0x3c):
         for st in (0x00, 0x80, 0xe0, 0x60):
             cases.append(dict(base, queue=[(0, 512), (16, 16)], opts=opts, st=st))
             cases.append(dict(base, queue=[], opts=opts, st=st))
     # Left-over entries: busy or idle main loop, first vblank or later.
-    for opts in (0x18, 0x38):
+    for opts in (0x18, 0xb8):
         for st in (0xa0, 0xe0, 0xc0, 0x80):
             for pc in (0xfd69, 0xfd6d, 0xfd6f, 0xfd70, 0xfd66, 0x8457):
                 cases.append(dict(base, queue=[(176, 336)], opts=opts, st=st, pc=pc))
@@ -200,12 +202,12 @@ def edge_cases():
             cases.append(dict(base, queue=[(480, 32), (96, 18)], opts=opts, st=st))
             cases.append(dict(base, queue=[(260, 4)], opts=opts, st=st))          # tiny raw budget
     for master in (1, 2):
-        for opts in (0x18, 0x10, 0x38):
+        for opts in (0x18, 0x10, 0xb8):
             for st in (0x00, 0x80):
                 cases.append(dict(base, queue=[(0, 300), (400, 50)], master=master, opts=opts, st=st))
     rng = random.Random(7)
-    for opts, master in ((0x38, 0), (0x18, 0), (0x10, 0), (0x30, 0), (0x00, 0), (0x08, 0), (0x28, 0),
-                         (0x38, 1)):
+    for opts, master in ((0xb8, 0), (0x18, 0), (0x10, 0), (0x30, 0), (0x00, 0), (0x08, 0), (0x28, 0),
+                         (0x38, 0), (0xb8, 1), (0x18, 1)):
         for first, count in ((16, 16), (208, 32), (0, 1), (255, 1), (128, 127), (200, 56),
                              (230, 20), (239, 2), (240, 16), (224, 127), (250, 100)):
             pal = [rng.randrange(0x200) for _ in range(512)]

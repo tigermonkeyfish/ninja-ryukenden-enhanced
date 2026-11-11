@@ -151,12 +151,12 @@ class PaletteTableTests(unittest.TestCase):
         # Every label of the bank $46 code and the family-11 dispatch, renamed
         # and guarded; nothing outside the marked lines.
         for label in ('palette_entry', 'vblank_gb', 'now_gb', 'mapped_upload', 'upload_chunk',
-                      'fold_queue', 'vblank_family3', 'vblank_sms', 'now_sms'):
+                      'fold_queue', 'vblank_sms', 'now_sms', 'now_hell_cinema_exit'):
             self.assertIn(label, labels)
             self.assertIn(f'\nsms_{label}:\n', text)
             self.assertIn(f' .if (sms_{label} <> {label})\n .fail\n .endif', text)
-        self.assertNotIn('hell_vblank', labels)
-        self.assertIn(' jmp hell_vblank\n', text)                  # labels defined elsewhere keep their names
+        self.assertNotIn('hell_gameplay', labels)
+        self.assertIn(' jmp hell_gameplay\n', text)                # labels defined elsewhere keep their names
         self.assertIn(' jmp sms_mapped_upload\n', text)
         self.assertNotIn(';', text.split('\n', 1)[1])               # comments dropped
         self.assertEqual(text.count(' .org '), 2)
