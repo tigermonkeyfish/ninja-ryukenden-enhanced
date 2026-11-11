@@ -64,6 +64,7 @@ select  also checks, after a cold boot, that the LANGUAGE row reads
 Writes a JSON report to the output folder; captures stay private there.
 """
 import argparse
+import re
 import hashlib
 import json
 from pathlib import Path
@@ -232,22 +233,52 @@ def opens(game):
     return run_until(game, [MENU_OPEN, HOOK_RETURN]) == MENU_OPEN_PC
 
 
+IRQ_EVENT = re.compile(r'@(\d+)\s.*?\[CPU\]\s+IRQ\s+(\S+)')
+
+
+def interrupts(game, pos):
+    """The CPU's interrupt entries logged since trace position `pos`:
+    (new position, [(kind, master clock)]); kind IRQ1 (VDC) or TIQ (timer)."""
+    end = game.call('get_trace_log', {'count': 1}).get('total_logged', 0)
+    events = []
+    while pos < end:
+        chunk = game.call('get_trace_log', {'start': pos, 'count': 1000})
+        lines = chunk.get('entries') or chunk.get('lines') or []
+        if not lines:
+            break
+        for line in lines:
+            m = IRQ_EVENT.search(line if isinstance(line, str) else line.get('text', ''))
+            if m:
+                events.append((m.group(2), int(m.group(1))))
+        pos += len(lines)
+    return pos, events
+
+
 def frames(game, count, state_dir):
     """From a breakpoint stop: normalize (save and reload the state, so frame
     steps have a defined length), then `count` whole frames; for each, the
-    completed frame's picture and the video state at its end (VRAM, sprite
-    table, palette). A screenshot taken at a breakpoint can show a frame in
-    progress, so pictures are only taken after whole frame steps."""
+    completed frame's picture, the video state at its end (VRAM, sprite
+    table, palette), the PSG registers and the CPU's interrupt entries in
+    the frame (master clocks from the frame's VDC interrupt). A screenshot
+    taken at a breakpoint can show a frame in progress, so pictures are only
+    taken after whole frame steps."""
     state = Path(state_dir) / 'normal.state'
     game.call('save_state_file', {'file_path': str(state)})
     game.call('load_state_file', {'file_path': str(state)})
+    game.call('set_trace_log', {'enabled': True, 'output': 'memory', 'memory_size': '1M', 'filters': ['cpu.irqs']})
+    pos = game.call('get_trace_log', {'count': 1}).get('total_logged', 0)
     shots = []
     for _ in range(count):
         game.checked_step(1)
+        pos, events = interrupts(game, pos)
+        vdc = [t for kind, t in events if kind == 'IRQ1']
+        t0 = vdc[-1] if vdc else 0
         video = hashlib.sha256()
         for area, size in ((4, 0x10000), (6, 512), (8, 1024)):
             video.update(game.read(0, size, area=area))
-        shots.append((hashlib.sha256(game.screenshot()).hexdigest()[:16], video.hexdigest()[:16], psg(game)))
+        shots.append((hashlib.sha256(game.screenshot()).hexdigest()[:16], video.hexdigest()[:16], psg(game),
+                      tuple((kind, t - t0) for kind, t in events)))
+    game.call('set_trace_log', {'enabled': False})
     return shots
 
 
@@ -266,6 +297,30 @@ def compare_frames(found, menu_shots, reference_shots):
     writes landed at another raster position (the interrupts take different
     time after the menu: the music driver played on), which is reported."""
     video = [k for k, (a, b) in enumerate(zip(menu_shots, reference_shots)) if a[1] != b[1]]
+    # The timer interrupt (an acknowledge only, $FCD3; reload $74: a period
+    # 143 CPU cycles longer than a frame) runs on through the menu, so after
+    # it its phase against the frame differs, which the menu cannot restore.
+    # It moves the main loop by its own length; a frame end that catches
+    # work spanning frames (a stage load, an area change's redraw) may then
+    # see one write more or less. Such a frame is reported apart when the
+    # VDC interrupts came at the same times in every frame of both runs, the
+    # timer's did not, the sound driver's RAM was the same at the return
+    # ($8B apart: the held sound; so its work in every interrupt was the
+    # same), its picture is the same and the video state agrees again at the
+    # end of the next frame. found['vdc_interrupts_agree'] and
+    # found['timer_moved'] report the two conditions.
+    vdc = lambda shot: tuple(t for kind, t in shot[3] if kind == 'IRQ1')
+    timer = lambda shot: tuple(t for kind, t in shot[3] if kind != 'IRQ1')
+    # (the CPU takes an interrupt at the end of its current instruction, so
+    # the entries may lie a few cycles apart: a quarter line is allowed)
+    same_vdc = all(len(vdc(a)) == len(vdc(b)) and all(abs(x - y) <= 1365 // 4 for x, y in zip(vdc(a), vdc(b)))
+                   for a, b in zip(menu_shots, reference_shots))
+    timer_moved = any(timer(a) != timer(b) for a, b in zip(menu_shots, reference_shots))
+    found['vdc_interrupts_agree'], found['timer_moved'] = same_vdc, timer_moved
+    driver_held = set(found.get('sound_ram_differs', [])) <= {'$208b'}
+    found['timer_phase_frames'] = [k for k in video if same_vdc and timer_moved and driver_held and k + 1 < len(menu_shots)
+                                   and menu_shots[k][0] == reference_shots[k][0] and k + 1 not in video]
+    video = [k for k in video if k not in found['timer_phase_frames']]
     if video or len(menu_shots) != len(reference_shots):
         found['problems'].append(f'video state differs at the end of frames {video[:20]}')
     sound = [k for k, (a, b) in enumerate(zip(menu_shots, reference_shots)) if a[2] != b[2]]

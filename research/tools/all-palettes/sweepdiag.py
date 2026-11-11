@@ -28,7 +28,7 @@ sys.path.insert(0, str(HERE.parents[2] / 'scripts'))
 from gbtools import Session, cv, load_run  # noqa: E402
 import check_menu as CM  # noqa: E402
 
-EVENT = re.compile(r'^\s*(\d+)\s+(\S+)\s+(\S+)\s*(\S*)')
+EVENT = re.compile(r'@(\d+)\s.*?\[(VCE|VDC1|CPU)\]\s+(\S+)\s+(\S+)?')   # as gb-palette/timing_trace.py
 LINE = 1365
 
 
@@ -60,7 +60,7 @@ def trace_read(g, pos):
             text = ln if isinstance(ln, str) else ln.get('text', '')
             m = EVENT.match(text)
             if m:
-                events.append((int(m.group(1)), m.group(2), m.group(3), m.group(4)))
+                events.append((int(m.group(1)), m.group(2), m.group(3), m.group(4) or ''))
         pos += len(lines)
     return pos, events
 
@@ -77,7 +77,7 @@ def frame_states(g, n):
         pos, ev = trace_read(g, pos)
         cpu = g.call('get_huc6280_status')
         ram = g.read(0, 0x2000)
-        vbl = [e[0] for e in ev if e[1].startswith('VDC') and e[2] == 'VBLANK']
+        vbl = [e[0] for e in ev if e[1] == 'VDC1' and e[2] == 'VBLANK']
         t0 = vbl[0] if vbl else (ev[0][0] if ev else 0)
         psg = g.call('get_psg_status')
         out.append({'psg': [(c['enabled'], c['amplitude'], c['frequency'], c['vol_left'], c['vol_right'],
@@ -87,8 +87,7 @@ def frame_states(g, n):
                     'vce': g.read(0, 1024, area=8), 'png': g.screenshot(),
                     'ram': ram, 'fields': {'area': ram[0xe60], 'ryu': ram[0xeab], 'e63': ram[0xe63],
                                            'e45': ram[0xe45], 'lock': ram[0x283], 'cr': ram[0x0e]},
-                    'irqs': [(e[1], e[2], e[3], round((e[0] - t0) / LINE, 2)) for e in ev
-                             if not (e[1] == 'CPU' and e[3] == 'IRQ1')]})
+                    'irqs': [(e[1], e[2], e[3], round((e[0] - t0) / LINE, 2)) for e in ev if e[1] == 'CPU']})
     return out
 
 

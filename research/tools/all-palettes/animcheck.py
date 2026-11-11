@@ -6,7 +6,8 @@ nes_palette.original_animations). Each must come from the mode's own list
 for that entry (NES-A: animations.json; NES-B: relit), and the other
 variant's list is reported for contrast.
 The stage's set is the one whose every entry holds only its list's colours
-and changes at least once.
+and changes at least once (or, where this variant's lists are each one
+colour, as NES-B's 3-1 lists, holds it).
 usage: animcheck.py ROM FLAGS FRAMES stage,stage,..."""
 import os
 import struct
@@ -45,7 +46,8 @@ for stage in stages:
                     seen.setdefault((s, e), set()).add(pal[256 + e if sprite[(s, e)] else e])
     # Which set is this stage's: the one whose entries all hold list colours.
     match = [s for s, lists in mine.items() if all(seen[(s, e)] <= set(cols) for e, cols in lists)
-             and any(len(seen[(s, e)]) > 1 for e, _ in lists)]
+             and (any(len(seen[(s, e)]) > 1 for e, _ in lists) or all(len(set(c)) == 1 for _, c in lists))
+             and any(seen[(s, e)] != {0} for e, _ in lists)]
     for s in match:
         lists = dict(mine[s])
         olists = dict(other[s])
