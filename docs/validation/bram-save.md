@@ -142,6 +142,24 @@ describe `bram-save` as it was stopped.
   without ours and 42 with ours (new matrix image
   `tiny-entries-41-ours-last`: passes on the pinned emulator and under
   `lock` and `key`).
+- NES-A recorded afterwards (one session): all 11 runs identical to the
+  `dark-lift` build's in every field. NES-B: running.
+- Stack (`research/tools/bram-save/stackguard.py`, `build/v111/stackguard.log`):
+  the lowest byte written by the loader or by the save in the open menu is
+  `$21D5` (149 bytes above the watched margin's top `$2140`); the save uses
+  at most 21 bytes below its entry `$21E9`.
+- Boot modes (`research/tools/bram-save/bootmodes.py`, `build/v111/bootmodes.log`):
+  each of the six palette modes (English) and Original in Japanese and
+  Chinese, loaded from backup RAM at a cold boot: 899 idle frames identical
+  to the `dark-lift` build given the same settings (and, in English, to a
+  boot without backup RAM), and 120 frames into 1-1 the palette is the
+  mode's and picture, VCE, RAM palette, `$2100` and `$2104` are the
+  baseline's: 8 of 8. The ninth row (`$BF`, Chinese: SMS with the original
+  background, No Damage and NES Firewheel) also equals the baseline in every
+  one of those, but the probe called its palette "not due": its check for
+  NES left-overs expects the Enhanced merged palette in row 1, which the
+  original background does not load. Probe corrected; that row is to be
+  rerun.
 - Random images (`research/tools/bram-save/fuzz.py`, pinned emulator, seed
   2): the first 560 images, 0 problems, before the generator itself tripped
   on a short end pointer (fixed); a longer run is pending.

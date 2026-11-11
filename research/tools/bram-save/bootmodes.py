@@ -15,9 +15,14 @@ from a cold boot with backup RAM holding that entry after another game's:
   the module's state bit set, an NES mode's own colours in the RAM palette),
   and the picture, the VCE, the RAM palette, $2100 and $2104 are those of
   the BASELINE build given the same settings by a debugger write after its
-  first frame.
+  first frame. With the original background ($2100 bit 0) palette row 1
+  holds the original game's colours, not the Enhanced merged palette that
+  mode_ok's check for NES left-overs expects, so a mapped mode is then due
+  for its table over the RAM palette as it is (check_menu.mode_expected).
 
-usage: bootmodes.py ROM BASELINE ORIGINAL [FRAMES]
+usage: bootmodes.py ROM BASELINE ORIGINAL [FRAMES [OPTIONS:LANGUAGE,...]]
+       (the settings in hex:decimal; default: every palette mode in
+       English, Original in Japanese and Chinese, and $BF in Chinese)
 """
 import hashlib
 import json
@@ -29,7 +34,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'scripts'))
 import bram_image as bi  # noqa: E402
 from check_bram import boot  # noqa: E402
-from check_menu import mode_ok, nes_expected, palette_words  # noqa: E402
+from check_menu import mode_expected, mode_ok, nes_expected, palette_words  # noqa: E402
 from comparison_video import Game  # noqa: E402
 
 rom, baseline, original = sys.argv[1:4]
@@ -53,6 +58,18 @@ def idle(path, image, poke=None):
         return hashes
 
 
+def due(game, ram):
+    """The colours on screen are what the mode in $2100 is due."""
+    mode = ram[0x100] & 0x38
+    vce = game.read(0, 1024, area=8)
+    if not mode:
+        return vce[:512] == ram[0x286:0x486] and not ram[0x104] & 0x80
+    if ram[0x100] & 1 and mode & 0x18 != 0x08:
+        return (ram[0x100] & 0x80 == (0x80 if mode == 0x38 else 0) and vce == mode_expected(game, mode)
+                and ram[0x104] & 0x80 == 0x80)
+    return mode_ok(game, ram, mode, nes)
+
+
 def play(path, image, poke):
     with tempfile.TemporaryDirectory() as work, Game(EMU, work) as game:
         started = boot(game, path, image, Path(work), poke=poke)
@@ -60,14 +77,14 @@ def play(path, image, poke):
         ram = game.read(0, 0x2000)
         return game, {'frame': started['first_update_frame'], 'shot': hashlib.sha256(game.screenshot()).hexdigest(),
                       'vce': game.read(0, 1024, area=8).hex(), 'palette': ram[0x286:0x686].hex(),
-                      'options': ram[0x100], 'state': ram[0x104], 'language': ram[0x1227],
-                      'due': (mode_ok(game, ram, ram[0x100] & 0x38, nes) if ram[0x100] & 0x38 else
-                              game.read(0, 1024, area=8)[:512] == ram[0x286:0x486] and not ram[0x104] & 0x80)}
+                      'options': ram[0x100], 'state': ram[0x104], 'language': ram[0x1227], 'due': due(game, ram)}
 
 
 plain = idle(rom, None)
 ok = True
-for options, language in [(m, 1) for m in bi.PALETTES] + [(0x00, 0), (0x00, 2), (0xbf, 2)]:
+SETTINGS = ([(int(o, 16), int(l)) for o, l in (pair.split(':') for pair in sys.argv[5].split(','))]
+            if len(sys.argv) > 5 else [(m, 1) for m in bi.PALETTES] + [(0x00, 0), (0x00, 2), (0xbf, 2)])
+for options, language in SETTINGS:
     image = bi.image([bi.other(0, 0x40), bi.settings_entry(options, language)])
     saved = idle(rom, image)
     poked = idle(baseline, None, (options, language))
