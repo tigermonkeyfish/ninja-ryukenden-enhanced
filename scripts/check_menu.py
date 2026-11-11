@@ -599,8 +599,8 @@ def nes_expected(original):
         want.pop(i, None)
     want.update({0xf1 + k: c for k, c in enumerate(lay['hud'])})
     orig.update({0xf1 + k: int(e['pce'], 16) for k, e in enumerate(data['shared']['hud']['entries'])})
-    want.update({256 + k: c for k, c in enumerate(lay['sprites'][0][1]) if k})
-    orig.update({256 + k: int(c, 16) for k, c in enumerate(data['shared']['sprites'][0]['pce'])})
+    want.update({256 + k: c for k, c in enumerate(dict(lay['sprites'])[96]) if k})
+    orig.update({256 + e['entry']: int(e['pce'], 16) for e in data['shared']['sprites'][0]['entries']})
     if original is not None:
         m, n = NP.enhanced_palettes('stage11', original)['extra_palette_nes']
         want.update({16 + k: n[k] for k in range(1, 16)})

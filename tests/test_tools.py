@@ -129,15 +129,17 @@ class NesPaletteTests(unittest.TestCase):
     def test_packed_tables_decode_back_to_the_role_data(self):
         import nes_palette as NP
         data = NP.load()
-        tables, sets = NP.includes(data)
-        t, s = self.labelled_bytes(tables), self.labelled_bytes(sets)
+        inc = NP.includes(data)
+        t, s = self.labelled_bytes(inc['nes-tables.inc']), self.labelled_bytes(inc['nes-sets.inc'])
+        s37 = self.labelled_bytes(inc['nes-sprites-37.inc'])
+        s45 = self.labelled_bytes(inc['nes-sprites-45.inc'])
         files = {d['set']: d for d in data['stages'] if not d.get('variant_of')}
         self.assertEqual(len(files), 18)
         for n in range(NP.SETS):
             if n in files:
                 want = [int(e['out'], 16) for e in files[n]['entries']]
                 self.assertEqual(NP.unpack(bytes(s[f'nes_set_{n}']), len(want)), want)
-                self.assertEqual(t['nes_set_hi'][n], f'HIGH(nes_set_{n}+$2000)')
+                self.assertEqual(t['nes_set_hi'][n], f'HIGH(nes_set_{n}+$2000)+$80')   # bank $45
             else:
                 # Title and cinema sets (0, 19-21): no NES copy, the original is used.
                 self.assertIn(n, (0, 19, 20, 21))
@@ -148,15 +150,69 @@ class NesPaletteTests(unittest.TestCase):
         self.assertEqual(NP.unpack(bytes(t['nes_variant_6']), 192), [int(e['out'], 16) for e in variant['entries']])
         ryu = data['shared']['sprites'][0]
         self.assertEqual(ryu['palette'], 96)
-        self.assertEqual(t['nes_sprite_src_lo'] + t['nes_sprite_src_hi'], ['LOW($7840)', 'HIGH($7840)'])  # $7180 + 18 x 96
-        decoded = NP.unpack(bytes(t['nes_sprite_96']), 16)
-        for e in ryu['entries']:
-            self.assertEqual(decoded[e['entry']], int(e['out'], 16))
+        # Sprite palettes: a table by palette number from NES_SPRITE_FIRST;
+        # each copy in bank $37's tail (read in place) or bank $45 (+$80).
+        first = int(next(l for l in inc['nes-tables.inc'].splitlines() if l.startswith('NES_SPRITE_FIRST')).split('=')[1])
+        records = {sp['palette']: sp for sp, _, _ in NP.sprite_records(data)}
+        for k, (lo, hi) in enumerate(zip(t['nes_sprite_lo'], t['nes_sprite_hi'])):
+            n = first + k
+            if n not in records:
+                self.assertEqual((lo, hi), (0, 0))
+                continue
+            label = f'nes_sprite_{n}'
+            raw = s37.get(label) or s45.get(label)
+            self.assertEqual(NP.unpack(bytes(raw), 16), [int(e['out'], 16) for e in records[n]['entries']])
+            self.assertEqual(hi, f'HIGH({label})' if label in s37 else f'HIGH({label}+$2000)+$80')
+        self.assertIn('nes_sprite_96', s37)
         hud = t['nes_hud_colours']
         self.assertEqual([hud[2 * k] | hud[2 * k + 1] << 8 for k in range(7)],
                          [int(e['out'], 16) for e in data['shared']['hud']['entries']])
-        # The NES copies fit the module's ranges (bank $45 $5200-$5FFF; tables below $4400).
-        self.assertLessEqual(sum(len(v) for v in s.values()), 0x5fff - 0x5200 + 1)
+        # The NES copies fit the module's ranges (bank $37 $7C30-$7FDF; bank
+        # $45 $5200-$5FFF for sets and the other sprite palettes).
+        self.assertLessEqual(sum(len(v) for v in s37.values()), 0x7fe0 - 0x7c30)
+        self.assertLessEqual(sum(len(v) for v in s.values()) + sum(len(v) for v in s45.values()), 0x6000 - 0x5200)
+
+    def test_every_nes_mode_colour_is_an_nes_colour(self):
+        import nes_palette as NP
+        self.assertEqual(len(NP.NES_COLOURS), 47)
+        data = NP.load()
+        lay = NP.layout(data)
+        self.assertEqual(NP.nes_problems(lay), [])
+        for cols in list(lay['sets'].values()) + [c for _, c in lay['variants'].values()] + \
+                [c for _, c in lay['sprites']] + [lay['hud']] + [c for v in lay['animations'].values() for _, c in v]:
+            self.assertTrue(set(cols) <= NP.NES_COLOURS)
+        # A colour outside the set fails the check and the build's table check.
+        d = data['stages'][0]
+        d['entries'][5]['override'] = None
+        lay['sets'][d['set']][5] = 0x123
+        self.assertTrue(NP.nes_problems(lay))
+        rec = {'pce': '123', 'role': 'unused', 'nes': '00', 'out': '123', 'entry': 1}
+        self.assertTrue(any('not an NES colour' in p for p in NP._check_results('x', [rec], {})))
+
+    def test_detail_keeps_distinct_colours_distinct_in_lightness_order(self):
+        import nes_palette as NP
+        # Eight greys on a grey role: eight NES colours, in the same order.
+        greys = [0x000, 0x049, 0x092, 0x0db, 0x124, 0x16d, 0x1b6, 0x1ff]
+        r = NP.resolve_role({'ramp': ['00', '10', '30']}, greys)
+        out = [NP.nes9(r[c]) for c in greys]
+        self.assertEqual(len(set(out)), 8)
+        ls = [NP.lightness(c) for c in out]
+        self.assertEqual(ls, sorted(ls))
+        # The role's hue anchors: shades of blue on a red role stay red-ish
+        # (never a far hue column such as blue or green).
+        blues = [0x001, 0x002, 0x003, 0x004, 0x005, 0x006, 0x007]
+        red = NP.resolve_role({'ramp': ['16', '26']}, blues)
+        self.assertTrue(all((n & 0x0F) in (0x05, 0x06, 0x07, 0x00, 0x0F) or NP.chroma(NP.nes9(n)) < NP.NEAR_GREY
+                            for n in red.values()), red)
+        # Merges only once the allowed colours run out, and the report names them.
+        many = list(range(0x000, 0x008)) + [0x008 * k for k in range(1, 8)]
+        r = NP.resolve_role({'ramp': ['0F'], 'mode': 'match', 'strict': True, 'detail': True}, many)
+        self.assertEqual(len(set(r.values())), len(set(NP.nes9(n) for n in r.values())))
+        # 'detail: false' keeps the old nearest-in-the-hue-columns choice.
+        flat = NP.resolve_role({'ramp': ['00', '10', '30'], 'strict': True, 'detail': False}, greys)
+        self.assertTrue(set(flat.values()) <= {0x00, 0x10, 0x30, 0x0F})
+        rows = NP.detail_report(NP.load())
+        self.assertTrue(all(n >= 1 for _, _, _, n in rows))
 
     def test_packing_puts_bit_eight_first(self):
         import nes_palette as NP
@@ -175,7 +231,8 @@ class NesPaletteTests(unittest.TestCase):
         self.assertEqual(set(fixed.values()), {0x25})
         grey = NP.resolve_role({'ramp': ['00', '10', '30'], 'strict': True}, {0x000, 0x092, 0x1ff, 0x0c4})
         self.assertEqual((grey[0x000], grey[0x1ff]), (0x0f, 0x30))
-        self.assertTrue(set(grey.values()) <= {0x00, 0x10, 0x30, 0x0f})
+        self.assertEqual(grey[0x092], 0x00)
+        self.assertTrue(all(NP.chroma(NP.nes9(n)) < NP.NEAR_GREY for n in grey.values()))
         # Black only for near-black, near-neutral colours.
         red = NP.resolve_role({'ramp': ['16', '26']}, {0x008, 0x038})
         self.assertNotEqual(red[0x038], 0x0f)

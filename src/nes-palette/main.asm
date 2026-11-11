@@ -1,18 +1,21 @@
-; NES palette mode ($2100 bits 3-4 = 01): the stages' colours read as the
-; corresponding stages of NES Ninja Gaiden. The colours are data
-; (src/nes-palette/*.json; scripts/nes_palette.py generates nes-tables.inc
-; and nes-sets.inc at build time); this module only chooses them.
+; NES palette mode ($2100 bits 3-4 = 01): the game in NES master-palette
+; colours, read as NES Ninja Gaiden. The colours are data (src/nes-palette/
+; *.json; scripts/nes_palette.py generates the nes-*.inc files at build
+; time); this module only chooses them.
 ;
 ; All the game's palette data is in bank $37: the colour sets (table at
 ; $6000, loader $F211, A = set) and the sprite palettes ($7180 + 18n, loader
 ; $F1C0). Both map bank $37 into MPR3 and unpack with $F2BE (source <$19/<$1A,
 ; first colour <$15/<$16, count <$17/<$18) into the RAM palette $2286. In NES
 ; gameplay their jsr $F2BE comes here, and a set or sprite palette that has
-; an NES copy is unpacked from it instead. Everything else in the game
-; (fades, the backup $2686, the vblank upload) works on the RAM palette, so it
-; carries the NES colours on by itself; the palette module (src/palette)
-; uploads mode 01 natively. The HUD colours (bank 1 $83C3, table $83E5) and
-; the 1-1 / 2-2 Enhanced palettes (stage11, stage22) choose theirs the same way.
+; an NES copy is unpacked from it instead. The colours the game animates come
+; from bank 3's animation table ($CE8D, pointer table $CF32): in NES gameplay
+; the stage load takes the NES copy of that table instead. Everything else in
+; the game (fades, the backup $2686, the vblank upload) works on the RAM
+; palette, so it carries the NES colours on by itself; the palette module
+; (src/palette) uploads mode 01 natively. The HUD colours (bank 1 $83C3,
+; table $83E5) and the 1-1 / 2-2 Enhanced palettes (stage11, stage22) choose
+; theirs the same way.
 ;
 ; Cinemas, the title and the ending ($2240 != 0) keep the original colours.
 ; A set may have a variant for one stage ($2E5F): 3-2 shares set 6 with 3-1.
@@ -31,6 +34,8 @@ NEW_COLOUR = $2284          ; and $2285: the colour SET_COLOUR writes
 HUD_TABLE = $83e5           ; bank 1: the original HUD colours, 7 words
 SETS = 22
 WINDOW = $2000              ; this bank runs in MPR2 ($4000), F2BE reads MPR3 ($6000)
+IN_BANK45 = $80             ; a copy's high byte + $80: the copy is in bank $45
+ANIM_TABLE = $cf32          ; bank 3: the original animation set pointers
 
  ; The two loaders' unpack calls (native: jsr $f2be), with bank $37 in MPR3.
  .bank 0
@@ -64,6 +69,14 @@ nes_unpack_hook_end:
  .fail
  .endif
 
+ ; NES sprite palettes read in place (MPR3 = bank $37): $7C30-$7FDF.
+ .org $7c30
+ .include "nes-sprites-37.inc"
+nes_sprites_37_end:
+ .if (nes_sprites_37_end > nes_unpack_hook)
+ .fail
+ .endif
+
  ; The HUD colours (native: 7 words from $83E5 to entries $F1-$F7 through
  ; $F23C). Bank 1 is mapped at $8000 here; the routine leaves A, X, Y, the
  ; flags and $2E88 as the native one did (A = the last colour's high byte,
@@ -86,35 +99,74 @@ hud_colours_end:
  .fail
  .endif
 
+ ; The animation sets ($CE8D, bank 3 at $C000, A = set pushed): native
+ ; lda #<$CF32 / ldy #>$CF32 / plx, then jsr $E13F picks the set's pointer.
+ .bank 3
+ .org $ce98
+ plx
+ jsr nes_anim_table
+ nop
+ .org $d400
+ ; A/Y = the animation set pointer table: the NES copy in NES gameplay.
+ ; X is kept.
+nes_anim_table:
+ lda OPTIONS
+ and #PALETTE_BITS
+ cmp #PALETTE_NES
+ bne anim_original
+ lda MASTER_STATE
+ bne anim_original
+ lda #LOW(nes_anim)
+ ldy #HIGH(nes_anim)
+ rts
+anim_original:
+ lda #LOW(ANIM_TABLE)
+ ldy #HIGH(ANIM_TABLE)
+ rts
+ .include "nes-anim.inc"
+nes_anim_end:
+ .if (nes_anim_end > $da00)
+ .fail
+ .endif
+
  .bank NES_BANK
  .org $4000
  ; From nes_unpack_hook (MPR2 = this bank, MPR3 = bank $37, F2BE's
- ; arguments set; <$21 = the set number when $F211 called). X and Y are
- ; kept, MPR3 is bank $37 again on return, <$19/<$1A as they came.
+ ; arguments set; <$21 = the set number when $F211 called, <$22:<$21 =
+ ; twice the palette number when $F1C0 called). X and Y are kept, MPR3 is
+ ; bank $37 again on return, <$19/<$1A as they came.
 nes_unpack:
  lda MASTER_STATE
- bne unpack_original
+ beq nes_unpack_gameplay
+ jmp UNPACK
+nes_unpack_gameplay:
  phx
  phy
- ; A sprite palette with an NES copy (by its source address)?
- ldx #NES_SPRITE_COUNT-1
- bmi set_lookup
-sprite_find:
- lda <$19
- cmp nes_sprite_src_lo,x
- bne sprite_next
+ ; A sprite palette? Only $F1C0 unpacks from $7180 up.
  lda <$1a
- cmp nes_sprite_src_hi,x
- bne sprite_next
+ cmp #HIGH($7180)
+ bcc set_lookup
+ bne sprite_lookup
+ lda <$19
+ cmp #LOW($7180)
+ bcc set_lookup
+sprite_lookup:
+ lda <$22
+ lsr a
+ lda <$21
+ ror a                      ; the palette number
+ sec
+ sbc #NES_SPRITE_FIRST
+ cmp #NES_SPRITE_COUNT      ; (numbers below the first wrap above the count)
+ bcs unpack_original_pop
+ tax
  ldy nes_sprite_hi,x
+ beq unpack_original_pop    ; no NES copy
  lda nes_sprite_lo,x
  bra unpack_nes
-sprite_next:
- dex
- bpl sprite_find
 set_lookup:
  ; A colour set: <$21 holds the set, and its table entry must name this
- ; source (only $F211 unpacks from below $7180).
+ ; source.
  lda <$21
  cmp #SETS
  bcs unpack_original_pop
@@ -146,19 +198,28 @@ set_copy:
  beq unpack_original_pop    ; no NES copy: title and cinema sets
  lda nes_set_lo,x
 unpack_nes:
- ; A/Y = the NES copy in the $6000 window of this bank.
+ ; A/Y = the NES copy in the $6000 window; Y + $80 marks bank $45, else
+ ; it is in bank $37 (already in MPR3).
  tax
  lda <$19
  pha
  lda <$1a
  pha
  stx <$19
- sty <$1a
+ tya
+ bmi copy_in_bank45
+ sta <$1a
+ jsr UNPACK
+ bra unpack_done
+copy_in_bank45:
+ and #$7f
+ sta <$1a
  lda #NES_BANK
  tam #3
  jsr UNPACK
  lda #DATA_BANK
  tam #3
+unpack_done:
  pla
  sta <$1a
  pla
@@ -212,18 +273,23 @@ hud_native:
  rts
 nes_code_end:
 
- ; Tables, the HUD words, sprite palettes and variant sets.
+ ; Tables, the HUD words and variant sets.
  .include "nes-tables.inc"
 nes_tables_end:
  .if (nes_tables_end > $4400)
  .fail
  .endif
+ .if (NES_SPRITE_FIRST + NES_SPRITE_COUNT > 256)
+ .fail
+ .endif
 
- ; The NES copies of the colour sets: bank $45 $5200-$5FFF
- ; (stage61-upload ends before $5200).
+ ; The NES copies of the colour sets, then sprite palettes that did not fit
+ ; bank $37: bank $45 $5200-$5FFF (stage61-upload ends before $5200).
  .org $5200
  .include "nes-sets.inc"
 nes_sets_end:
- .if (nes_sets_end > $6000)
+ .include "nes-sprites-45.inc"
+nes_bank45_end:
+ .if (nes_bank45_end > $6000)
  .fail
  .endif
