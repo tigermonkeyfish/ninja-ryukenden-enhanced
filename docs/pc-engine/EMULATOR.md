@@ -75,6 +75,27 @@ Each is a case study in [LESSONS.md](LESSONS.md).
 - **Repeat a mismatch before believing it**, and keep emulator evidence
   separate from hardware reports.
 
+## Backup RAM
+
+- The headless frontend never applies the desktop setting "Force Backup
+  RAM" (only the GUI's start-up does), so a HuCard loaded with `load_media`
+  has **no** backup RAM: bank `$F7` reads `$FF`, ignores writes, and no
+  `.sav` is read or written. `emulator_session.Emulator.call` checks this
+  after every `load_media`.
+- A save state carries the 2 KiB and the flag "this machine has backup
+  RAM". `Emulator.power_on(rom, bram=image)` patches both into a state taken
+  at reset and loads it: the only switch a headless session has. A boot
+  through such a state is identical to a plain boot for a ROM that ignores
+  the memory.
+- A machine with backup RAM writes `<rom name>.sav` beside the emulator
+  binary (portable mode) on a normal exit. The harness ends such a session
+  with SIGKILL and removes a `.sav` that appeared during it. A state saved
+  in such a session re-enables backup RAM wherever it is loaded.
+- For a HuCard this build does not decode `$1807`/`$1803`: backup RAM is
+  always unlocked, so a game's unlock and lock code is not exercised.
+  `research/tools/bram-save/locktest_patch.py` makes a test-only copy that
+  models the lock.
+
 ## Debugger reference (Geargrafx `78fc3d7`)
 
 Memory areas (`read_memory`/`write_memory` `area`; `list_memory_areas` gives

@@ -17,8 +17,20 @@ defaults:
 | NES Firewheel | OFF | In-game menu |
 | Palette | Original | In-game menu |
 
-Settings are not saved. They return to these defaults after a reset or
-power-off.
+Since 1.11-dev (branch `bram-save`, emulator evidence only so far) the
+settings are saved when the console has backup RAM (a Duo, a CD-ROM unit, a
+Ten no Koe 2, or a flash cartridge or emulator that provides it): pressing
+**Run** in the in-game menu stores every setting of the table except the
+stage in a small file named `NR ENHANCE` (26 bytes) beside the saves of
+other games, and the next power-on starts with them. Select (cancel) saves
+nothing, and a language chosen on the title screen is stored by the next
+Run. Without backup RAM, or when it is full or damaged, nothing is written
+and the game starts with these defaults. The menu's last line shows which
+it is (`SAVE: OK`, `READY`, `NONE`, `FULL` or `ERROR` with a number); the
+[hardware checklist](validation/bram-save-hardware-checklist.md) lists the
+meanings, and [the validation record](validation/bram-save.md) what each
+platform needs (MiSTer: "Save Backup RAM" in the OSD; Turbo EverDrive Pro on
+a console without CD: Default EXP Device `TNK2` or `CDROM`).
 
 ## Language
 
@@ -51,6 +63,7 @@ menu's **LANGUAGE** row changes the same setting.
    LANGUAGE: ENGLISH
 
    RUN: OK  SELECT: CANCEL
+   SAVE: READY
    ```
 
 2. Press **Up** or **Down** to choose a setting. The chosen setting's value

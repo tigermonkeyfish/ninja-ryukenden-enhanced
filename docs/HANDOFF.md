@@ -117,6 +117,24 @@
   interrupt's phase, listed apart (`--strict` fails it). HELL's retuned
   candidate D and the 1-1 override followed on `hell-1-1` (above). Evidence:
   [validation/all-palettes.md](validation/all-palettes.md), emulator only.
+- **Saved settings** (1.11-dev, branch `bram-save`, from `hell-1-1`; **work
+  in progress**, stopped 2026-11-11): the menu's Run saves `$2100` and the
+  language to the console's backup RAM when there is one (a System Card
+  style file `NR ENHANCE`, 26 bytes), and the reset loads them; without
+  backup RAM, or when it is full, damaged or unformatted and not blank,
+  nothing is written and the game starts with the defaults as before. The
+  popup's last row shows the status (`SAVE: OK`, `READY`, `NONE`, `FULL`,
+  `ERROR n`; `$2105`). Code: `src/bram` (the old `src/english` folded in),
+  bank `$46` `$4B00-$4FFF` and the reset trampoline `$FFE6-$FFF5`. In the
+  emulator load, save, 206 of 208 image cases, power cycles and saves cut
+  short pass (the other two: a directory of 112 files boots one interrupt
+  late); the unlock/lock sequence, the comparison with `hell-1-1` over the
+  stored runs, `check_menu.py` and hardware are **not done**. Read
+  [validation/bram-save.md](validation/bram-save.md) first: it lists the
+  next steps in order; the maintainer's test list is
+  [validation/bram-save-hardware-checklist.md](validation/bram-save-hardware-checklist.md).
+  The emulator harness now controls backup RAM per session
+  (`scripts/emulator_session.py`: none unless `power_on(rom, bram=image)`).
 - **Popup menu** (1.11-dev, branch `popup-menu`): Select opens a 26 x 10
   window over the playfield (BAT rows 7-16) instead of covering the HUD:
   STAGE, SMOOTH PARALLAX, NO DAMAGE, NES FIREWHEEL, PALETTE, LANGUAGE, then
@@ -157,7 +175,7 @@
   takes longer than the original's. The HUD/playfield split no longer drops
   a line (back-to-back VRAM block transfers had delayed its interrupt).
 - **Options.** English, Enhanced parallax and No Damage OFF are the reset
-  defaults. The menu (Select) offers 22 stage entries, PARALLAX ON/OFF and
+  defaults (on `bram-save`: unless backup RAM holds saved settings). The menu (Select) offers 22 stage entries, PARALLAX ON/OFF and
   No Damage; applying a stage refills Ryu's health. Do not reintroduce the
   abandoned four-speed menu or the repeating 6-1 moon.
 - **Comparison runs and videos.** `research/comparison-runs/` holds a

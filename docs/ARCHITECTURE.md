@@ -193,7 +193,8 @@ the uploads made 5-3 area 2 and 2-2 area 0 miss vblank.
 | `stage61-*` | Sky/mountain separation, sky upload and dispatch |
 | `speed` | Shared divisor-8 coordinate and entrance anchor |
 | `selector-hook`, `options` | Stage selection, progression synchronization, the popup menu (all options and the language) and its version/credit line; a chosen stage starts with full health (`$2EAD = 16`, 1.09-dev) |
-| `cinema-sprite`, `english` | Cinema sprite-pattern reset (below); native English initialization. Enhanced has no boot screen since 1.10-dev |
+| `cinema-sprite` | Cinema sprite-pattern reset (below). Enhanced has no boot screen since 1.10-dev |
+| `bram` | Saved settings (1.11-dev, branch `bram-save`): the reset trampoline with the defaults (the old `english` module: English is `DEFAULT_LANGUAGE`), the loader and the menu's save, in backup RAM ([saved settings](#saved-settings-backup-ram)) |
 
 The canonical bank allocations are in
 [`src/modules.json`](../src/modules.json). Do not use old experimental `.sym`
@@ -210,7 +211,8 @@ files to allocate free space.
 | `$2286-$2685` / `$2686-$2A85` | RAM palette (512 words, the source of every upload) / its backup (`$F718` copies to it, `$F720` back; fades compute `$2286` from it) |
 | `$2102–$2103` | Entrance anchor |
 | `$2104` | The palette module's state (1.11-dev SMS; before it `$2100` bits 5-7): bit 5 a left-over palette entry is queued, bit 6 the main loop was busy at the last vblank with palette work, bit 7 the VCE holds mapped colours (GB DMG, HELL or SMS); bits 0-4 zero. Not a setting: never saved; zero at reset (the RAM clear `$E023`), and clearing it costs at most one needless full re-upload |
-| `$2105–$213F` | Watched stack margin; not general-purpose spare RAM |
+| `$2105` | Save status (1.11-dev, `src/bram` ST_ values 0-8: what the reset found in backup RAM, then what the last Run's save came to); the menu shows it. Not a setting; zero (NONE) from the RAM clear until the loader sets it |
+| `$2106–$213F` | Watched stack margin; not general-purpose spare RAM |
 | `$220F–$2210` | Absolute foreground camera |
 | `$2241` | Current master stage parameter |
 | `$2247` | Next master-script cursor; must match selected stage |
@@ -263,12 +265,11 @@ guard checks.
 | `$FF70` | Gameplay Select hook |
 | `$FFB0` | Banked renderer lookup |
 | `$FFD0–$FFE5` | Shared speed bridge |
-| `$FFE6–$FFED` | English reset initialization — occupied production code |
-| `$FFEE–$FFF5` | Free (`$FF`) |
+| `$FFE6–$FFF5` | Reset trampoline (1.11-dev, `src/bram`, 16 bytes: the English initialization's 8 and the 8 free bytes after it): maps bank `$46` in MPR2, calls the settings loader `$4B00`, restores MPR2, jumps to the native `$FCBE` — occupied production code |
 | `$FFF6–$FFFF` | Native interrupt/reset vectors |
 
 Earlier timing tests temporarily used `$FFE6` as a stub; that range is now
-occupied by English initialization. Do not boot with such a stub installed.
+occupied by the reset trampoline. Do not boot with such a stub installed.
 
 Preserve caller registers, processor flags, bank mappings and all borrowed
 zero-page scratch. The early renderer saves `$06–$0B` and `$25–$30`. IRQ
@@ -639,9 +640,10 @@ the exact previous palette (fade state, animated and enemy colours)
 restored on cancel: 1 KiB of backup the menu does not have; not done.
 
 Bank `$46` (1.11-dev): `$4000-$40FF` dispatch, `$4100-$42FF` unowned
-(512 bytes; reserved for the backup-RAM save code), `$4300-$43FF` cinema
-sprite reset, `$4400-$4AFF` the menu (`options`), `$4B00-$4FFF` unowned
-(1,280 bytes, contiguous; reserved for the backup-RAM save code),
+(512 bytes, still free), `$4300-$43FF` cinema
+sprite reset, `$4400-$4AFF` the menu (`options`, 1,749 bytes used), `$4B00-$4FFF`
+the saved settings (`bram`, 962 bytes used to `$4EC1`; entries `$4B00`
+reset loader, `$4B03` save),
 `$5000-$53FF` palette code (905 bytes used), `$5400-$57FF` its GB DMG
 table, `$5800-$583F` 6-1 dispatch, `$5840-$58FF` options' renderer gate,
 `$5900-$59FF` speed (143 bytes used), `$5A00-$5AFF` the palette module's
@@ -762,7 +764,10 @@ values are `src/options/menu.txt`, generated into `menu-text.inc` by
 - **Controls.** Up/Down choose a row (the value blinks: 16 frames shown, 16
   blank; counter in zero page `$27`), Left/Right change it, Run accepts and
   restarts the stage shown (health refilled, timer reset, palettes
-  reloaded), Select cancels. The menu returns once Select, Run, I and II are
+  reloaded) and saves the settings to backup RAM when there is one
+  ([saved settings](#saved-settings-backup-ram)), Select cancels. The
+  window's last row shows the save status (`$2105`; `SAVE:` and one of the
+  `?` line's texts in `menu.txt`), drawn once when the window opens. The menu returns once Select, Run, I and II are
   released. Rows: STAGE (22 entries), SMOOTH PARALLAX (bit 0 clear = ON),
   NO DAMAGE (bit 1), NES FIREWHEEL (bit 2), PALETTE (bits 3-5), LANGUAGE
   (`$3227`; draft bits 6-7). Each option row is a mask and a value list in `menu.txt`
@@ -780,6 +785,39 @@ Evidence (1.11-dev, emulated; `scripts/check_menu.py`): see the 1.11-dev
 popup menu record in [validation/popup-menu.md](validation/popup-menu.md).
 Re-audit if the HUD, the font loader, the sprite-table code (`$F8E0`,
 `$F728`) or the menu's open conditions change.
+
+## Saved settings (backup RAM)
+
+1.11-dev, branch `bram-save`, module `src/bram`; emulator evidence only, the
+lock sequence untested: status, evidence and open points in
+[validation/bram-save.md](validation/bram-save.md).
+
+`$2100` and `$3227` are kept in the console's backup RAM (bank `$F7`, 2 KiB)
+as a System Card style file `NR ENHANCE` (`$18` bytes with its header:
+version 1, `$2100`, `$3227`, five zero bytes). A HuCard has no BIOS, so the
+module does what the System Card's routines do: `sei`, `csl`, bank `$F7`
+into MPR4, `$48 $75 $80` to `$1807` to unlock, a read of `$1803` to lock,
+`csh`, MPR4 back. It saves and restores zero page `$22-$2C`, X, Y and the
+flags, and by count uses 23 bytes of stack below its caller (not yet
+measured with a guard).
+
+- Reset: the trampoline at `$FFE6` calls `$4B00` after the native RAM clear
+  (interrupts off). Defaults first (`$3227` = 1), then our entry's values
+  if the directory is sound and the entry checks out. Read only. Its cost
+  must stay below 59,832 master clocks (the time between the first, pending
+  vblank interrupt after the reset code enables interrupts and the next
+  one), or the boot runs one interrupt behind the original's: about 55
+  directory entries at the walk's 950 clocks each.
+- The menu's Run calls `$4B03` after it has set `$2100` and `$3227`, before
+  the stage restarts (window closed, sound still held, interrupts off for
+  the save's length: about 2 ms with a few files).
+- Whoever adds a setting: it is saved if it lives in `$2100` (bit 6 is
+  free; the loader rejects an entry with bit 6 set until its range check is
+  extended) or needs a new data byte (bytes 3-7 of the entry are zero and
+  ignored on load) and, for a change of meaning, a new format version.
+- `$2104` (palette module state) is not saved: zero at reset, and the
+  module is expected to re-upload by itself when a mapped mode is live at the first
+  gameplay vblank (the saved modes at boot are not yet checked: `bootmodes.py`).
 
 ## Cinema VRAM ownership
 
