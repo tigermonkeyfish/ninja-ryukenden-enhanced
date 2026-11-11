@@ -603,8 +603,9 @@ By eye:
   [Shade order in SMS](#shade-order-in-sms)). **1-1 and 2-2 changed too**:
   1-1's brick in the awning's shade has a green hatch where it was black
   (3.3% of the picture), and 2-2's shadowed bridge wall is a lighter, flat
-  olive with its mortar lines lifted (8.1%). The study measured these; they
-  are the dark lift's, not this branch's.
+  olive with its mortar lines lifted (8.1%). The study gave 3.4% for each
+  as a mean over three frames of the stage; they are the dark lift's, not
+  this branch's.
 - HELL: 4-1's trunks and ferns show brown on the dark red, the rock wall of
   area 1 is orange-brown with dark seams; 5-1's and 6-2's floors and
   statues are lighter; 6-2 area 2's pillars are golden brown with their
@@ -614,6 +615,20 @@ By eye:
 - NES-A and NES-B: only 4-1 changes; the back trunks are a textured brown
   where they were a flat dark green. Nothing else differs in any picture
   compared.
+
+**The 22 Level Select entries** (`mkjobs.py starts`: `hell-1-1/stagestarts11.py`
+120 frames in SMS and HELL, `all-palettes/stagecheck.py` 150 frames in
+NES-A and NES-B):
+
+- SMS: every entry is due for the new table from frame 14-16 after the
+  first update to frame 119 (the mode's first full re-upload runs before
+  that), as on the SMS build.
+- HELL: every entry due from frame 4-5, 2-3 from 9 and 6-2 from 10 (the one
+  frame more each that the `hell-1-1` record lists: the frame boundary
+  inside that vblank's upload), with 1-1's override.
+- NES-A and NES-B: `stagecheck passed` for all 22: no entry of a stage's set
+  other than its NES colour (4-1 the new set 8), the same load length and
+  gameplay as Original.
 
 ## Rerunning
 
