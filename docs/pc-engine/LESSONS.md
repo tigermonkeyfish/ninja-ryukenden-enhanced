@@ -841,3 +841,28 @@ and take pictures only of completed frames.
 
 **Confidence/limits:** Geargrafx `78fc3d7` behaviour of the debugger; the
 interrupt-time differences are Ninja's sound driver.
+
+## Swap palette data where the loader maps its bank, not in the RAM palette
+
+**Observed:** an alternative colour set had to reach every place the game
+uses colours: the live RAM palette, its backup, every fade step, the area
+changes' re-queues. All of it starts from two loaders that map one data
+bank and unpack through one routine.
+
+**Finding/fix:** the loaders' unpack calls go to a 26-byte hook in the data
+bank's own free tail (mapped there at both call sites, so no fixed-bank
+bytes); in the alternative mode it unpacks from another bank's copy, found
+by the source address the loader set up. Everything downstream carries the
+new colours by itself; tables that bypass the loaders (the HUD's) need their
+own small hook. The colour data stay plain JSON, generated at build time.
+
+**Reusable lesson:** find the narrowest point all palette data passes
+(here the unpack call with its bank mapped) before patching consumers; a
+bank's own unused tail is a place for a hook that its loaders reach.
+
+**Confidence/limits:** emulator, every stage load and the stored runs
+(validation/nes-palette.md); addresses are Ninja's. Even a 15-cycle test on
+the unchanged path moved Ninja's music driver a timer tick in one stage,
+with two single frames redrawn a moment apart: any hook on a load path
+shifts sub-frame timing, so compare such builds per frame and explain each
+difference.
