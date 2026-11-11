@@ -56,7 +56,10 @@ def main():
             if d:
                 ram_frames.append(f)
                 addrs.update(f'{0x2000 + i:04X}' for i in d)
+        parts = collections.Counter(p for v in video.values() for p in v)
         report[name] = {'frames': len(a), 'picture_sat_vce_vram_s_differing': len(video),
+                        'differing_by_part': dict(parts),
+                        'picture_frames': [f for f, v in video.items() if 'png' in v][:20],
                         'video_first': dict(list(video.items())[:8]),
                         'ram_differing_frames': len(ram_frames), 'ram_frames': ram_frames[:40],
                         'ram_addresses': dict(addrs.most_common(24))}

@@ -2,8 +2,10 @@
 flags) and, for frames FIRST..LAST, print which parts differ: the picture
 (pixel count), the VCE entries, the SAT, VRAM, and the RAM addresses (dead
 stack below S excluded, S itself printed).
-usage: framediff.py BASE_ROM CANDIDATE_ROM FLAGS RUN FIRST LAST"""
+usage: framediff.py BASE_ROM CANDIDATE_ROM FLAGS RUN FIRST LAST [SHOTS_DIR]"""
 import sys
+
+from pathlib import Path
 
 from ntools import Session, cv, load_run
 
@@ -35,7 +37,18 @@ def main():
         x, y = a[f], b[f]
         parts = []
         if x['png'] != y['png']:
-            parts.append('picture')
+            import io
+            from PIL import Image
+            pa = list(Image.open(io.BytesIO(x['png'])).convert('RGB').getdata())
+            pb = list(Image.open(io.BytesIO(y['png'])).convert('RGB').getdata())
+            px = [i for i in range(len(pa)) if pa[i] != pb[i]]
+            rows = sorted({i // 256 for i in px})
+            if len(sys.argv) > 7:           # SHOTS_DIR: keep both pictures
+                d = Path(sys.argv[7])
+                d.mkdir(parents=True, exist_ok=True)
+                (d / f'{name}-{f}-base.png').write_bytes(x['png'])
+                (d / f'{name}-{f}-candidate.png').write_bytes(y['png'])
+            parts.append(f'picture: {len(px)} pixels on screenshot rows {rows[:6]}')
         if x['s'] != y['s']:
             parts.append(f'S {x["s"]:02x}/{y["s"]:02x}')
         ram = [i for i in range(0x2000) if x['ram'][i] != y['ram'][i]]

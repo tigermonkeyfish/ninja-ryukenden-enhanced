@@ -14,7 +14,9 @@ fresh session each. Per frame:
   value), NES mode must be at or below the NES value too (a flash of an
   original colour is a brighter channel). Entries the game animates (given
   per stage in ANIMATED, a JSON of stage name -> indices; build it from
-  stagecheck.py's game_written lists) are left out;
+  stagecheck.py's game_written lists) are left out. A mismatch in a frame
+  that ends with the palette lock $2283 held (a load unpacking: nothing is
+  uploaded, the picture cannot show it) is counted apart as mid-update;
 - cinemas and the title ($2240 != 0): picture, VCE and RAM palette identical
   in both modes (original colours).
 usage: nesruns.py ROM OUT.json FRAMES_AFTER ANIMATED.json [runs,..]"""
@@ -48,6 +50,7 @@ def replay(rom, flags, run, after):
             ram = g.read(0, 0x2000)
             fr = {k: ram[a:b].hex() for k, (a, b) in FIELDS.items()}
             fr['sat'] = h(g.read(0, 512, area=6))
+            fr['lock'] = ram[0x283]
             fr['pal'] = ram_palette(ram)
             if ram[0x240]:
                 fr['png'] = h(g.screenshot())
@@ -129,16 +132,17 @@ def main():
                     fading = [p for p in pairs if ov != p[0] and at_or_below(ov, p[0])] + \
                         [p for p in hits if ov == 0]
                     if nv not in [p[1] for p in hits] and not any(at_or_below(nv, p[1]) for p in fading):
-                        bad.append((f, i, f'{ov:03X}', f'{nv:03X}', 'full'))
+                        bad.append((f, i, f'{ov:03X}', f'{nv:03X}', 'full', bool(x['lock'] or y['lock'])))
                 elif all(at_or_below(ov, p[0]) for p in pairs):
                     fade += 1
                     if not any(at_or_below(nv, p[1]) for p in pairs):
-                        bad.append((f, i, f'{ov:03X}', f'{nv:03X}', 'fade'))
+                        bad.append((f, i, f'{ov:03X}', f'{nv:03X}', 'fade', bool(x['lock'] or y['lock'])))
         cinema_frames = sum(1 for x in a if int(x['master'], 16))
         report[name] = {'frames': len(a), 'gameplay_differing': len(gameplay), 'gameplay_first': gameplay[:8],
                         'cinema_frames': cinema_frames, 'cinema_differing': len(cinema), 'cinema_first': cinema[:8],
                         'stages_seen': sorted(stages), 'full_checks': full, 'fade_checks': fade,
-                        'colour_problems': len(bad), 'colour_first': bad[:12]}
+                        'colour_problems': sum(1 for p in bad if not p[5]), 'colour_first': [p for p in bad if not p[5]][:12],
+                        'locked_mid_update': sum(1 for p in bad if p[5]), 'locked_first': [p for p in bad if p[5]][:6]}
         print(name, json.dumps(report[name]), flush=True)
     report['ok'] = all(not r['gameplay_differing'] and not r['cinema_differing'] and not r['colour_problems']
                        for r in report.values() if isinstance(r, dict))

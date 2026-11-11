@@ -71,17 +71,11 @@ def load_and_trace(rom, flags, stage, frames):
             if pc == '8457':
                 break
             raise RuntimeError(f'unexpected stop {pc}')
-        g.call('remove_breakpoint', {'address': '2457', 'memory_area': 'rom'})
-        entered = Path(g.logdir) / 'entered.state'
-        g.call('save_state_file', {'file_path': str(entered)})
-        g.call('load_state_file', {'file_path': str(entered)})
-        # cv.start_stage's tripwire: the first step must cover one update.
-        before = g.read(0xeda, 1)[0]
-        g.checked_step(1)
-        after = g.read(0xeda, 1)[0]
-        g.call('load_state_file', {'file_path': str(entered)})
-        if (before - after) & 0xff != 1:
-            raise cv.StepError(f'the first step covered {(before - after) & 0xff} updates')
+    # The frames after the first update come from a fresh session entered
+    # with cv.start_stage (its saved-state normalization and tripwire); a
+    # session stopped mid-frame by the counting above can step two updates.
+    with Session(rom, flags) as g:
+        cv.start_stage(g, stage)
         trace, palettes = [], []
         for n in range(frames):
             g.checked_step(1)
