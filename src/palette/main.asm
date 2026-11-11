@@ -1,6 +1,15 @@
-; Palette modes: $2100 bits 3-4. 00 Original (the shipped colours; zero is
-; the default), 01 NES (reserved, shown as Original for now), 10 GB DMG,
-; 11 HELL. The menu's PALETTE row offers them (src/options/menu.txt).
+; Palette modes: $2100 bits 3-5 (1.11-dev). Bits 3-4 are the upload family,
+; bit 5 the variant within it:
+;   $00 Original (the shipped colours; zero is the default)
+;   $08 NES-A, $28 NES-B: other palette data loaded into the RAM palette
+;       (the nes-palette branch; uploaded here as Original)
+;   $10 GB DMG
+;   $18 HELL
+;   $38 SMS
+;   $20, $30: unassigned (uploaded as Original and as GB DMG)
+; The menu's PALETTE row offers them (src/options/menu.txt). The dispatch
+; below tests bits 3-4 only (as before SMS), so the Original and GB DMG paths
+; are what they were; bit 5 is tested only in family 11 (HELL or SMS).
 ;
 ; The native game keeps its live palette in RAM ($2286, 512 words) and queues
 ; ranges to upload ($F350; up to 8 entries at $2260-$2280). The vblank
@@ -11,23 +20,30 @@
 ; holds the original colours and fades map every step. HELL does the same
 ; for VCE entries 0 to HELL_MAPPED-1 (background palettes 0-14) only: the HUD
 ; palette, the sprite palettes and the border (entry $100) keep their
-; colours, written by a TIA at the native rate. Cinemas, the title and the
-; ending ($2240 = 1 or 2) keep the native upload in every mode.
+; colours, written by a TIA at the native rate. SMS is GB DMG with the SMS
+; table: the very same code runs from a copy of this bank's $5000-$57FF in
+; bank SMS_BANK, whose $5400-$57FF holds the SMS table instead of the GB DMG
+; one (see "SMS" at the end). Cinemas, the title and the ending ($2240 = 1
+; or 2) keep the native upload in every mode.
 ;
-; $2100 bit 7 is this module's state, not an option: set while the VCE holds
-; mapped colours (GB DMG or HELL). Whenever the colours due (mapped in GB
-; DMG or HELL gameplay, original otherwise) differ from that state, the
-; vblank upload queues all 512 colours ($F394) and flips the bit, so a
-; change between Original (or NES) and a mapped mode, or a cinema starting or
+; PALETTE_STATE ($2104, bits 5-7; in $2100 bits 5-7 before SMS) is this
+; module's state, not an option. Bit 7 is set while the VCE holds mapped
+; colours (GB DMG, HELL or SMS). Whenever the colours due (mapped in a mapped
+; mode's gameplay, original otherwise) differ from that state, the vblank
+; upload queues all 512 colours ($F394) and flips the bit, so a change
+; between Original (or NES) and a mapped mode, or a cinema starting or
 ; ending, re-uploads everything by itself. The bit does not say which table
-; the VCE holds: whoever changes bits 3-4 while a mapped mode is live must
+; the VCE holds: whoever changes bits 3-5 while a mapped mode is live must
 ; also queue all 512 colours ($F394; the menu's preview and cancel do).
-; Menus and saved settings must mask bits 5-7 out; clearing bit 7 costs at
-; most one needless full re-upload.
+; Clearing bit 7 costs at most one needless full re-upload. $2104 is the
+; byte above $2100-$2103 at the bottom of the stack page (the watched stack
+; margin is $2105-$213F since 1.11-dev; docs/validation/sms-palette.md).
 ;
 ; The Original and GB DMG paths take exactly the cycles they took before HELL
-; existed (the HELL tests ride on branches those paths already took), so
-; their timing, and that of every interrupt after them, is unchanged.
+; existed (the HELL and SMS tests ride on branches those paths already took;
+; PALETTE_STATE is read and written with the same absolute instructions as
+; $2100 was), so their timing, and that of every interrupt after them, is
+; unchanged.
 ;
 ; The mapped upload costs about 3.5 times the native TIA per colour, so it
 ; uploads at most PALETTE_CAP colours per vblank, less ENTRY_COST for each
@@ -41,9 +57,11 @@
 ; the native upload's time.
 
 OPTIONS = $2100
-PALETTE_BITS = $18
+PALETTE_BITS = $18          ; the upload family (bits 3-4)
 PALETTE_GB = $10
-PALETTE_HELL = $18
+PALETTE_HELL = $18          ; family 11: HELL, or SMS with PALETTE_VARIANT
+PALETTE_VARIANT = $20       ; bit 5
+PALETTE_STATE = $2104       ; bits 5-7: this module's state (below)
 MASTER_STATE = $2240        ; 0 gameplay, 1 cinema or title, 2 ending
 QUEUE_COUNT = $2260
 QUEUE_BYTES_LO = $2261      ; bytes to upload (2 per colour)
@@ -54,10 +72,12 @@ BORDER = $2281              ; written to colour $100 after each upload
 PALETTE_LOCK = $2283
 NATIVE_UPLOAD = $f3b5
 QUEUE_ALL = $f394           ; native: queue colours 0-511, under the lock
-MAPPED_STATE = $80          ; $2100 bit 7: the VCE holds mapped colours
-LEFTOVER = $20              ; $2100 bit 5: the queue's one entry was left over
-WAS_BUSY = $40              ; $2100 bit 6: the main loop was busy at the last vblank with work
+MAPPED_STATE = $80          ; PALETTE_STATE bit 7: the VCE holds mapped colours
+LEFTOVER = $20              ; bit 5: the queue's one entry was left over
+WAS_BUSY = $40              ; bit 6: the main loop was busy at the last vblank with work
 PALETTE_BANK = $46
+PALETTE_FAR = $5a00         ; bank $46 $5A00-$5AFF: the family-11 dispatch
+SMS_BANK = $3b              ; the SMS copy of $5000-$57FF and PALETTE_FAR
 HELL_BANK = $43            ; HELL's code and table, mapped in MPR3 ($6000)
 HELL_CODE = $7800           ; while they run: bank $43 $7800-$7BFF ...
 HELL_TABLE = $7c00          ; ... and $7C00-$7FFF
@@ -113,6 +133,11 @@ palette_upload_end:
  .endif
 
  .bank PALETTE_BANK
+ ; Everything between the ;@mirror lines is also assembled, byte for byte the
+ ; same at the same addresses, in bank SMS_BANK (scripts/palette_tables.py
+ ; writes sms-mirror.inc from these lines, every label defined here renamed
+ ; sms_..., with a guard that each sms_ label equals its original).
+;@mirror begin
  .org $5000
 palette_entry:
  ; Cycle counts below (HuC6280, no page-crossing penalties) are those of
@@ -127,32 +152,34 @@ palette_vblank:
  lda OPTIONS
  and #PALETTE_BITS
  cmp #PALETTE_GB
- bne vblank_other           ; Original, NES, HELL (carry set: HELL)
+ bne vblank_other           ; Original, NES, HELL, SMS (carry set: HELL, SMS)
+vblank_gb:
+ ; GB DMG, and SMS from vblank_sms (in bank SMS_BANK, with the SMS table).
  lda MASTER_STATE
  bne vblank_cinema
  ; GB DMG in gameplay. If the VCE still holds original colours (bit 7
  ; clear: the mode was just chosen, or a cinema or the title just ended),
  ; queue all 512 colours ($F394) first.
- lda OPTIONS
+ lda PALETTE_STATE
  bmi mapped_state
  ora #MAPPED_STATE
- sta OPTIONS
+ sta PALETTE_STATE
  bra queue_everything
 mapped_state:
  lda QUEUE_COUNT
  bne queue_present
  ; Nothing queued, so nothing is left over either.
- lda OPTIONS
+ lda PALETTE_STATE
  and #$ff - LEFTOVER
- sta OPTIONS
+ sta PALETTE_STATE
  rts
 queue_present:
  jmp mapped_upload          ; 4 cycles, as the bra it replaces
 queue_everything:
  jsr QUEUE_ALL
- lda OPTIONS
+ lda PALETTE_STATE
  and #$ff - LEFTOVER
- sta OPTIONS
+ sta PALETTE_STATE
  jmp mapped_upload
 vblank_other:
  ; Original or NES (carry clear) in 2 + 5 + 2 + 4 cycles, as the 5 + 4 + 4
@@ -160,18 +187,12 @@ vblank_other:
  ; (With bit 7 set, the mode just changed to Original, the requeue below
  ; starts 4 cycles later than before HELL.)
  bcs vblank_hell
- lda OPTIONS
+ lda PALETTE_STATE
  bmi cinema_requeue
  jmp NATIVE_UPLOAD
 vblank_hell:
- ; HELL: its code and table are in bank HELL_BANK, mapped in MPR3 until it
- ; leaves by hell_cinema or hell_done, which put MPR3 back (code running in
- ; MPR3 cannot unmap itself).
- tma #3
- pha
- lda #HELL_BANK
- tam #3
- jmp hell_vblank
+ ; HELL or SMS (family 11): vblank_family3 (PALETTE_FAR) tells them apart.
+ jmp vblank_family3
 hell_cinema:
  pla
  tam #3
@@ -179,11 +200,11 @@ vblank_cinema:
  ; GB DMG or HELL in a cinema, the title or the ending: original colours.
  ; If the VCE holds mapped ones (bit 7 set: a cinema just began, or the
  ; mode was just changed), queue all 512 colours first.
- lda OPTIONS
+ lda PALETTE_STATE
  bpl native_upload
 cinema_requeue:
  and #$ff - MAPPED_STATE
- sta OPTIONS
+ sta PALETTE_STATE
  jsr QUEUE_ALL
 native_upload:
  jmp NATIVE_UPLOAD
@@ -227,8 +248,10 @@ palette_now_mapped:
  lda OPTIONS
  and #PALETTE_BITS
  cmp #PALETTE_GB
- bne now_other              ; Original, NES, HELL (carry set: HELL)
+ bne now_other              ; Original, NES, HELL, SMS (carry set: HELL, SMS)
  nop                        ; GB DMG: the 2 cycles the entry saved
+now_gb:
+ ; GB DMG, and SMS from now_sms (in bank SMS_BANK, with the SMS table).
  lda MASTER_STATE
  bne now_raw
 now_mapped:
@@ -255,13 +278,8 @@ now_high:
  bne now_mapped
  bra now_done
 now_hell_far:
- ; HELL: bank HELL_BANK in MPR3 while now_hell maps the colours below
- ; HELL_MAPPED; it comes back to now_hell_exit with Y = the bytes done.
- tma #3
- pha
- lda #HELL_BANK
- tam #3
- jmp now_hell
+ ; HELL or SMS (family 11): now_family3 (PALETTE_FAR) tells them apart.
+ jmp now_family3
 now_hell_exit:
  pla
  tam #3
@@ -337,13 +355,13 @@ busy_now:
  ldy #WAS_BUSY
 idle_now:
  sty <CHUNK
- lda OPTIONS
+ lda PALETTE_STATE
  and #WAS_BUSY
  sta <ENTRY
- lda OPTIONS
+ lda PALETTE_STATE
  and #$ff - WAS_BUSY
  ora <CHUNK
- sta OPTIONS
+ sta PALETTE_STATE
  ; A single entry that an upload left over ($2100 bit 5) is work the native
  ; game does not have in this frame, and the main loop may need the time
  ; (the frames after a large upload are often an area change's load). It
@@ -352,7 +370,7 @@ idle_now:
  ldx QUEUE_COUNT
  cpx #1
  bne new_work
- lda OPTIONS
+ lda PALETTE_STATE
  and #LEFTOVER
  beq new_work
  lda <CHUNK
@@ -373,7 +391,7 @@ new_work:
  stz <PTR
  stz <PTR+1
  ldx #0
- lda OPTIONS
+ lda PALETTE_STATE
  and #LEFTOVER
  beq sum_bytes
  inx
@@ -434,7 +452,7 @@ budget_set:
  ; entries of 512 colours or more (a fade step) go after it: the left-over
  ; entry then carries on from where it stopped and every colour comes in
  ; turn.
- lda OPTIONS
+ lda PALETTE_STATE
  and #LEFTOVER
  beq budget_done
  lda <TMP
@@ -471,9 +489,9 @@ rotate_entry:
  pla
  sta QUEUE_BYTES_LO-1,x
 budget_done:
- lda OPTIONS
+ lda PALETTE_STATE
  and #$ff - LEFTOVER
- sta OPTIONS
+ sta PALETTE_STATE
  stz <ENTRY
 next_entry:
  ldx <ENTRY
@@ -558,9 +576,9 @@ full_done:
  ; Bit 5: an entry is left over (it was cleared above).
  lda QUEUE_COUNT
  beq nothing_left
- lda OPTIONS
+ lda PALETTE_STATE
  ora #LEFTOVER
- sta OPTIONS
+ sta PALETTE_STATE
 nothing_left:
  ; The border colour (entry $100), mapped like the rest.
  stz $0402
@@ -738,6 +756,7 @@ palette_code_end:
  .if (palette_code_end > $5400)
  .fail
  .endif
+;@mirror end
 
  ; The GB DMG table (generated from gb-dmg.json by scripts/palette_tables.py):
  ; four pages, the mapped colour's low and high byte for colours $000-$0FF
@@ -748,6 +767,56 @@ palette_tables_end:
  .if (palette_tables_end > $5800)
  .fail
  .endif
+
+ ; Family 11 (bits 3-4 = 11): HELL, or SMS with bit 5 set. Bank $46
+ ; $5A00-$5AFF (file offsets $8DA00-$8DAFF), the unused tail of the speed
+ ; module's old claim ($5900-$5FFF; its fixed code ends at $598E; since
+ ; 1.11-dev speed claims $5900-$59FF). Mirrored in bank SMS_BANK, where
+ ; vblank_sms and now_sms go on after their tam #2.
+;@mirror begin
+ .org PALETTE_FAR
+vblank_family3:
+ ; From vblank_hell (A = PALETTE_HELL, carry set).
+ lda OPTIONS
+ and #PALETTE_VARIANT
+ bne vblank_sms
+ ; HELL: its code and table are in bank HELL_BANK, mapped in MPR3 until it
+ ; leaves by hell_cinema or hell_done, which put MPR3 back (code running in
+ ; MPR3 cannot unmap itself).
+ tma #3
+ pha
+ lda #HELL_BANK
+ tam #3
+ jmp hell_vblank
+vblank_sms:
+ ; SMS: the GB DMG path, run from bank SMS_BANK (the same code, the SMS
+ ; table at $5400); the trampoline puts MPR2 back when it returns.
+ lda #SMS_BANK
+ tam #2
+ jmp vblank_gb
+now_family3:
+ ; From now_hell_far (Y = 0, X = the first colour, PTR, CHUNK and the VCE
+ ; address set, the lock held).
+ lda OPTIONS
+ and #PALETTE_VARIANT
+ bne now_sms
+ ; HELL: bank HELL_BANK in MPR3 while now_hell maps the colours below
+ ; HELL_MAPPED; it comes back to now_hell_exit with Y = the bytes done.
+ tma #3
+ pha
+ lda #HELL_BANK
+ tam #3
+ jmp now_hell
+now_sms:
+ ; SMS: GB DMG's palette_now from bank SMS_BANK.
+ lda #SMS_BANK
+ tam #2
+ jmp now_gb
+palette_far_end:
+ .if (palette_far_end > PALETTE_FAR + $100)
+ .fail
+ .endif
+;@mirror end
 
  ; HELL, in bank $43 $7800-$7FFF (file offsets $87800-$87FFF): the tail of
  ; stage11's last data bank, which its generator can never reach (phases 6
@@ -765,10 +834,10 @@ hell_vblank:
 hell_gameplay:
  ; If the VCE holds original colours (bit 7 clear: the mode was just
  ; chosen, or a cinema or the title just ended), queue all 512 first.
- lda OPTIONS
+ lda PALETTE_STATE
  bmi hell_mapped_state
  ora #MAPPED_STATE
- sta OPTIONS
+ sta PALETTE_STATE
  jsr QUEUE_ALL
  bra hell_fresh
 hell_mapped_state:
@@ -777,9 +846,9 @@ hell_mapped_state:
 hell_fresh:
  ; Nothing queued, so nothing is left over either (or all 512 colours were
  ; just queued afresh).
- lda OPTIONS
+ lda PALETTE_STATE
  and #$ff - LEFTOVER
- sta OPTIONS
+ sta PALETTE_STATE
  lda QUEUE_COUNT
  bne hell_upload
  jmp hell_done
@@ -827,17 +896,17 @@ hell_busy_now:
  ldy #WAS_BUSY
 hell_idle_now:
  sty <CHUNK
- lda OPTIONS
+ lda PALETTE_STATE
  and #WAS_BUSY
  sta <ENTRY
- lda OPTIONS
+ lda PALETTE_STATE
  and #$ff - WAS_BUSY
  ora <CHUNK
- sta OPTIONS
+ sta PALETTE_STATE
  ldx QUEUE_COUNT
  cpx #1
  bne hell_new_work
- lda OPTIONS
+ lda PALETTE_STATE
  and #LEFTOVER
  beq hell_new_work
  lda <CHUNK
@@ -852,7 +921,7 @@ hell_new_work:
  stz <PTR
  stz <PTR+1
  ldx #0
- lda OPTIONS
+ lda PALETTE_STATE
  and #LEFTOVER
  beq hell_sum
  inx
@@ -907,7 +976,7 @@ hell_min:
  lda #BUDGET_MIN
 hell_set:
  sta <BUDGET
- lda OPTIONS
+ lda PALETTE_STATE
  and #LEFTOVER
  beq hell_budget_done
  lda <TMP
@@ -944,9 +1013,9 @@ hell_rotate:
  pla
  sta QUEUE_BYTES_LO-1,x
 hell_budget_done:
- lda OPTIONS
+ lda PALETTE_STATE
  and #$ff - LEFTOVER
- sta OPTIONS
+ sta PALETTE_STATE
  stz <ENTRY
  bra hell_next_entry
 hell_entry_done:
@@ -1080,9 +1149,9 @@ hell_border:
 hell_full_done:
  lda QUEUE_COUNT
  beq hell_nothing_left
- lda OPTIONS
+ lda PALETTE_STATE
  ora #LEFTOVER
- sta OPTIONS
+ sta PALETTE_STATE
 hell_nothing_left:
  ; The border colour (entry $100, sprite palette 0's transparent colour):
  ; unmapped, like the rest of the sprite palettes.
@@ -1272,5 +1341,26 @@ hell_table_end:
  .fail
  .endif
  .if (HELL_MAPPED > 256)
+ .fail
+ .endif
+
+ ; SMS, in bank SMS_BANK ($3B): a copy of bank $46 $5000-$53FF and
+ ; PALETTE_FAR at the same addresses (sms-mirror.inc, from the ;@mirror
+ ; lines above), and at $5400-$57FF the SMS table in the GB DMG table's
+ ; format (sms-table.inc, from sms.json). File offsets $77000-$777FF and
+ ; $77A00-$77AFF: the original game's $FF tail of bank $3B (its data ends
+ ; at $761CE), never read or executed (docs/validation/sms-palette.md).
+ ; vblank_sms and now_sms map this bank into MPR2 in place of bank $46 and
+ ; carry on with GB DMG's code here, which reads the SMS table where GB DMG
+ ; reads its own; the trampoline restores MPR2 on return.
+ .bank SMS_BANK
+ .include "sms-mirror.inc"
+ .org $5400
+ .include "sms-table.inc"
+sms_tables_end:
+ .if (sms_tables_end > $5800)
+ .fail
+ .endif
+ .if (sms_lo0 <> gb_lo0) | (sms_hi0 <> gb_hi0) | (sms_lo1 <> gb_lo1) | (sms_hi1 <> gb_hi1)
  .fail
  .endif

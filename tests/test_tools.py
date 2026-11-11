@@ -144,6 +144,29 @@ class PaletteTableTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     sms_table(path)
 
+    def test_sms_mirror_copies_the_marked_code(self):
+        from palette_tables import mirror
+        source = (ROOT / 'src/palette/main.asm').read_text()
+        text, labels = mirror(source)
+        # Every label of the bank $46 code and the family-11 dispatch, renamed
+        # and guarded; nothing outside the marked lines.
+        for label in ('palette_entry', 'vblank_gb', 'now_gb', 'mapped_upload', 'upload_chunk',
+                      'fold_queue', 'vblank_family3', 'vblank_sms', 'now_sms'):
+            self.assertIn(label, labels)
+            self.assertIn(f'\nsms_{label}:\n', text)
+            self.assertIn(f' .if (sms_{label} <> {label})\n .fail\n .endif', text)
+        self.assertNotIn('hell_vblank', labels)
+        self.assertIn(' jmp hell_vblank\n', text)                  # labels defined elsewhere keep their names
+        self.assertIn(' jmp sms_mapped_upload\n', text)
+        self.assertNotIn(';', text.split('\n', 1)[1])               # comments dropped
+        self.assertEqual(text.count(' .org '), 2)
+        for broken in (source.replace(';@mirror end', '', 1),
+                       source.replace(';@mirror begin', '', 1),
+                       source.replace(';@mirror begin\n .org PALETTE_FAR', ';@mirror begin\n .bank 3\n .org PALETTE_FAR'),
+                       source.replace('now_sms:\n', 'now_sms:\nvblank_sms:\n')):
+            with self.assertRaises(ValueError):
+                mirror(broken)
+
     def test_hell_parameters_are_editable(self):
         import tempfile
         from palette_tables import HELL_PARAMETERS, generate, hell_table, pages

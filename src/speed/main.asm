@@ -112,3 +112,8 @@ offset_ready:
  sbc $220f
  rts
 speed_offset_end:
+ ; The claim is bank $46 $5900-$59FF (src/modules.json); $5A00-$5AFF, the
+ ; old claim's unused tail, is the palette module's since 1.11-dev.
+ .if (speed_offset_end > $5a00)
+ .fail
+ .endif
