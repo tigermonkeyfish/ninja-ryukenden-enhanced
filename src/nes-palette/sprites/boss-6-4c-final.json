@@ -1,0 +1,77 @@
+{
+  "name": "The final demon (6-4C)",
+  "nes": "",
+  "roles": {
+    "outline": {"ramp": ["0F"], "note": "outlines and the darkest shades"},
+    "green": {"ramp": ["1A", "2A", "0A"]},
+    "brown": {"ramp": ["07", "17", "27"]},
+    "grey": {"ramp": ["00", "10", "30"]},
+    "cyan": {"ramp": ["1C", "2C", "3C"]}
+  },
+  "notes": ["Draft: roles by the PC Engine colour's hue class."],
+  "palettes": [
+    {
+      "palette": 110, "name": "The final demon",
+      "entries": [
+        {"entry": 0, "pce": "080", "role": "unused", "nes": "09", "out": "080"},
+        {"entry": 1, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 2, "pce": "11A", "role": "green", "nes": "1A", "out": "100"},
+        {"entry": 3, "pce": "010", "role": "brown", "nes": "07", "out": "010"},
+        {"entry": 4, "pce": "091", "role": "green", "nes": "0A", "out": "080"},
+        {"entry": 5, "pce": "060", "role": "brown", "nes": "16", "out": "060"},
+        {"entry": 6, "pce": "123", "role": "green", "nes": "10", "out": "16D"},
+        {"entry": 7, "pce": "070", "role": "brown", "nes": "17", "out": "0A0"},
+        {"entry": 8, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 9, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 10, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 11, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 12, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 13, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 14, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 15, "pce": "1FF", "role": "grey", "nes": "30", "out": "1FF"}
+      ]
+    },
+    {
+      "palette": 111, "name": "The final demon",
+      "entries": [
+        {"entry": 0, "pce": "000", "role": "unused", "nes": "0F", "out": "000"},
+        {"entry": 1, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 2, "pce": "11A", "role": "green", "nes": "1A", "out": "100"},
+        {"entry": 3, "pce": "010", "role": "brown", "nes": "07", "out": "010"},
+        {"entry": 4, "pce": "091", "role": "green", "nes": "0A", "out": "080"},
+        {"entry": 5, "pce": "16C", "role": "green", "nes": "3C", "out": "1AE"},
+        {"entry": 6, "pce": "123", "role": "green", "nes": "10", "out": "16D"},
+        {"entry": 7, "pce": "038", "role": "brown", "nes": "17", "out": "0A0"},
+        {"entry": 8, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 9, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 10, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 11, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 12, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 13, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 14, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 15, "pce": "1FF", "role": "grey", "nes": "30", "out": "1FF"}
+      ]
+    },
+    {
+      "palette": 112, "name": "The final demon",
+      "entries": [
+        {"entry": 0, "pce": "000", "role": "unused", "nes": "0F", "out": "000"},
+        {"entry": 1, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 2, "pce": "1C7", "role": "cyan", "nes": "3C", "out": "1AE"},
+        {"entry": 3, "pce": "145", "role": "cyan", "nes": "2C", "out": "14D"},
+        {"entry": 4, "pce": "104", "role": "cyan", "nes": "1C", "out": "0C4"},
+        {"entry": 5, "pce": "0C3", "role": "cyan", "nes": "00", "out": "092"},
+        {"entry": 6, "pce": "082", "role": "cyan", "nes": "0C", "out": "042"},
+        {"entry": 7, "pce": "1FF", "role": "grey", "nes": "30", "out": "1FF"},
+        {"entry": 8, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 9, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 10, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 11, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 12, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 13, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 14, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 15, "pce": "1FF", "role": "grey", "nes": "30", "out": "1FF"}
+      ]
+    }
+  ]
+}

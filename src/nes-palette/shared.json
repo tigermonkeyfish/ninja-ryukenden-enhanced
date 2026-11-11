@@ -21,18 +21,18 @@
     {
       "palette": 96, "name": "Ryu",
       "roles": {
-        "ryu_suit": {"ramp": ["22"]},
-        "ryu_skin": {"ramp": ["35"]},
-        "ryu_dark": {"ramp": ["07"]},
+        "ryu_suit": {"ramp": ["02", "12", "22"], "note": "NES Ryu suit 22; its darker shades 12, 02 keep the PC Engine suit shading"},
+        "ryu_skin": {"ramp": ["35"], "mode": "fixed", "note": "NES Ryu skin"},
+        "ryu_dark": {"ramp": ["07", "17"], "note": "NES Ryu 07; the lighter tan 17 keeps the two PC Engine shades apart"},
         "ryu_black": {"ramp": ["0F"], "mode": "fixed"}
       },
       "entries": [
         {"entry": 0, "pce": "100", "role": "unused", "nes": "1A", "out": "100"},
         {"entry": 1, "pce": "0CE", "role": "ryu_suit", "nes": "22", "out": "0DF"},
-        {"entry": 2, "pce": "133", "role": "ryu_skin", "nes": "26", "out": "0FB"},
-        {"entry": 3, "pce": "04B", "role": "ryu_suit", "nes": "0C", "out": "042"},
+        {"entry": 2, "pce": "133", "role": "ryu_skin", "nes": "35", "out": "17F"},
+        {"entry": 3, "pce": "04B", "role": "ryu_suit", "nes": "02", "out": "005"},
         {"entry": 4, "pce": "08D", "role": "ryu_suit", "nes": "11", "out": "086"},
-        {"entry": 5, "pce": "060", "role": "ryu_dark", "nes": "16", "out": "060"},
+        {"entry": 5, "pce": "060", "role": "ryu_dark", "override": "07", "nes": "07", "out": "010"},
         {"entry": 6, "pce": "0E2", "role": "ryu_dark", "nes": "17", "out": "0A0"},
         {"entry": 7, "pce": "000", "role": "ryu_black", "nes": "0F", "out": "000"},
         {"entry": 8, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},

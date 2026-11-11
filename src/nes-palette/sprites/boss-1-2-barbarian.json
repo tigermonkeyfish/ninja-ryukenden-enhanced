@@ -1,0 +1,36 @@
+{
+  "name": "Barbarian (1-2)",
+  "nes": "",
+  "roles": {
+    "outline": {"ramp": ["0F"], "note": "outlines and the darkest shades"},
+    "skin": {"ramp": ["27", "37", "17"], "note": "NES enemy skin (27/37 with 17 shading)"},
+    "red": {"ramp": ["16", "26"]},
+    "green": {"ramp": ["1A", "2A", "0A"]},
+    "brown": {"ramp": ["07", "17", "27"]},
+    "cyan": {"ramp": ["1C", "2C", "3C"]}
+  },
+  "notes": ["Draft: roles by the PC Engine colour's hue class."],
+  "palettes": [
+    {
+      "palette": 102, "name": "Barbarian",
+      "entries": [
+        {"entry": 0, "pce": "0DB", "role": "unused", "nes": "00", "out": "092"},
+        {"entry": 1, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 2, "pce": "0E2", "role": "skin", "nes": "27", "out": "130"},
+        {"entry": 3, "pce": "12C", "role": "red", "nes": "26", "out": "0FB"},
+        {"entry": 4, "pce": "10B", "role": "green", "nes": "1A", "out": "100"},
+        {"entry": 5, "pce": "099", "role": "brown", "nes": "18", "out": "090"},
+        {"entry": 6, "pce": "08A", "role": "cyan", "nes": "00", "out": "092"},
+        {"entry": 7, "pce": "028", "role": "brown", "nes": "17", "out": "0A0"},
+        {"entry": 8, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 9, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 10, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 11, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 12, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 13, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 14, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 15, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"}
+      ]
+    }
+  ]
+}

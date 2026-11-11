@@ -1,0 +1,34 @@
+{
+  "name": "Kelbeross (4-4)",
+  "nes": "",
+  "roles": {
+    "outline": {"ramp": ["0F"], "note": "outlines and the darkest shades"},
+    "skin": {"ramp": ["27", "37", "17"], "note": "NES enemy skin (27/37 with 17 shading)"},
+    "brown": {"ramp": ["07", "17", "27"]},
+    "blue": {"ramp": ["02", "12", "22"]}
+  },
+  "notes": ["Draft: roles by the PC Engine colour's hue class."],
+  "palettes": [
+    {
+      "palette": 105, "name": "Kelbeross",
+      "entries": [
+        {"entry": 0, "pce": "0DB", "role": "unused", "nes": "00", "out": "092"},
+        {"entry": 1, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 2, "pce": "0E2", "role": "skin", "nes": "27", "out": "130"},
+        {"entry": 3, "pce": "050", "role": "brown", "nes": "07", "out": "010"},
+        {"entry": 4, "pce": "0A9", "role": "brown", "nes": "17", "out": "0A0"},
+        {"entry": 5, "pce": "098", "role": "brown", "nes": "18", "out": "090"},
+        {"entry": 6, "pce": "0CC", "role": "blue", "nes": "00", "out": "092"},
+        {"entry": 7, "pce": "028", "role": "brown", "nes": "16", "out": "060"},
+        {"entry": 8, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 9, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 10, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 11, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 12, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 13, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 14, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 15, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"}
+      ]
+    }
+  ]
+}

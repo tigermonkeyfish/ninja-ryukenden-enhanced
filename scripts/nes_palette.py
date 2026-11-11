@@ -31,17 +31,20 @@ colour is outside the NES set. `python3 scripts/nes_palette.py detail` lists
 the palette rows where distinct PC Engine colours share an NES colour.
 
 Resolution ('match' roles, the default), per palette row (16 colours of a
-set row, one sprite palette, one animation list): a role names its NES hues
-(`ramp`); the candidates are every NES colour, priced by lightness (CIE L*
-of the 9-bit colour), CHROMA x the a*b* distance, and how far the candidate
-is from the role's hues (the ramp 0, the ramp codes' hue columns PENALTY,
-neighbouring hue columns and near-greys EXT_NEAR, anything else EXT_FAR;
-black 0F only for near-black colours). The row's distinct colours of one
-role are assigned in their lightness order to candidates in lightness order,
-distinct colours to distinct NES colours (a merge costs MERGE, so it happens
-only when the NES set has no colour left); roles of a row are resolved
-largest first and avoid the colours earlier roles took. This keeps the PC
-Engine lighting and texture with NES hues. `detail: false` gives the old
+set row, one sprite palette, one animation set): a role names its NES hues
+(`ramp`); the candidates are the NES colours of the role's hue columns,
+the neighbouring columns and the greys / near-greys, priced by lightness
+(CIE L* of the 9-bit colour), the colour's own a*b* only to choose among the
+role's hues (CHROMA, CHROMA_EXT beyond them), and the candidate's distance
+from the role's hues (the ramp 0, the ramp codes' hue columns PENALTY,
+neighbouring columns and near-greys EXT_NEAR plus ROLE_HUE x a*b*; any other
+hue EXT_FAR, never chosen; black 0F only for near-black colours). The row's
+distinct colours of one role are assigned in their lightness order to
+candidates in lightness order, distinct colours to distinct NES colours; two
+share one only at MERGE cost, the price of a 30 L* shift, so a row keeps its
+detail unless that would re-light it (the build lists such rows). Roles of a
+row are resolved largest first and avoid the colours earlier roles took.
+This keeps the PC Engine lighting and texture with NES hues. `detail: false` gives the old
 per-colour nearest choice inside the hue columns; 'ramp' roles map by
 lightness rank onto the ramp, 'fixed' roles take the ramp's first code.
 
@@ -95,15 +98,17 @@ REGION_45_END = 0x6000        # bank $45 copies follow the sets up to $5FFF
 
 PENALTY = 60.0
 EXT_NEAR = 150.0              # a neighbouring hue column or a near-grey
-EXT_FAR = 3e5                 # any other NES colour: dearer than a merge (keeps the role hue)
+EXT_FAR = 1e5                 # any other NES colour: dearer than any merge (keeps the role hue)
 ROLE_HUE = 0.1                # x a candidate's a*b* distance from the role's colours
-MERGE = 1e5                   # two distinct colours of a row on one NES colour
+MERGE = 900.0                 # two distinct colours of a row on one NES colour: the price of
+                              # a 30 L* shift, so detail never costs the scene its lighting
 INFEASIBLE = 1e9
 BLACK_L = 7.0
 BLACK_CHROMA = 20.0
 CHROMA = 0.15
 CHROMA_EXT = 0.6             # the same beyond the role's hue columns (detail)
-NEAR_GREY = 32.0              # chroma below which an NES colour counts as a near-grey
+NEAR_GREY = 32.0              # chroma below which an NES colour counts as a near-grey (grey roles)
+NEAR_GREY_HUED = 22.0         # the same for roles with a hue
 ENTRY_KEYS = {'index', 'row', 'entry', 'pce', 'role', 'nes', 'out', 'override'}
 ROLE_KEYS = {'ramp', 'mode', 'strict', 'chroma', 'black_l', 'extra', 'exclude', 'note', 'detail', 'chroma_ext'}
 
@@ -216,7 +221,7 @@ def _hue_penalty(n, ramp, fam):
     hues = {x & 0x0F for x in ramp if x != 0x0F and (x & 0x0F) < 0x0D}
     h = n & 0x0F
     grey_role = hues <= {0}
-    if h == 0 or h == 0x0D or chroma(nes9(n)) < NEAR_GREY:
+    if h == 0 or h == 0x0D or chroma(nes9(n)) < (NEAR_GREY if grey_role else NEAR_GREY_HUED):
         return EXT_NEAR                  # greys and near-greys are near every role
     for x in hues - {0}:
         if 1 <= h <= 12 and min((h - x) % 12, (x - h) % 12) == 1:
@@ -398,9 +403,21 @@ def anim_records(data):
 
 
 def anim_entries(a):
-    """An animator's list as colour records (one row)."""
+    """An animator's list as colour records."""
     return [{'pce': p, 'role': a['role'], 'row': 0, **({'override': a['override'][i]} if a.get('override') and a['override'][i] else {})}
             for i, p in enumerate(a['pce'])]
+
+
+def anim_resolve(s, roles):
+    """{entry: [(code, out)]}: all lists of one animation set resolve as one
+    row, so a colour that travels from entry to entry keeps its NES colour."""
+    recs, spans = [], []
+    for a in s['animators']:
+        e = anim_entries(a)
+        spans.append((a['entry'], len(recs), len(recs) + len(e)))
+        recs += e
+    res = resolve(recs, roles)
+    return {entry: res[i:j] for entry, i, j in spans}
 
 
 def check(data):
@@ -461,8 +478,7 @@ def check(data):
     sets_seen = set()
     for s, a, roles in anim_records(data):
         sets_seen.add(s['set'])
-        recs = anim_entries(a)
-        res = resolve(recs, roles)
+        res = anim_resolve(s, roles)[a["entry"]]
         want_nes = [f'{c:02X}' for c, _ in res]
         want_out = [f'{o:03X}' for _, o in res]
         if a.get('nes') != want_nes or a.get('out') != want_out:
@@ -717,7 +733,7 @@ def detail_report(data):
         n = {o for _, o in res[1:]}
         out.append((name, f'sprite {sp["palette"]}', len(p), len(n)))
     for s, a, roles in anim_records(data):
-        res = resolve(anim_entries(a), roles)
+        res = anim_resolve(s, roles)[a["entry"]]
         out.append(('animations.json', f'set {s["set"]} entry {a["entry"]}', len(set(a['pce'])), len({o for _, o in res})))
     return out
 
@@ -731,10 +747,15 @@ def generate(work, original, path=DATA):
         raise NesPaletteError('NES palette data:\n  ' + '\n  '.join(problems))
     for name, text in includes(data, original).items():
         (Path(work) / name).write_text(text)
-    lost = [r for r in detail_report(data) if r[3] < r[2]]
+    rows = detail_report(data)
+    lost = [r for r in rows if r[3] < r[2]]
     if lost:
-        print(f'NES palette: {len(lost)} rows keep fewer distinct colours than the original '
-              f'(NES set exhausted): ' + ', '.join(f'{f} {r} {p}->{n}' for f, r, p, n in lost))
+        per = collections.Counter()
+        for f, _, p, n in lost:
+            per[f] += p - n
+        print(f'NES palette: {len(lost)} of {len(rows)} rows keep fewer distinct colours than the original '
+              f'({sum(per.values())} merged; nes_palette.py detail lists them): '
+              + ', '.join(f'{f} {k}' for f, k in sorted(per.items())))
     return lay
 
 
@@ -896,7 +917,7 @@ def resolve_files(path=DATA):
         for s in an['sets']:
             roles = {**files[s['file']]['roles'], **s.get('roles', {})} if s.get('file') else dict(s.get('roles', {}))
             for a in s['animators']:
-                res = resolve(anim_entries(a), roles)
+                res = anim_resolve(s, roles)[a["entry"]]
                 a['nes'] = [f'{c:02X}' for c, _ in res]
                 a['out'] = [f'{o:03X}' for _, o in res]
         p.write_text(dumps_animations(an))

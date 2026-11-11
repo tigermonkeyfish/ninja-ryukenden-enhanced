@@ -1,0 +1,34 @@
+{
+  "name": "The demon statue (6-4B)",
+  "nes": "",
+  "roles": {
+    "outline": {"ramp": ["0F"], "note": "outlines and the darkest shades"},
+    "brown": {"ramp": ["07", "17", "27"]},
+    "blue": {"ramp": ["02", "12", "22"]},
+    "purple": {"ramp": ["04", "14", "24"]}
+  },
+  "notes": ["Draft: roles by the PC Engine colour's hue class."],
+  "palettes": [
+    {
+      "palette": 108, "name": "The demon statue",
+      "entries": [
+        {"entry": 0, "pce": "0DB", "role": "unused", "nes": "00", "out": "092"},
+        {"entry": 1, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 2, "pce": "030", "role": "brown", "nes": "17", "out": "0A0"},
+        {"entry": 3, "pce": "08E", "role": "blue", "nes": "11", "out": "086"},
+        {"entry": 4, "pce": "003", "role": "purple", "nes": "03", "out": "00C"},
+        {"entry": 5, "pce": "044", "role": "purple", "nes": "04", "out": "013"},
+        {"entry": 6, "pce": "047", "role": "purple", "nes": "14", "out": "025"},
+        {"entry": 7, "pce": "020", "role": "brown", "nes": "16", "out": "060"},
+        {"entry": 8, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 9, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 10, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 11, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 12, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 13, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 14, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 15, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"}
+      ]
+    }
+  ]
+}

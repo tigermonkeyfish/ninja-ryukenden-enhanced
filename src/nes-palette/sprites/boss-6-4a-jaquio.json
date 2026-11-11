@@ -1,0 +1,58 @@
+{
+  "name": "Jaquio (6-4A)",
+  "nes": "",
+  "roles": {
+    "green": {"ramp": ["1A", "2A", "0A"]},
+    "outline": {"ramp": ["0F"], "note": "outlines and the darkest shades"},
+    "blue": {"ramp": ["02", "12", "22"]},
+    "grey": {"ramp": ["00", "10", "30"]},
+    "yellow": {"ramp": ["28", "38", "18"]},
+    "brown": {"ramp": ["07", "17", "27"]},
+    "purple": {"ramp": ["04", "14", "24"]}
+  },
+  "notes": ["Draft: roles by the PC Engine colour's hue class."],
+  "palettes": [
+    {
+      "palette": 75, "name": "Jaquio",
+      "entries": [
+        {"entry": 0, "pce": "052", "role": "unused", "nes": "0C", "out": "042"},
+        {"entry": 1, "pce": "080", "role": "green", "nes": "0A", "out": "080"},
+        {"entry": 2, "pce": "0C0", "role": "green", "nes": "19", "out": "0C8"},
+        {"entry": 3, "pce": "100", "role": "green", "nes": "1A", "out": "100"},
+        {"entry": 4, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 5, "pce": "1C0", "role": "green", "nes": "2A", "out": "190"},
+        {"entry": 6, "pce": "093", "role": "blue", "nes": "00", "out": "092"},
+        {"entry": 7, "pce": "0DC", "role": "blue", "nes": "22", "out": "0DF"},
+        {"entry": 8, "pce": "16D", "role": "grey", "nes": "10", "out": "16D"},
+        {"entry": 9, "pce": "16D", "role": "grey", "nes": "10", "out": "16D"},
+        {"entry": 10, "pce": "16D", "role": "grey", "nes": "10", "out": "16D"},
+        {"entry": 11, "pce": "16D", "role": "grey", "nes": "10", "out": "16D"},
+        {"entry": 12, "pce": "16D", "role": "grey", "nes": "10", "out": "16D"},
+        {"entry": 13, "pce": "16D", "role": "grey", "nes": "10", "out": "16D"},
+        {"entry": 14, "pce": "16D", "role": "grey", "nes": "10", "out": "16D"},
+        {"entry": 15, "pce": "1FF", "role": "grey", "nes": "30", "out": "1FF"}
+      ]
+    },
+    {
+      "palette": 107, "name": "Jaquio",
+      "entries": [
+        {"entry": 0, "pce": "0DB", "role": "unused", "nes": "00", "out": "092"},
+        {"entry": 1, "pce": "001", "role": "blue", "nes": "0F", "out": "000"},
+        {"entry": 2, "pce": "121", "role": "yellow", "nes": "28", "out": "168"},
+        {"entry": 3, "pce": "0D5", "role": "blue", "nes": "22", "out": "0DF"},
+        {"entry": 4, "pce": "0A0", "role": "brown", "nes": "17", "out": "0A0"},
+        {"entry": 5, "pce": "044", "role": "purple", "nes": "04", "out": "013"},
+        {"entry": 6, "pce": "058", "role": "brown", "nes": "07", "out": "010"},
+        {"entry": 7, "pce": "08C", "role": "blue", "nes": "02", "out": "005"},
+        {"entry": 8, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 9, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 10, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 11, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 12, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 13, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 14, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 15, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"}
+      ]
+    }
+  ]
+}

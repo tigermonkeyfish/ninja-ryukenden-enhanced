@@ -1,0 +1,100 @@
+{
+  "name": "Ryu's other sprite rows (1, 2) and their copies in boss rooms",
+  "nes": "NES Ryu effects: sword 30/22, ninpo fire 16 26 30",
+  "roles": {
+    "skin": {"ramp": ["27", "37", "17"], "note": "NES enemy skin (27/37 with 17 shading)"},
+    "brown": {"ramp": ["07", "17", "27"]},
+    "green": {"ramp": ["1A", "2A", "0A"]},
+    "red": {"ramp": ["16", "26"]},
+    "grey": {"ramp": ["00", "10", "30"]},
+    "purple": {"ramp": ["04", "14", "24"]},
+    "blue": {"ramp": ["02", "12", "22"]}
+  },
+  "notes": ["Draft: roles by the PC Engine colour's hue class."],
+  "palettes": [
+    {
+      "palette": 97, "name": "Ryu's other sprite rows",
+      "entries": [
+        {"entry": 0, "pce": "0DB", "role": "unused", "nes": "00", "out": "092"},
+        {"entry": 1, "pce": "133", "role": "skin", "nes": "37", "out": "1BD"},
+        {"entry": 2, "pce": "030", "role": "brown", "nes": "17", "out": "0A0"},
+        {"entry": 3, "pce": "058", "role": "brown", "nes": "07", "out": "010"},
+        {"entry": 4, "pce": "0B1", "role": "brown", "nes": "26", "out": "0FB"},
+        {"entry": 5, "pce": "0F9", "role": "brown", "nes": "27", "out": "130"},
+        {"entry": 6, "pce": "0A8", "role": "brown", "nes": "16", "out": "060"},
+        {"entry": 7, "pce": "184", "role": "green", "nes": "2B", "out": "18B"},
+        {"entry": 8, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 9, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 10, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 11, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 12, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 13, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 14, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 15, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"}
+      ]
+    },
+    {
+      "palette": 98, "name": "Ryu's other sprite rows",
+      "entries": [
+        {"entry": 0, "pce": "0DB", "role": "unused", "nes": "00", "out": "092"},
+        {"entry": 1, "pce": "0E3", "role": "red", "nes": "26", "out": "0FB"},
+        {"entry": 2, "pce": "1B6", "role": "grey", "nes": "30", "out": "1FF"},
+        {"entry": 3, "pce": "002", "role": "purple", "nes": "04", "out": "013"},
+        {"entry": 4, "pce": "086", "role": "blue", "nes": "11", "out": "086"},
+        {"entry": 5, "pce": "0C7", "role": "blue", "nes": "22", "out": "0DF"},
+        {"entry": 6, "pce": "130", "role": "brown", "nes": "27", "out": "130"},
+        {"entry": 7, "pce": "184", "role": "green", "nes": "2B", "out": "18B"},
+        {"entry": 8, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 9, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 10, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 11, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 12, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 13, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 14, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 15, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"}
+      ]
+    },
+    {
+      "palette": 100, "name": "Ryu's other sprite rows",
+      "entries": [
+        {"entry": 0, "pce": "0DB", "role": "unused", "nes": "00", "out": "092"},
+        {"entry": 1, "pce": "133", "role": "skin", "nes": "37", "out": "1BD"},
+        {"entry": 2, "pce": "030", "role": "brown", "nes": "17", "out": "0A0"},
+        {"entry": 3, "pce": "058", "role": "brown", "nes": "07", "out": "010"},
+        {"entry": 4, "pce": "0B1", "role": "brown", "nes": "26", "out": "0FB"},
+        {"entry": 5, "pce": "0F9", "role": "brown", "nes": "27", "out": "130"},
+        {"entry": 6, "pce": "0A8", "role": "brown", "nes": "16", "out": "060"},
+        {"entry": 7, "pce": "184", "role": "green", "nes": "2B", "out": "18B"},
+        {"entry": 8, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 9, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 10, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 11, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 12, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 13, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 14, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 15, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"}
+      ]
+    },
+    {
+      "palette": 101, "name": "Ryu's other sprite rows",
+      "entries": [
+        {"entry": 0, "pce": "0DB", "role": "unused", "nes": "00", "out": "092"},
+        {"entry": 1, "pce": "0E3", "role": "red", "nes": "26", "out": "0FB"},
+        {"entry": 2, "pce": "1B6", "role": "grey", "nes": "30", "out": "1FF"},
+        {"entry": 3, "pce": "002", "role": "purple", "nes": "04", "out": "013"},
+        {"entry": 4, "pce": "046", "role": "purple", "nes": "14", "out": "025"},
+        {"entry": 5, "pce": "0C7", "role": "blue", "nes": "22", "out": "0DF"},
+        {"entry": 6, "pce": "130", "role": "brown", "nes": "27", "out": "130"},
+        {"entry": 7, "pce": "184", "role": "green", "nes": "2B", "out": "18B"},
+        {"entry": 8, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 9, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 10, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 11, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 12, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 13, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 14, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 15, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"}
+      ]
+    }
+  ]
+}
