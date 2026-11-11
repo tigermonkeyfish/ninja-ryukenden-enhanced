@@ -14,8 +14,12 @@ one tile, its shading is reversed. This probe
    row: the pixels of each and the number of 4-neighbour pixel pairs in
    which the two touch.
 
-usage: hellorder.py [--hell hell.json] [--min L] [--mode hell] [--pairs] [CAP...]
-  --pairs: list every inversion (default: per family counts and the greys)."""
+usage: hellorder.py [--hell hell.json] [--min L] [--mode hell] [--pairs] [--sms] [CAP...]
+  --pairs: list every inversion (default: per family counts and the greys).
+  --sms: the SMS table instead (sms.json; every VCE entry), with the fade's
+         order: a pair is inverted when one colour has every channel at least
+         the other's (a fade step of it, or a lighter shade of one hue) and is
+         shown at least MIN L* darker; captures of mode sms."""
 import json
 import sys
 from collections import defaultdict
@@ -58,12 +62,28 @@ def inversions(table):
     return out, fams
 
 
-inv, fams = inversions(table)
-print(f'{path.name}: inversions of at least {MIN} L* (lighter input shown darker), per family')
+def dominance(table):
+    """The fade's order: b has every channel at least a's and is shown darker."""
+    out = [(a, b) for a in range(1, 512) for b in range(1, 512)
+           if a != b and all(x <= y for x, y in zip(PT.channels(a), PT.channels(b)))
+           and L[table[a]] - L[table[b]] >= MIN]
+    return {'fade': out}, {'fade': list(range(1, 512))}
+
+
+SMS = '--sms' in sys.argv
+if SMS:
+    table = PT.sms_table()
+    MODE = opt.get('mode', 'sms')
+    spec = {'mapped_entries': 512}
+    inv, fams = dominance(table)
+else:
+    inv, fams = inversions(table)
+print(f'{"sms.json" if SMS else path.name}: inversions of at least {MIN} L* (lighter input shown darker), per family')
 for fam in sorted(fams):
     pairs = inv.get(fam, [])
     print(f'  {fam:6s} {len(fams[fam]):3d} colours, {len(pairs):5d} inverted pairs')
-greys = sorted((c for c in range(1, 512) if PT.hell_family(c, spec)[0] in ('grey', 'ash')), key=lambda c: L[c])
+greys = [] if SMS else sorted((c for c in range(1, 512) if PT.hell_family(c, spec)[0] in ('grey', 'ash')),
+                             key=lambda c: L[c])
 print('greys and ash, darkest input first: input (RGB, L*) > shown (RGB, L*)')
 last = -1
 for c in greys:

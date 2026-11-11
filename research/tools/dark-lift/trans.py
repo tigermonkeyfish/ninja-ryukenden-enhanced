@@ -18,7 +18,8 @@ CASE: walk:STAGE        Level Select entry of STAGE; in each area 60 idle
 Per frame (OUT/TAG-<case>.json): master state, stage, area, lock, queue
 count, the fade's bytes $2A8A-$2A8E, the module's state $2104, the share of
 the playfield (screenshot rows 50-241) that is not the mode's black, its
-colours (the 6 commonest, as PC Engine words), the VCE entries that differ
+colours (the 6 commonest, as PC Engine words), the share of the HUD band
+(rows 18-49) that is not black, the VCE entries that differ
 from the colour due (count, how many of those are not black in the VCE, the
 first few), and a hash of the gameplay fields.
 (GB_WORK: seed.state, original.pce)"""
@@ -70,7 +71,8 @@ class Recorder:
 
     def frame(self, g, n, note=''):
         png = g.screenshot()
-        rgb = np.array(Image.open(io.BytesIO(png)).convert('RGB'))[50:242]
+        full = np.array(Image.open(io.BytesIO(png)).convert('RGB'))
+        rgb, hud = full[50:242], full[18:50]
         ram = g.read(0, 0x1000)
         vce = g.read(0, 1024, 8)
         stage = ram[0xe5f]
@@ -91,6 +93,7 @@ class Recorder:
         row = {'f': n, 'note': note, 'master': ram[0x240], 'stage': stage, 'area': ram[0xe60],
                'lock': ram[0x283], 'queue': ram[0x260], 'fade': ram[0xa8a:0xa8f].hex(), 'state': ram[0x104],
                'timer': ram[0xe63], 'notblack': round(notblack * 100 / size, 3),
+               'hud': round(float((words(hud) != black).mean()) * 100, 3),
                'top': [[f'{c:03X}', round(k * 100 / size, 2)] for k, c in top[:6]],
                'late': len(late), 'lit': len(lit), 'lit_first': lit[:24],
                'lit_colours': sorted({f'{v[i]:03X}' for i in lit})[:12],
