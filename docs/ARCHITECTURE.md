@@ -253,6 +253,7 @@ guard checks.
 | `$FEBE–$FECE` | Palette trampoline (1.11-dev, 17 bytes): `$FEBE` palette_now (stage modules: write colours X..X+Y-1 of the RAM palette to the VCE at once, in the mode's colours), `$FEC0` vblank upload; both map bank `$46` into MPR2 and restore it |
 | `$FECF–$FEDF` | Free (`$FF`, 17 bytes) |
 | `$F1DC`, `$F234` | The sprite-palette and colour-set loaders' unpack calls (native `jsr $F2BE`): `jsr $7FE0`, the NES palette hook in bank `$37`'s free tail (MPR3 holds bank `$37` at both; 1.11-dev) |
+| `$CE98-$CE9C` (bank 3) | The animation-set setup's table pointer (native `lda #$32 / ldy #$CF / plx`): `plx / jsr $D400 / nop`, the NES copy of the animation table in NES gameplay (1.11-dev) |
 | `$FE40 / $FE46` | Early wrapper / preserved-scratch renderer entry |
 | `$FEE0` | Development cinema sprite reset wrapper (bank 04 `$802D` hook) |
 | `$FF2C` | Area change (bank 1 `$85B4`): native init, marks the Enhanced draw pending (`$2258 = $FE`) |
@@ -376,30 +377,66 @@ backdrop in wrong colours until the stage changed.
 
 ### NES palette mode
 
-Mode 01 (module `src/nes-palette`) recolours the stages to read as the
-corresponding stages of NES Ninja Gaiden. Its colours are data:
-`src/nes-palette/stages/*.json` (one file per colour set, plus the 3-2
-variant of set 6) and `shared.json` (HUD, Ryu's sprite palette 96), colour
-values and role names only; `scripts/nes_palette.py` resolves the roles,
-checks the files' original colours against the original ROM and generates
-`nes-tables.inc` / `nes-sets.inc` at build time (prepare step `nes-palette`)
-and the NES versions of the 1-1 / 2-2 merged palettes (`nes-enhanced-stage11`,
-`nes-enhanced-stage22`, after the backdrop steps). Swapping the colours needs
-no code change.
+Mode 01 (module `src/nes-palette`) shows the game in NES master-palette
+colours only (the 47 9-bit colours of the 2C02G composite palette) with the
+PC Engine's full detail, reading as NES Ninja Gaiden: every stage's colour
+set, Ryu, the HUD, every enemy, item and boss sprite palette and every colour
+the game animates (owner's rules, 2026-11-11: "all the bosses should be 8
+bit and all the rooms should follow"; NES colours only, TG16 detail).
+Cinemas and the title stay original. Its colours are data, colour values
+and role names only: `src/nes-palette/stages/*.json` (one file per colour
+set, plus the 3-2 variant of set 6), `shared.json` (HUD, Ryu's sprite
+palette 96), `sprites/*.json` (every other sprite palette loaded in
+gameplay, grouped by object: Ryu's effects, items, enemies, one file per
+boss) and `animations.json` (the animated colour lists).
+`scripts/nes_palette.py` resolves the roles, checks the files' original
+colours against the original ROM, fails the build on any colour outside the
+NES set and generates the `nes-*.inc` files at build time (prepare step
+`nes-palette`) and the NES versions of the 1-1 / 2-2 merged palettes
+(`nes-enhanced-stage11`, `nes-enhanced-stage22`, after the backdrop steps).
+Swapping the colours needs no code change.
+
+Resolution keeps detail: within each palette row (16 set entries, one sprite
+palette, one animation set) distinct PC Engine colours of a role go to
+distinct NES colours in the same lightness order, the role's NES hue the
+anchor and the neighbouring hue columns, greys and near-greys the extension;
+two colours share one only where keeping them apart would shift a colour by
+more than about 30 L* (re-lighting the scene). The build prints the rows
+that still merge; `nes_palette.py detail` lists them.
 
 - Loaders: `$F211` and `$F1C0` call `$7FE0` in bank `$37` (their own MPR3
   bank; `$FF` in the original from `$7C30`) instead of `$F2BE`. The 26-byte
   hook tests bits 3-4 = 01 and otherwise jumps to `$F2BE` with nothing
   pushed (15 cycles more per load). In NES mode it maps bank `$45` into MPR2
   and calls `nes_unpack` (`$45:$4000`): only in gameplay (`$2240` = 0), a
-  sprite palette with an NES copy (by source address: palette 96, `$7840`),
-  or a colour set (`<$21`, checked against its table entry) with one: the
-  stage's variant when `$2E5F` names one (3-2, set 6), else the set's copy
-  (none for the title/cinema sets 0 and 19-21). It maps bank `$45` into MPR3,
-  points `<$19/<$1A` at the copy (`$6000` window), calls `$F2BE`, then maps
-  bank `$37` back and restores `<$19/<$1A`, X and Y. Everything downstream
-  (the backup `$2686`, fades, the vblank upload) works on the RAM palette, so
-  it carries the NES colours with it.
+  sprite palette (source `$7180` up: only `$F1C0`) by its number, which
+  `$F1E4` leaves doubled in `<$21/<$22` (one table entry per number from the
+  lowest with a copy), or a colour set (`<$21`, checked against its table
+  entry) with one: the stage's variant when `$2E5F` names one (3-2, set 6),
+  else the set's copy (none for the title/cinema sets 0 and 19-21). A copy's
+  high byte + `$80` marks bank `$45` (mapped into MPR3 for the unpack, then
+  bank `$37` back); other sprite copies sit in bank `$37`'s free tail and are
+  read in place. It points `<$19/<$1A` at the copy (`$6000` window), calls
+  `$F2BE` and restores `<$19/<$1A`, X and Y. Everything downstream (the
+  backup `$2686`, fades, the vblank upload) works on the RAM palette, so it
+  carries the NES colours with it.
+- Animated colours: the stage load calls bank 3 `$CE8D` (A = animation set,
+  0-14) which copies the set's records (count; per list delay, background or
+  sprite, entry, list address) from the pointer table `$CF32`; every update
+  `$CED7` counts each list's delay and writes its next colour word through
+  `$F23C` (a word with high byte `$FF` ends a list). `$CE98` now calls
+  `nes_anim_table` (bank 3 `$D400`), which gives the NES copy of the whole
+  table in NES gameplay (same records, delays and list lengths; NES colours)
+  and the original `$CF32` otherwise; X is kept. Sets: 0 2-3 orbs, 1 6-4C,
+  2 1-1, 3 5-2, 4 3-1, 5 2-1, 6 4-2, 7 5-1, 8 1-2, 9 4-4, 10 6-2, 11 3-3,
+  12 6-4A/B, 13 4-3, 14 6-3. No other code writes the RAM palette in play
+  (write watch over `$2286-$2685`).
+- Sprite palettes in gameplay: rows 0-2 Ryu (96, 97, 98) at every load;
+  boss rooms load their boss rows in the stage loader (bank 1 `$8790-$8B1B`:
+  1-2 102; 2-3 103; 3-3 104; 4-4 105; 5-4 106, 101; 6-4A 75, 107, 100; 6-4B
+  108, 103, 100; 6-4C 110, 111, 112; row 13 109); other stages a row-14
+  palette by stage (`$8708`, table `$8714`: 113-121) and per area a list of
+  (row, palette) pairs (`$9916`, lists `$9A4A-$9B67`: 122-151).
 - HUD: bank 1 `$83C3` is a 19-byte trampoline to `nes_hud` in bank `$45`,
   which writes the 7 words as the native routine did, from the NES table in
   NES gameplay, else from `$83E5`; it returns A, X, Y, the flags and `$2E88`
@@ -408,16 +445,21 @@ no code change.
   instead of their merged palettes in NES mode (a mode test before the copy).
   Each NES colour is the NES colour of the native set entries that supply
   most of the merged colour's pixels.
-- Not covered: enemy and boss sprite palettes, colours the game animates
-  (written straight into the RAM palette from tables: the stage checks list
-  them, e.g. 2-3 row 9, 6-2 row 10), cinemas and the title (original by
-  design).
+- Not covered: cinemas and the title (original by design); Continue and Game
+  Over screens were not checked.
 
-Space: bank `$45` `$4000-$43FF` (code 249 bytes `$4000-$40F8`, tables, HUD,
-Ryu, the 3-2 variant: to `$4236`; 457 bytes free) and `$5200-$5FFF` (the 18
-NES sets, 3,240 bytes to `$5EA7`; 344 free). `stage61-upload`'s claim ends at
-`$51FF` (its code ends at `$5113`, guarded). Bank `$37` `$7FE0-$7FF9`.
-Fixed bank: none of the free bytes; only the two call operands change.
+Space (1.11-dev, NES palette draft 2): bank `$45` `$4000-$43FF` (code,
+tables, the HUD words and the 3-2 variant: 723 bytes to `$42D2`; 301 free)
+and `$5200-$5FFF` (the 18 NES sets, then the sprite palettes that do not fit
+bank `$37`: 3,276 bytes to `$5ECB`; 309 free). Bank `$37` `$7C30-$7FDF`: 52
+NES sprite palettes (936 bytes to `$7FD7`; 8 free) and the hook
+`$7FE0-$7FF9`. Bank 3: `$CE98-$CE9C` (the call) and `$D400-$D9FF` claimed
+(the table helper and the NES animation table, 1,022 bytes to `$D7FD`; 514
+free); `$DA00-$DBFF` stays unclaimed and `$D3FD-$D3FF` untouched (next to
+the original's table). `stage61-upload`'s claim ends at `$51FF` (its code
+ends at `$5113`, guarded). Every region has an `.if/.fail` guard. Fixed
+bank: none of the free bytes; only the two call operands change. The bank 3
+call costs every stage load in every mode about 25 cycles more.
 
 The menu's **PALETTE** row (1.11-dev) offers the values listed in
 `src/options/menu.txt` (ORIGINAL, NES, GB DMG). While the menu is open the
