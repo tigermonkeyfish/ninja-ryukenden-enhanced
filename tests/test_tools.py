@@ -490,12 +490,17 @@ class ReleaseTests(unittest.TestCase):
         with self.assertRaises(ValueError): band('V{version} {credit}', '1.11-development-build')
         self.assertEqual(len(menu['band']), 32)
         palette = menu['choices'][3]
-        self.assertEqual((palette[0], [v for v, _ in palette[1]]), (0x18, [0x00, 0x10, 0x18]))
+        self.assertEqual((palette[0], [v for v, _ in palette[1]]), (0x38, [0x00, 0x10, 0x18, 0x38]))
         self.assertEqual(palette[1][2][1], bytes(CODES[c] for c in 'HELL    '))
-        # Offering NES is one more value=TEXT item on the PALETTE line.
-        nes = source.replace('@ $18 $00=ORIGINAL $10=GB_DMG', '@ $18 $00=ORIGINAL $08=NES $10=GB_DMG')
-        self.assertEqual([v for v, _ in layout(nes, '1.11')['choices'][3][1]], [0x00, 0x08, 0x10, 0x18])
-        self.assertEqual(layout(nes, '1.11')['choices'][3][1][1][1][:3], bytes(CODES[c] for c in 'NES'))
+        self.assertEqual(palette[1][3][1], bytes(CODES[c] for c in 'SMS     '))
+        # The language owns draft bits 6-7 (bits 0-5 are $2100's on Run).
+        self.assertEqual(menu['choices'][4][0], 0xc0)
+        self.assertEqual([v for v, _ in menu['choices'][4][1]], [0x40, 0x00, 0x80])
+        # Offering NES-A and NES-B is two more value=TEXT items on the PALETTE
+        # line (the encoding in src/palette/main.asm).
+        nes = source.replace('@ $38 $00=ORIGINAL $10=GB_DMG', '@ $38 $00=ORIGINAL $08=NES-A $28=NES-B $10=GB_DMG')
+        self.assertEqual([v for v, _ in layout(nes, '1.11')['choices'][3][1]], [0x00, 0x08, 0x28, 0x10, 0x18, 0x38])
+        self.assertEqual(layout(nes, '1.11')['choices'][3][1][2][1][:5], bytes(CODES[c] for c in 'NES-B'))
         for broken in (source.replace('| STAGE: #####             |', '| STAGE: ####              |'),  # STAGE width
                        source.replace('| NO DAMAGE: ###           |', '| NO DAMAGE: ###            |'),  # 27 columns
                        source.replace('LANGUAGE', 'LANGUAGE!'),

@@ -1,6 +1,7 @@
 ; Active flags: bit 0 = original background, bit 1 = no contact damage,
-; bit 2 = Use NES Firewheel logic, bits 3-4 = palette mode (src/palette);
-; bits 5-7 belong to the palette module (see docs/ARCHITECTURE.md).
+; bit 2 = Use NES Firewheel logic, bits 3-5 = palette mode (src/palette);
+; bits 6-7 unassigned (zero). Before 1.11-dev's SMS mode bits 5-7 were the
+; palette module's state; that is in $2104 now (see docs/ARCHITECTURE.md).
 ; Two bytes at the bottom of the CPU stack page. The native stack grows
 ; downward from $21FF; validation watches the reserved low margin.
 OPTIONS = $2100
@@ -80,8 +81,8 @@ renderer_gate_end:
 ; (VDC control register bit 6) while it is open; the register is rewritten
 ; from the game's shadow <$0E on close.
 MENU_ENTRY = $4400          ; the hook's jsr target (src/selector-hook)
-OPTION_BITS = $1f           ; draft bits copied to $2100 on Run
-PALETTE_BITS = $18          ; previewed live while the menu is open
+OPTION_BITS = $3f           ; draft bits copied to $2100 on Run
+PALETTE_BITS = $38          ; previewed live while the menu is open
 LANGUAGE = $3227            ; native: 0 Japanese, 1 English, 2 Chinese
 BOX_TOP = 7                 ; BAT row of the window's top row
 BOX_LEFT = 3                ; screen column of its left edge
@@ -154,9 +155,10 @@ save_zero_page:
 valid_stage:
  sta <STAGE
  stz <ROW
- ; The draft: the options (bits 0-4) and the language (bits 5-6).
+ ; The draft: the options (bits 0-5) and the language (bits 6-7).
  lda LANGUAGE
  and #3
+ asl a
  asl a
  asl a
  asl a
@@ -233,8 +235,8 @@ choose:
  and #$0f
  bne choose
  jsr close_window
- ; Bits 5-7 of $2100 are the palette module's (its vblank upload writes
- ; them), so $2100 is changed with interrupts held off.
+ ; The vblank upload reads $2100's palette bits, so $2100 is changed with
+ ; interrupts held off.
  pla
  and #PALETTE_BITS
  sta <SCRATCH
@@ -258,7 +260,7 @@ choose:
  lsr a
  lsr a
  lsr a
- and #3
+ lsr a
  sta LANGUAGE
  bra closed
 cancelled:
@@ -266,8 +268,9 @@ cancelled:
  lda <SCRATCH
  jsr set_palette
  ; Let the palette module put the colours back before the game runs on (a
- ; full upload at once in Original; in GB DMG about 136 colours, then 16 a
- ; vblank left over, about 25 vblanks for all 512; HELL about 12): a vblank, then more
+ ; full upload at once in Original; in GB DMG and SMS about 136 colours,
+ ; then 16 a vblank left over, about 25 vblanks for all 512; HELL about
+ ; 12): a vblank, then more
  ; while its queue holds work, at most 48 in all; then one more, so the
  ; game resumes after an interrupt with no upload (a full upload takes about
  ; 27 lines and would move the update's first writes against the raster).
@@ -315,7 +318,7 @@ preview_palette:
  ; colours are queued (native $F394, under the palette lock) and src/palette
  ; re-uploads them in the new mode's colours at the next vblanks: its state
  ; bit tells only whether the VCE holds mapped colours, not which table
- ; (GB DMG or HELL), so a change between those needs the full queue.
+ ; (GB DMG, HELL or SMS), so a change between those needs the full queue.
 set_palette:
  sta <SCRATCH
  lda OPTIONS

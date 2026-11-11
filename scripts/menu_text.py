@@ -28,9 +28,9 @@ BOX_WIDTH, BOX_ROWS = 26, 10
 BAND_WIDTH = 32
 STAGE_WIDTH = 5
 CREDITS = ('GITHUB.COM/TIGERMONKEYFISH', 'TIGERMONKEYFISH')
-# Draft bits the option rows may own: bits 0-4 are copied to $2100 on Run,
-# bits 5-6 hold the language ($3227) (src/options/main.asm).
-DRAFT_BITS = 0x7f
+# Draft bits the option rows may own: bits 0-5 are copied to $2100 on Run,
+# bits 6-7 hold the language ($3227) (src/options/main.asm).
+DRAFT_BITS = 0xff
 
 
 def encode(text, what):
