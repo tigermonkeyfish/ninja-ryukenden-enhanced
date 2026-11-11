@@ -445,6 +445,33 @@ leave GB DMG exactly as it was, the rule would need a test of the mode in
 the shared code (SMS runs GB DMG's bytes), a few cycles in GB DMG's
 left-over path; not done.
 
+### A. Timing over the 11 runs
+
+`gb-palette/timing_trace.py` (the hardware-event trace) on the fix build in
+SMS, HELL and GB DMG, against the `hell-1-1` record's traces of Original
+and of HELL (the same code as the dark-lift build's); `split.py`,
+`updates.py`. Lines are counted after the VDC vblank interrupt; the display
+starts about 22.8 lines after it.
+
+| | SMS | GB DMG | HELL |
+| --- | --- | --- | --- |
+| Updates (stage timer, Ryu, camera, area, `$2240`, sprite table) against Original | identical in every frame of every run | identical | identical |
+| Worst vblank upload end | 18.24 (the SMS record's figure) | 18.19 (the GB record's) | 19.29, in 1-1 19.75 (19.02 and 19.32 on `hell-1-1`) |
+| Vblank uploads that end after line 22 | none | none | none |
+| HUD split entries past the cut-off (70.84) | 1-1, 5-3, 6-3 one each, Original's frames | the same | the same |
+| Largest shift of a normal split entry against Original | +0.576 line (5-2) | +0.571 (5-2) | +0.600 (5-2 frame 1435, as on `hell-1-1`) |
+
+(2-2's writes at line 59 are the renderer's `palette_now` from the main
+loop, as in every record.) HELL against HELL before: the upload differs in
+nine vblanks a run, the ones after the fade-out's last step: 137 writes
+ending at line 17.7 (18.9 in 1-1), 324 ending at 19.3 (19.75 in 1-1: 136
+budget colours of mapped and raw entries), 54 ending at 7.5, then none,
+where the build before wrote 17 colours to line 4 in each of the nine. The
+split entry differs in 7 to 21 vblanks a run there, by at most 0.017 line;
+5-4, which has no stage end, in none. So the rule's cost in HELL is 0.27
+line on the worst upload (0.43 in 1-1); in SMS and GB DMG the fade vblanks
+stay below the fade steps' own first vblank.
+
 ### A. Boot and menu
 
 - `scripts/check_boot.py`: passed (idle frames 1-899 identical to the
