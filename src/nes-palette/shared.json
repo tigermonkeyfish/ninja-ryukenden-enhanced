@@ -1,0 +1,41 @@
+{
+  "note": "HUD colours (bank 1 $83E5: HUD row 15 entries 1-7) and sprite palettes replaced in NES mode (sprite palette n at bank $37 $7180 + 18n). NES HUD palette: 25 30 0F; NES Ryu: 07 22 35.",
+  "hud": {
+    "roles": {
+      "hud_text": {"ramp": ["30"], "mode": "fixed"},
+      "hud_bar": {"ramp": ["25"], "mode": "fixed"},
+      "hud_black": {"ramp": ["0F"], "mode": "fixed"},
+      "hud_light": {"ramp": ["30"], "mode": "fixed"}
+    },
+    "entries": [
+      {"entry": 1, "pce": "1F8", "role": "hud_text", "nes": "30", "out": "1FF"},
+      {"entry": 2, "pce": "168", "role": "hud_text", "nes": "30", "out": "1FF"},
+      {"entry": 3, "pce": "0D8", "role": "hud_text", "nes": "30", "out": "1FF"},
+      {"entry": 4, "pce": "000", "role": "hud_black", "nes": "0F", "out": "000"},
+      {"entry": 5, "pce": "0B8", "role": "hud_bar", "nes": "25", "out": "0BD"},
+      {"entry": 6, "pce": "038", "role": "hud_bar", "nes": "25", "out": "0BD"},
+      {"entry": 7, "pce": "1B6", "role": "hud_light", "nes": "30", "out": "1FF"}
+    ]
+  },
+  "sprites": [
+    {
+      "palette": 96, "name": "Ryu",
+      "pce": ["100", "0CE", "133", "04B", "08D", "060", "0E2", "000", "1C0", "1C0", "1C0", "1C0", "1C0", "1C0", "1C0", "1C0"],
+      "roles": {
+        "ryu_suit": {"ramp": ["22"]},
+        "ryu_skin": {"ramp": ["35"]},
+        "ryu_dark": {"ramp": ["07"]},
+        "ryu_black": {"ramp": ["0F"], "mode": "fixed"}
+      },
+      "entries": [
+        {"entry": 1, "pce": "0CE", "role": "ryu_suit", "nes": "22", "out": "0DF"},
+        {"entry": 2, "pce": "133", "role": "ryu_skin", "nes": "35", "out": "17F"},
+        {"entry": 3, "pce": "04B", "role": "ryu_suit", "nes": "02", "out": "005"},
+        {"entry": 4, "pce": "08D", "role": "ryu_suit", "nes": "22", "out": "0DF"},
+        {"entry": 5, "pce": "060", "role": "ryu_dark", "nes": "17", "out": "0A0"},
+        {"entry": 6, "pce": "0E2", "role": "ryu_dark", "nes": "17", "out": "0A0"},
+        {"entry": 7, "pce": "000", "role": "ryu_black", "nes": "0F", "out": "000"}
+      ]
+    }
+  ]
+}
