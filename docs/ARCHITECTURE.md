@@ -191,7 +191,7 @@ the uploads made 5-3 area 2 and 2-2 area 0 miss vblank.
 | `castle` | Shared 5-3 / 5-4 castle rendering and star animation |
 | `stage61-*` | Sky/mountain separation, sky upload and dispatch |
 | `speed` | Shared divisor-8 coordinate and entrance anchor |
-| `selector-hook`, `options` | Stage selection, progression synchronization, parallax/damage settings and the menu's version/credit line; a chosen stage starts with full health (`$2EAD = 16`, 1.09-dev) |
+| `selector-hook`, `options` | Stage selection, progression synchronization, the popup menu (all options and the language) and its version/credit line; a chosen stage starts with full health (`$2EAD = 16`, 1.09-dev) |
 | `cinema-sprite`, `english` | Cinema sprite-pattern reset (below); native English initialization. Enhanced has no boot screen since 1.10-dev |
 
 The canonical bank allocations are in
@@ -202,8 +202,8 @@ files to allocate free space.
 
 | CPU address | Meaning / constraint |
 | --- | --- |
-| `$2100` | Active options: bit 0 Original, bit 1 No Damage, bit 2 Use NES Firewheel logic, bits 3-4 palette mode (00 Original, 01 NES reserved, 10 GB DMG, 11 reserved; 1.11-dev, no menu rows yet); bits 5-7 are the palette module's state (5: a left-over palette entry is queued; 6: the main loop was busy at the last vblank with palette work; 7: the VCE holds mapped colours), not options: menus and saved settings mask them out. Zero = the defaults |
-| `$2101` | Draft menu options (the menu copies bits 0-4, so Run keeps the NES Firewheel and palette bits) |
+| `$2100` | Active options: bit 0 Original, bit 1 No Damage, bit 2 Use NES Firewheel logic, bits 3-4 palette mode (00 Original, 01 NES reserved, 10 GB DMG, 11 reserved; 1.11-dev); bits 5-7 are the palette module's state (5: a left-over palette entry is queued; 6: the main loop was busy at the last vblank with palette work; 7: the VCE holds mapped colours), not options: menus and saved settings mask them out. Zero = the defaults |
+| `$2101` | The menu's draft while it is open: bits 0-4 the options (copied into `$2100` on Run, bits 5-7 of `$2100` kept), bits 5-6 the language (written to `$3227` on Run). Meaningless while the menu is closed |
 | `$2260-$2280` | Native palette upload queue: count, then 8 entries of byte count (low `$2261`, high `$2269`) and first colour (low `$2271`, high `$2279`); `$F350` adds one under the lock and drops it when 8 are queued; `$F394` replaces the queue with all 512 colours |
 | `$2281-$2283` | Border colour (written to VCE entry `$100` after each upload) / upload lock |
 | `$2286-$2685` / `$2686-$2A85` | RAM palette (512 words, the source of every upload) / its backup (`$F718` copies to it, `$F720` back; fades compute `$2286` from it) |
@@ -231,9 +231,13 @@ files to allocate free space.
 | `$2240 / $2241` | Native master state (0 gameplay, 1 cinema, 2 ending) / scene id |
 | `$3227` | Native language: 0 Japanese, 1 English, 2 Chinese |
 
-The CPU stack grows down from `$21FF`; the menu backs up two HUD rows on it.
-Reserved low-stack variables were checked with memory guards. Changes to
-call depth or menu backups need fresh guard checks.
+The CPU stack grows down from `$21FF`. Since 1.11-dev the menu keeps only
+11 bytes there (zero page `$25-$2C`, the VDC selector `<$11`, `$2100`); its
+backup is in VRAM. Its deepest use, with the vblank interrupt's palette work
+on top, reached `$21D3` from the hook's `$21FB` (1.10's menu, with two HUD
+rows on the stack, reached `$215B`). Reserved low-stack variables were
+checked with memory guards. Changes to call depth or menu backups need fresh
+guard checks.
 
 ## CPU entry points and hazards
 
@@ -312,9 +316,8 @@ wheel's icon); the tick sound is the native wheel tick. Up+attack shows the
 throw pose with no projectile and no ninpo, as on the NES. Evidence:
 [validation/nes-firewheel.md](validation/nes-firewheel.md).
 
-A menu row would only toggle bit 2 of the draft (`DRAFT eor #4`, as
-`option_masks` does for bits 0-1) and draw its value; accept already copies
-the draft to `$2100`.
+The menu's **NES FIREWHEEL** row (1.11-dev) sets bit 2 of the draft; Run
+copies it to `$2100`.
 
 ## Palette modes
 
@@ -363,11 +366,22 @@ palette existed only in the VCE, so any full re-queue (the area-1 fade in the
 stored 1-1 run) put back the native palette 1 and showed the Enhanced
 backdrop in wrong colours until the stage changed.
 
-A menu row would toggle the draft's bits 3-4 between 00 and 10 (`DRAFT eor
-#$10`, as `option_masks` does for bits 0-1) and draw the value; accept copies
-the draft to `$2100` and the next vblank re-uploads everything. Bank `$46`
-use: code `$5000-$53FF` (claimed with the tables), tables `$5400-$57FF`;
-`$4100-$42FF` and `$4400-$4FFF` remain unowned.
+The menu's **PALETTE** row (1.11-dev) offers the values listed in
+`src/options/menu.txt` (Original and GB DMG; NES is one more `$08=NES` item
+there once this module implements it). While the menu is open the live bits
+3-4 follow the draft, so the module re-uploads every colour at the next
+vblanks and the choice shows at once (the menu waits in `$FD67`, so the
+left-over rule gets its 32 colours a vblank); Select puts the old bits back
+and waits until the queue is empty (at most 33 vblanks) before the game runs
+on. Run keeps the bits and restarts the stage, which reloads the palettes.
+
+Bank `$46` (1.11-dev): `$4000-$40FF` dispatch, `$4100-$42FF` unowned
+(512 bytes), `$4300-$43FF` cinema sprite reset, `$4400-$4AFF` the menu
+(`options`), `$4B00-$4FFF` unowned (1,280 bytes, contiguous), `$5000-$53FF`
+palette code, `$5400-$57FF` its GB DMG table, `$5800-$583F` 6-1 dispatch,
+`$5840-$58FF` options' renderer gate, `$5900-$5FFF` speed. Bank `$45`
+`$4000-$43FF`, the menu's old range, is unowned again (1 KiB; the rest of
+bank `$45` is `stage61-upload`).
 
 ## Facts kept from retired build scripts
 
@@ -409,43 +423,73 @@ no longer in the repository.
 
 ## Menu display
 
-The menu draws four rows, laid out in `src/options/menu.txt` (generated into
-`menu-text.inc` by `scripts/menu_text.py`; `#` runs mark the STAGE, PARALLAX
-and NO DAMAGE value fields, whose BAT positions become `STAGE_AT`,
-`PARALLAX_AT` and `DAMAGE_AT`): the HUD's rows 28-30 and the blank band
-under the HUD, row 31. The selected value blinks (16 frames shown, 16 blank;
-counter in zero page `$27`, saved by the menu). Its `.` and `:` are glyphs
-in the native style uploaded to the HUD font's blank tiles `$7AA` and `$7AD`, and
-`/` to the blank tile `$7B9` after the health-bar pieces (glyph planes 0-1 are
-stored; plane 2, the font's background, is computed).
+Since 1.11-dev the menu is a popup window over the playfield; the HUD rows
+28-30 are never written. Select in gameplay (hook `$FF70`, unchanged open
+conditions `$2E63 = 0`, `$2201 != 0`) calls bank `$46` `$4400`
+(`src/options`, 1,5xx bytes in `$4400-$4AFF`). Its layout and option
+values are `src/options/menu.txt`, generated into `menu-text.inc` by
+`scripts/menu_text.py`.
 
-- Rows 28-29 (score/stage, timer/ninja) are backed up on the stack, as in
-  1.09. The stack has no room for a third row: with two the menu reaches
-  `$215B`, 27 bytes above the watched margin.
-- Row 30 (lives, ninpo, item box, enemy bar; VRAM `$0780-$079F`) is parked
-  word by word in the blank tiles `$7AB-$7AC` (`$7AB0-$7ACF`).
-- Row 31 holds 32 blank HUD words (`$F79F`) in gameplay and is written back
-  as such.
+- **Refusal.** The menu returns at once (nothing touched) unless the
+  playfield's vertical scroll `$2E4D/$2E4E` is 0, which every probed
+  gameplay update shows; the window's rows must stay clear of the HUD's.
+- **Window.** 26 x 10 cells in the HUD font (palette 15, `$F7xx`, opaque:
+  the font's colour-4 background), BAT rows 7-16 (screenshot y 106-185),
+  starting at BAT column `((BXR >> 3) + 3) & 63` with BXR the playfield's
+  `$2E4B/$2E4C`, so it sits at screen columns 3-28 (less the fine scroll).
+  A row reaching BAT column 63 continues at column 0 (copied and drawn in
+  two pieces). No frame: there is no audited tile space for frame graphics.
+- **Backup.** The 260 covered BAT words go to VRAM: rows 0-8 (234 words) to
+  the sprite-table buffer the game is building (`$7E00` or `$7F00`, chosen
+  by `$2B81` and the native table `$FAA2`), row 9 to the HUD font's blank
+  tiles `$7AB-$7AC` (`$7AB0-$7AC9`). The building buffer is free at the
+  hook: the main loop (`$E061`) runs the update (which contains the hook)
+  and then `$F8E0`, which writes all 64 entries (256 words; `$2E44` is 64)
+  of that buffer and only then points the VDC's SATB register (`$13`) at it
+  and flips `$2B81`; DCR is 0 (no automatic SATB DMA), and no other gameplay
+  code writes `$13` (`$F728`, the sprite reset, clears both buffers). So the
+  buffer the menu borrowed is rewritten in the same update the menu returns
+  to, before it is ever shown. Tiles `$7AA-$7AD` and `$7B9` are zero in
+  every gameplay state (1.10 audit; the 1.11 probe saw `$7AB` zero at every
+  frame end) and are zeroed on close.
+- **Sprites** are hidden while the window is open: the VDC control
+  register's low byte is written without bit 6 (sprites), from the game's
+  shadow `<$0E`, which is left unchanged and written back on close (in
+  banks 0-3 the register is selected only by `$FC14`, `$FC24`, `$FC5E` and
+  `$FC73`, which all write it from that shadow; the other `st0 #5` byte
+  pairs there are data, and none is in the interrupt path). Hiding all sprites is one register
+  write with nothing to restore but the shadow; hiding only the sprites
+  over the window would mean editing and restoring the displayed sprite
+  table. The held item's icon (a sprite) disappears with them.
+- **Band.** BAT row 31, blank (`$F79F`) in gameplay, shows the version and
+  credit while the window is open: `V1.11-DEV TIGERMONKEYFISH`, or with
+  `GITHUB.COM/` when the line fits 32 columns (a release version: `V1.11
+  GITHUB.COM/TIGERMONKEYFISH`); the generator fails the build if it does not
+  fit. Close writes the 32 blank words back.
+- **Glyphs.** `.`, `:` and `/` in the native style are uploaded to the HUD
+  font's blank tiles `$7AA`, `$7AD` and `$7B9` (planes 0-1 stored, plane 2
+  computed), as in 1.10.
+- **Controls.** Up/Down choose a row (the value blinks: 16 frames shown, 16
+  blank; counter in zero page `$27`), Left/Right change it, Run accepts and
+  restarts the stage shown (health refilled, timer reset, palettes
+  reloaded), Select cancels. The menu returns once Select, Run, I and II are
+  released. Rows: STAGE (22 entries), SMOOTH PARALLAX (bit 0 clear = ON),
+  NO DAMAGE (bit 1), NES FIREWHEEL (bit 2), PALETTE (bits 3-4), LANGUAGE
+  (`$3227`). Each option row is a mask and a value list in `menu.txt`
+  (`choice_*` tables): the draft's value is looked up in the list (an
+  unlisted value shows the first entry) and Left/Right step through it.
+- **Language.** Only the title (bank 4 `$8610-$8643`, `$91B8`) and the story
+  text engine (bank 5) read `$3227` (absolute references; the patch's own
+  English initialization and menu write it), so a change shows at the next
+  cinema or title screen.
+- **Zero page and stack.** `$25-$2C` are saved on the stack and restored
+  (the vblank interrupt's palette module saves its own `$20-$26`); see the
+  stack note above.
 
-Closing the menu (**Run** accepts, **Select** cancels) copies row 30 back, zeroes tiles
-`$7AA-$7AD` and `$7B9` and blanks row 31; this adds no stack depth. The held item's
-icon is a sprite over the item box (columns 13-14 of rows 29-30), in front of
-the HUD, so the layout keeps those columns blank and the generator rejects
-text there. Ryu can still cover the HUD if the menu is opened while he is
-above the playfield, as in normal play. The left column starts at the
-screen's first column (`PARALLAX: OFF` fills the 13 columns left of the item
-box).
-
-Evidence (1.10, emulated): VRAM write watches over `$7AA0-$7ADF`, `$7B90-$7B9F` and row 31
-during all 22 Level Select stage loads and the 11 comparison runs (area
-changes included) saw only zeros and `$F79F` in gameplay; the stage loads
-write those values. A cinema writes `$0100` into row 31 (seen after 4-1, 5-3
-and 6-3); the menu cannot open there, and the next stage load restores the
-row. `scripts/check_menu.py` opens the menu throughout the stored runs and in
-every Level Select entry and requires VRAM, the sprite table and the palette
-to be unchanged on return, and RAM except where the interrupt or the menu
-legitimately writes. Re-audit if the HUD, the font loader or the menu's open
-conditions change.
+Evidence (1.11-dev, emulated; `scripts/check_menu.py`): see the 1.11-dev
+popup menu record in [validation/popup-menu.md](validation/popup-menu.md).
+Re-audit if the HUD, the font loader, the sprite-table code (`$F8E0`,
+`$F728`) or the menu's open conditions change.
 
 ## Cinema VRAM ownership
 

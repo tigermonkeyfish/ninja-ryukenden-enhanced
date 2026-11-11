@@ -16,9 +16,11 @@ from audit_public import GUIDE_IMAGES
 from comparison_video import Game
 
 LANGUAGE = 0x1227          # $3227: 0 Japanese, 1 English, 2 Chinese
-DRAFT = 0x0101             # $2101: menu settings before I applies them
+DRAFT = 0x0101             # $2101: menu settings before Run applies them (bits 5-6: language)
+ENGLISH = 0x20             # the draft's language bits for English
 TITLE_ROWS = (28, 88)      # logo and subtitle line
-MENU_ROWS = (16, 35)       # the four menu lines: the status bar and the line under it
+MENU_ROWS = (106, 186)     # the popup window, BAT rows 7-16 (screenshot y = 8 x row + 50)
+MENU_COLUMNS = (16, 240)   # its screen columns 3-28, with a margin for the fine scroll
 SCREEN_ROWS = (18, 224)    # the visible display
 
 
@@ -85,18 +87,18 @@ def capture(game, rom, shots):
             shots[name] = game.screenshot()
     to_gameplay(game)
     tap(game, {'select'}, after=12)       # inside the blink's 16 shown frames
-    expect(game, DRAFT, 0, 'menu opens on the defaults')
+    expect(game, DRAFT, ENGLISH, 'menu opens on the defaults')
     shots['menu'] = game.screenshot()
     for _ in range(5):                       # 1-1 -> 1-2 -> 2-1 -> 2-2 -> 2-3 -> 3-1
         tap(game, {'right'}, after=8)
     shots['menu-stage'] = game.screenshot()
     tap(game, {'down'})
     tap(game, {'right'})
-    expect(game, DRAFT, 1, 'parallax ORIGINAL')
+    expect(game, DRAFT, ENGLISH | 1, 'parallax OFF (original background)')
     shots['menu-parallax'] = game.screenshot()
     tap(game, {'down'})
     tap(game, {'right'})
-    expect(game, DRAFT, 3, 'NO DAMAGE ON')
+    expect(game, DRAFT, ENGLISH | 3, 'NO DAMAGE ON')
     shots['menu-no-damage'] = game.screenshot()
     tap(game, {'select'}, after=30)
     expect(game, 0x0100, 0, 'Select (cancel) leaves the settings unchanged')
@@ -123,9 +125,10 @@ def compose(shots, work, out):
            out / 'title-languages.png')
     top, height = SCREEN_ROWS
     ffmpeg([paths['menu']], f'crop=256:{height}:0:{top},scale=iw*2:ih*2:flags=neighbor', out / 'menu.png')
-    top, height = MENU_ROWS
+    top, bottom = MENU_ROWS
+    left, right = MENU_COLUMNS
     for name in ('menu-stage', 'menu-parallax', 'menu-no-damage'):
-        ffmpeg([paths[name]], f'crop=256:{height}:0:{top},pad=iw:ih+2:0:0:black,scale=iw*3:ih*3:flags=neighbor',
+        ffmpeg([paths[name]], f'crop={right - left}:{bottom - top}:{left}:{top},scale=iw*2:ih*2:flags=neighbor',
                out / f'{name}.png')
 
 

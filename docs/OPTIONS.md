@@ -1,18 +1,21 @@
 # How to change the options
 
 Ninja Ryukenden Enhanced has an in-game menu for **Level Select**,
-**parallax** and **No Damage**. The language is changed on the title screen
-with the original game's own switch.
+**smooth parallax**, **No Damage**, **NES Firewheel**, the **palette** and
+the **language**. The language can also be changed on the title screen with
+the original game's own switch.
 
 When the console is switched on or reset, the game starts with these
 defaults:
 
 | Setting | Default | Where to change it |
 | --- | --- | --- |
-| Language | English | Title screen |
+| Language | English | In-game menu or title screen |
 | Stage | 1-1 | In-game menu |
-| Parallax | ON (Enhanced) | In-game menu |
+| Smooth parallax | ON (Enhanced) | In-game menu |
 | No Damage | OFF | In-game menu |
+| NES Firewheel | OFF | In-game menu |
+| Palette | Original | In-game menu |
 
 Settings are not saved. They return to these defaults after a reset or
 power-off.
@@ -28,36 +31,40 @@ power-off.
 ![The title screen in English, Chinese and Japanese](images/options/title-languages.png)
 
 The language is used for the story scenes and the game's text. Some title
-and chapter artwork keeps its original Japanese lettering.
+and chapter artwork keeps its original Japanese lettering. The in-game
+menu's **LANGUAGE** row changes the same setting.
 
 ## The in-game menu
 
-1. During play, press **Select**. The game pauses, and the menu replaces the
-   status bar at the top of the screen (and the black line under it). The
-   right column shows the patch version and the project's home,
-   github.com/tigermonkeyfish:
+1. During play, press **Select**. The game pauses and a window opens over
+   the playfield; the status bar stays as it is. While the window is open,
+   the line under the status bar shows the patch version and the project's
+   home (github.com/tigermonkeyfish), and the game's sprites (Ryu, enemies,
+   the held item's icon) are hidden:
 
    ```
-   STAGE: 1-1      V1.10
-   PARALLAX: ON    GITHUB.COM/
-   NO DMG: OFF     TIGERMONKEYFISH
-   RUN: ACCEPT     SELECT: CANCEL
+   STAGE: 1-1
+   SMOOTH PARALLAX: ON
+   NO DAMAGE: OFF
+   NES FIREWHEEL: OFF
+   PALETTE: ORIGINAL
+   LANGUAGE: ENGLISH
+
+   RUN: OK  SELECT: CANCEL
    ```
 
-   A gap in the middle leaves room for the held item's icon. The status bar
-   returns when the menu closes.
 2. Press **Up** or **Down** to choose a setting. The chosen setting's value
-   blinks: **STAGE**, **PARALLAX** or **NO DMG**.
+   blinks.
 3. Press **Left** or **Right** to change it.
-4. Press **Run** (**ACCEPT**) to apply your choices, or **Select**
-   (**CANCEL**) to close the menu and keep playing with nothing changed.
-   **I** and **II** do nothing in the menu.
+4. Press **Run** (**OK**) to apply your choices, or **Select** (**CANCEL**)
+   to close the window and keep playing with nothing changed. **I** and
+   **II** do nothing in the menu.
 
 ![The menu, opened during 1-1](images/options/menu.png)
 
 **Run** always restarts the stage shown in the menu from its beginning, even
-when you changed only parallax or No Damage. Ryu's health is refilled and
-the stage timer starts again from full; your score and lives carry over.
+when you changed only another setting. Ryu's health is refilled and the
+stage timer starts again from full; your score and lives carry over.
 
 ### Level Select (stage jump)
 
@@ -68,15 +75,15 @@ fights). The list wraps around, so **Left** from 1-1 goes straight to
 
 ![STAGE 3-1 chosen](images/options/menu-stage.png)
 
-### Parallax
+### Smooth parallax
 
-With **PARALLAX** chosen, press **Left** or **Right** to choose:
+With **SMOOTH PARALLAX** chosen, press **Left** or **Right** to choose:
 
 - **ON**: this patch's smoother, slower parallax backgrounds (Enhanced, the
   default).
 - **OFF**: the game's original backgrounds.
 
-![PARALLAX OFF chosen](images/options/menu-parallax.png)
+![SMOOTH PARALLAX OFF chosen](images/options/menu-parallax.png)
 
 Enhanced parallax covers 1-1, 2-2, 3-1, 3-2, 4-1, 4-2, 5-2, 5-3, 5-4, 6-1
 and 6-3. The other stages look the same with either setting. Enhanced
@@ -85,12 +92,34 @@ frame like the original game in all of these stages.
 
 ### No Damage
 
-With **NO DMG** chosen, press **Left** or **Right** to choose **OFF** (the
+With **NO DAMAGE** chosen, press **Left** or **Right** to choose **OFF** (the
 default) or **ON**. With No Damage on, enemies and their attacks don't hurt
 Ryu or knock him back. Falling into a pit or running out of time still costs
 a life.
 
-![NO DMG ON chosen](images/options/menu-no-damage.png)
+![NO DAMAGE ON chosen](images/options/menu-no-damage.png)
+
+### NES Firewheel
+
+**ON** makes the Fire Wheel art work like the NES game's Invincible Fire
+Wheel: nothing hurts Ryu while it spins, its reach is the NES one, bosses lose
+health steadily while it touches them, and it lasts a set time. **OFF** (the
+default) keeps the PC Engine game's Fire Wheel.
+
+### Palette
+
+- **ORIGINAL** (the default): the game's own colours.
+- **GB DMG**: the four green shades of the original Game Boy.
+
+The colours change at once while the window is open, so you can look at the
+choice before you accept it; **Select** (cancel) puts the old colours back.
+Story scenes, the title and the ending always keep the original colours.
+
+### Language
+
+**ENGLISH**, **JAPANESE** or **CHINESE**: the same setting as the title
+screen's switch. The new language is used from the next story scene or title
+screen on.
 
 Press **Run** to apply.
 
