@@ -1,27 +1,26 @@
 {
-  "name": "Bomberhead (2-3); palette 103 is also used in 6-4B",
-  "nes": "",
+  "name": "Bomberhead (2-3); palette 103 is also loaded (row 4) in 6-4B, not seen on screen there",
+  "nes": "NES Bomberhead (stage $6D 4, room 9): skin 37 (tan), hair/clothes/shading 17 (brown), accents 1A (green) and 35 (pink-white), outline 0F",
   "roles": {
-    "outline": {"ramp": ["0F"], "note": "outlines and the darkest shades"},
-    "skin": {"ramp": ["27", "37", "17"], "note": "NES enemy skin (27/37 with 17 shading)"},
-    "red": {"ramp": ["16", "26"]},
-    "green": {"ramp": ["1A", "2A", "0A"]},
-    "brown": {"ramp": ["07", "17", "27"]},
-    "blue": {"ramp": ["02", "12", "22"]}
+    "outline": {"ramp": ["0F"]},
+    "skin": {"ramp": ["37", "27"], "note": "NES Bomberhead skin 37"},
+    "clothes": {"ramp": ["1A", "0A", "2A"], "note": "NES accent green 1A: the PC Engine green trousers"},
+    "brown": {"ramp": ["17", "07"], "note": "NES hair/shading 17"},
+    "accent": {"ramp": ["35"], "note": "NES accent 35"}
   },
-  "notes": ["Draft: roles by the PC Engine colour's hue class."],
+  "notes": ["PC Engine 103: 0EA and 12C skin, 111 and 0C9 green trousers, 0A1 brown, 0C4 teal, 000 outline."],
   "palettes": [
     {
       "palette": 103, "name": "Bomberhead",
       "entries": [
         {"entry": 0, "pce": "0DB", "role": "unused", "nes": "00", "out": "092"},
         {"entry": 1, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
-        {"entry": 2, "pce": "0EA", "role": "skin", "nes": "27", "out": "130"},
-        {"entry": 3, "pce": "12C", "role": "red", "nes": "26", "out": "0FB"},
-        {"entry": 4, "pce": "111", "role": "green", "nes": "1A", "out": "100"},
-        {"entry": 5, "pce": "0A1", "role": "brown", "nes": "17", "out": "0A0"},
-        {"entry": 6, "pce": "0C9", "role": "green", "nes": "1B", "out": "0C1"},
-        {"entry": 7, "pce": "0C4", "role": "blue", "nes": "00", "out": "092"},
+        {"entry": 2, "pce": "0EA", "role": "skin", "nes": "27", "out": "130", "override": "27"},
+        {"entry": 3, "pce": "12C", "role": "skin", "nes": "37", "out": "1BD", "override": "37"},
+        {"entry": 4, "pce": "111", "role": "clothes", "nes": "1A", "out": "100", "override": "1A"},
+        {"entry": 5, "pce": "0A1", "role": "brown", "nes": "17", "out": "0A0", "override": "17"},
+        {"entry": 6, "pce": "0C9", "role": "clothes", "nes": "0A", "out": "080", "override": "0A"},
+        {"entry": 7, "pce": "0C4", "role": "accent", "nes": "35", "out": "17F", "override": "35"},
         {"entry": 8, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
         {"entry": 9, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
         {"entry": 10, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},

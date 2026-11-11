@@ -1,25 +1,25 @@
 {
   "name": "Kelbeross (4-4)",
-  "nes": "",
+  "nes": "NES Kelbeross (stage $6D 11, room 21): fur 37 (tan) and 17 (brown), outline 0F; eyes/mouth/fire 16 24 30",
   "roles": {
-    "outline": {"ramp": ["0F"], "note": "outlines and the darkest shades"},
-    "skin": {"ramp": ["27", "37", "17"], "note": "NES enemy skin (27/37 with 17 shading)"},
-    "brown": {"ramp": ["07", "17", "27"]},
-    "blue": {"ramp": ["02", "12", "22"]}
+    "outline": {"ramp": ["0F"]},
+    "fur": {"ramp": ["37", "17", "27", "07"], "note": "NES Kelbeross fur 37 / 17"},
+    "eyes": {"ramp": ["16", "26"], "note": "NES eyes/fire 16"},
+    "accent": {"ramp": ["24"], "note": "NES accent 24: the PC Engine blue"}
   },
-  "notes": ["Draft: roles by the PC Engine colour's hue class."],
+  "notes": ["PC Engine 105: 0E2 tan fur, 0A9 / 098 / 050 browns, 0CC blue, 028 red eyes, 000 outline."],
   "palettes": [
     {
       "palette": 105, "name": "Kelbeross",
       "entries": [
         {"entry": 0, "pce": "0DB", "role": "unused", "nes": "00", "out": "092"},
         {"entry": 1, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
-        {"entry": 2, "pce": "0E2", "role": "skin", "nes": "27", "out": "130"},
-        {"entry": 3, "pce": "050", "role": "brown", "nes": "07", "out": "010"},
-        {"entry": 4, "pce": "0A9", "role": "brown", "nes": "17", "out": "0A0"},
-        {"entry": 5, "pce": "098", "role": "brown", "nes": "18", "out": "090"},
-        {"entry": 6, "pce": "0CC", "role": "blue", "nes": "00", "out": "092"},
-        {"entry": 7, "pce": "028", "role": "brown", "nes": "16", "out": "060"},
+        {"entry": 2, "pce": "0E2", "role": "fur", "nes": "37", "out": "1BD", "override": "37"},
+        {"entry": 3, "pce": "050", "role": "fur", "nes": "07", "out": "010", "override": "07"},
+        {"entry": 4, "pce": "0A9", "role": "fur", "nes": "27", "out": "130", "override": "27"},
+        {"entry": 5, "pce": "098", "role": "fur", "nes": "17", "out": "0A0", "override": "17"},
+        {"entry": 6, "pce": "0CC", "role": "accent", "nes": "24", "out": "0B7", "override": "24"},
+        {"entry": 7, "pce": "028", "role": "eyes", "nes": "16", "out": "060", "override": "16"},
         {"entry": 8, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
         {"entry": 9, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
         {"entry": 10, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
