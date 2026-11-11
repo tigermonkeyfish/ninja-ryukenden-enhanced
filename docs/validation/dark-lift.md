@@ -457,15 +457,36 @@ left-over path; not done.
   lists), 572 refused, 94 not seen: the dark-lift build's counts; select
   and options: every case passed (stack low-water `$21C5`, HELL).
 
+### A. Black frames of the runs in SMS and HELL
+
+`blackruns.py` on the regression's recordings: SMS and HELL show black as
+`$000`, so wherever Original's whole picture (HUD included) is black, theirs
+must be the same picture. 263 such frames in the 11 runs:
+
+| | Not black, before the mode's first black frame (late) | Not black after it (flash) | VCE entries not due at the load (the 7 runs that end in one) |
+| --- | --- | --- | --- |
+| SMS, dark-lift build | 120 | 21 (3-2: 12, 4-2: 9) | 42, 68, 62, 65, 73, 82, 80 |
+| SMS, fix build | 17 (1-3 a run) | 0 | 0 in all 7 |
+| HELL, dark-lift build | 263: never black in any of them (the HUD band stayed lit through every load) | 0 | 46, 43, 46, 46, 46, 46, 46 |
+| HELL, fix build | 20 (2 a run) | 0 | 0 in all 7 |
+
 ### Not verified on the fix build
 
 The second survey run (`jobs/trans-round2.txt`) was stopped by the host for
-low memory after 16 of its 30 jobs and was not started again. Missing from
-it:
+low memory after 16 of its 30 jobs and was not started again. So the
+per-frame transition survey (`trans.py`) of the fix build is missing for:
 
-- SMS: the 22 walks except 6-2's, and the 11 runs.
-- HELL: the walks of 5-2 to 6-4C, and the 11 runs.
-- GB DMG: the 5-3 run.
+- SMS: the 22 walks except 6-2's, and the 11 runs. The runs are covered by
+  the table above and the regression; of the 11 stage changes that end in a
+  load, 2-1 to 2-2, 4-3 to 4-4 (the largest flash) and 5-1 to 5-2 are
+  **not recorded in SMS on the fix build** by anything. GB DMG, whose code
+  SMS runs byte for byte with another table, is clean in all three.
+- HELL: the walks of 5-2 to 6-4C, and the 11 runs (covered as SMS's); the
+  stage change not recorded in HELL is 6-2 to 6-3.
+- GB DMG: the 5-3 run (in the regression).
+
+Also not run: deaths, Continue and Game Over in any mode; the stack and
+free-ROM probes (no call, push or new range was added).
 
 ```sh
 W=build/dark-lift-fix; D=research/tools/dark-lift    # GB_WORK=$W NES_WORK=$W NG_DEBUGGER_FAST=1
@@ -663,9 +684,12 @@ python3 $D/fadereport.py $W/fades $W/shots/fades --min 0.5
 
 ## Not done (next steps)
 
-None of these was started; the probes are written, and only `measure.py`
-and `nescheck.py` were tried (on the survey's `hell-1-1` captures, where
-`nescheck.py` fails as it should: 10 entries hold `$040`).
+None of these was started on the dark-lift build; all of them have since
+been run on the fix build (the same tables), see
+[C](#c-the-evidence-that-had-not-run-on-the-fix-build), with `$W` =
+`build/dark-lift-fix`, `fix2.pce` for `dl.pce` and one session at a time.
+`nescheck.py` on the survey's `hell-1-1` captures fails as it should (10
+entries hold `$040`).
 
 ```sh
 mkdir -p $W/starts $W/onscreen
@@ -679,18 +703,9 @@ python3 $D/sheets.py $W/shots build/dark-survey/cap $W/cap $W/shots/old $W/shots
 python3 $D/runjobs.py $W/jobs/onscreen.txt 2 $W/jobs/log     # NES colours on screen, both builds
 ```
 
-- **Brightness as the survey measured it** (mean L*, % of the playfield
-  below L* 10 and 20, 4-1 trunk/fill separation; 4-1's five frames, 5-1
-  area 0, 6-2 areas 0-4, the 6-4 rooms; six modes) and the comparison with
-  the study's predicted numbers (`build/dark-lift/numbers/`).
-- **Screenshots** `hell-1-1` against the candidate (4-1 three points, 5-1
-  area 0, 6-2 two areas, 1-1, 2-2, 5-3; SMS, HELL, NES-A, NES-B). Nobody has
-  looked at the candidate's stages yet, only at the fade strips.
-- **The 22 Level Select entries** in SMS, HELL, NES-A and NES-B beyond what
-  `check_menu.py` covers (it enters all 22 and checks the modes' colours in
-  1-1).
-- **NES on-screen counts** against `hell-1-1` (fade frames, leftover rows),
-  and 4-1's RAM palette in the NES modes.
+- Brightness as the survey measured it, the screenshots, the 22 Level
+  Select entries, the NES on-screen counts and 4-1's RAM palette in the NES
+  modes: done, see C.
 - The SMS flash and HELL's grey order: see
   [Dark lift 2](#dark-lift-2-the-flash-and-the-shade-order-branch-dark-lift-fix)
   (deaths, Continue and Game Over were still not looked at).
