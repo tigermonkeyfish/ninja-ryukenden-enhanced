@@ -14,10 +14,9 @@ runs    In each stored comparison run (research/comparison-runs/), every
         moment it was entered except the sprite-table buffer being built
         (the backup) and RAM except ALLOWED; then the game is compared with
         the same state run without the menu, both from the next vblank
-        interrupt ($FCD7; the menu returns just after a vblank, the run
-        without it at the hook's raster position): at that vblank VRAM,
-        sprite table, palette, PSG registers and RAM except ALLOWED, then
-        for UPDATES frames at every frame's end VRAM (the backup buffer
+        interrupt ($FCD7; the menu returns just after its last vblank,
+        before the frame boundary, the run without it at the hook's raster
+        position), for UPDATES frames at every frame's end VRAM (the backup buffer
         included: the game rewrote it), the sprite table, the palette and
         the PSG registers (not the emulator's waveform position; from the
         second frame: the sound held in the menu comes back with the
@@ -363,10 +362,10 @@ def exact_cycle(game, state_dir, actions=None, n=UPDATES, shots=None, blink=True
         found['problems'].append('RAM changed at ' + ', '.join(f'${0x2000 + i:04x}' for i in bad[:16]))
     pad = after['ram'][0xe55:0xe5f]
     # Frames are compared from the next vblank interrupt in both runs (the
-    # vblank after the update the hook was in): the menu returns just after
-    # a vblank, the run without it at the hook's raster position, so frame
-    # steps from the return would split that update differently. The state
-    # at that vblank is compared in full.
+    # one that ends the frame the hook was in; the sound driver's next tick):
+    # the menu returns just after its last vblank, before the emulator's
+    # frame boundary, the run without it at the hook's raster position, so
+    # frame steps from the return would be one frame apart.
     if run_until(game, [VBLANK_ENTRY]) != CPU[VBLANK_ENTRY]:
         found['problems'].append('no vblank after the menu returned')
     menu_vblank = snapshot(game)
@@ -403,28 +402,14 @@ def exact_cycle(game, state_dir, actions=None, n=UPDATES, shots=None, blink=True
     reference_vblank = snapshot(game)
     reference_vblank['psg'] = psg(game)
     reference_vblank['cpu'] = game.call('get_huc6280_status')
-    for area in ('vram', 'sat', 'vce'):
-        if menu_vblank[area] != reference_vblank[area]:
-            found['problems'].append(f'{area} differs at the first vblank after the hook')
+    # Where each run was when that vblank came (diagnostic only: the run
+    # without the menu may still be in the hook's update there, the menu's
+    # run already waits; the state is compared at the frame ends that follow).
+    found['vblank_interrupted'] = []
+    for snap in (menu_vblank, reference_vblank):
+        s0 = int(snap['cpu']['SP'], 16) - 0x2000
+        found['vblank_interrupted'].append(f"${snap['ram'][s0 + 2] | snap['ram'][s0 + 3] << 8:04x}")
     found['psg_held_at_first_vblank'] = menu_vblank['psg'] != reference_vblank['psg']
-    # The interrupt's own stack frame (P, return address): both runs must
-    # have been waiting for the vblank ($FD67-$FD6F), at any instruction of
-    # that loop (a few cycles apart: the timer interrupt's phase).
-    frame_bytes = set()
-    returns = []
-    for snap, cpu in ((menu_vblank, menu_vblank['cpu']), (reference_vblank, reference_vblank['cpu'])):
-        s0 = int(cpu['SP'], 16) - 0x2000
-        returns.append(snap['ram'][s0 + 2] | snap['ram'][s0 + 3] << 8)
-        frame_bytes |= {s0 + 1, s0 + 2, s0 + 3}
-    found['vblank_interrupted'] = [f'${r:04x}' for r in returns]
-    if not all(0xfd67 <= r <= 0xfd6f for r in returns):
-        frame_bytes = set()
-    bad = [i for i, (a, b) in enumerate(zip(menu_vblank['ram'], reference_vblank['ram']))
-           if a != b and not allowed(i, 0x2000 + sp) and i not in PREVIEW_SCRATCH and i not in frame_bytes
-           and not module_state_only(i, a, b)]
-    if bad:
-        found['problems'].append('RAM differs at the first vblank after the hook at ' +
-                                 ', '.join(f'${0x2000 + i:04x}' for i in bad[:16]))
     reference_shots = frames(game, n, state_dir)
     stop_at(game, HOOK_AFTER_DRAW)
     reference_end = snapshot(game)
