@@ -202,13 +202,14 @@ files to allocate free space.
 
 | CPU address | Meaning / constraint |
 | --- | --- |
-| `$2100` | Active options: bit 0 Original, bit 1 No Damage, bit 2 Use NES Firewheel logic, bits 3-4 palette mode (00 Original, 01 NES reserved, 10 GB DMG, 11 HELL; 1.11-dev); bits 5-7 are the palette module's state (5: a left-over palette entry is queued; 6: the main loop was busy at the last vblank with palette work; 7: the VCE holds mapped colours, GB DMG or HELL), not options: menus and saved settings mask them out, and whoever changes bits 3-4 while a mapped mode is live also queues all 512 colours (`$F394`). Zero = the defaults |
-| `$2101` | The menu's draft while it is open: bits 0-4 the options (copied into `$2100` on Run, bits 5-7 of `$2100` kept), bits 5-6 the language (written to `$3227` on Run). Meaningless while the menu is closed |
+| `$2100` | Active options: bit 0 Original, bit 1 No Damage, bit 2 Use NES Firewheel logic, bits 3-5 palette mode (1.11-dev; [palette modes](#palette-modes): `$00` Original, `$08` NES-A, `$28` NES-B, `$10` GB DMG, `$18` HELL, `$38` SMS; `$20` and `$30` unassigned), bit 6 unassigned (zero), bit 7 set exactly when bits 3-5 are SMS (a copy the upload tests; SMS is `$B8` in `$2100`). All eight bits are settings: a saved-settings record stores the byte as it is. Whoever changes bits 3-5 writes bit 7 with them and, while a mapped mode is live, also queues all 512 colours (`$F394`). Zero = the defaults |
+| `$2101` | The menu's draft while it is open: bits 0-5 the options (copied into `$2100` on Run, bits 6-7 of `$2100` kept), bits 6-7 the language (written to `$3227` on Run). Meaningless while the menu is closed |
 | `$2260-$2280` | Native palette upload queue: count, then 8 entries of byte count (low `$2261`, high `$2269`) and first colour (low `$2271`, high `$2279`); `$F350` adds one under the lock and drops it when 8 are queued; `$F394` replaces the queue with all 512 colours |
 | `$2281-$2283` | Border colour (written to VCE entry `$100` after each upload) / upload lock |
 | `$2286-$2685` / `$2686-$2A85` | RAM palette (512 words, the source of every upload) / its backup (`$F718` copies to it, `$F720` back; fades compute `$2286` from it) |
 | `$2102–$2103` | Entrance anchor |
-| `$2104–$213F` | Watched stack margin; not general-purpose spare RAM |
+| `$2104` | The palette module's state (1.11-dev SMS; before it `$2100` bits 5-7): bit 5 a left-over palette entry is queued, bit 6 the main loop was busy at the last vblank with palette work, bit 7 the VCE holds mapped colours (GB DMG, HELL or SMS); bits 0-4 zero. Not a setting: never saved; zero at reset (the RAM clear `$E023`), and clearing it costs at most one needless full re-upload |
+| `$2105–$213F` | Watched stack margin; not general-purpose spare RAM |
 | `$220F–$2210` | Absolute foreground camera |
 | `$2241` | Current master stage parameter |
 | `$2247` | Next master-script cursor; must match selected stage |
@@ -249,7 +250,7 @@ guard checks.
 | `$8457-$845C` | Gameplay loop calls `$E3F2`, `$ABD7`; Enhanced: `jsr $FE40` (which makes both calls) and three NOPs |
 | `$FE20` | Damage gate (bank 1 `$8F70`): No Damage, then the NES Firewheel protection rule (`$DC00`, bank 3); timer expiry explicitly bypasses optional immunity (`$9BC3` jumps to `$FE34`). `$FE3E–$FE3F` unused in the options range |
 | `$FD13` | Vblank interrupt's palette upload (native `jsr $F3B5`): `jsr $FEC0` |
-| `$FEBE–$FECE` | Palette trampoline (1.11-dev, 17 bytes): `$FEBE` palette_now (stage modules: write colours X..X+Y-1 of the RAM palette to the VCE at once, in the mode's colours), `$FEC0` vblank upload; both map bank `$46` into MPR2 and restore it |
+| `$FEBE–$FECE` | Palette trampoline (1.11-dev, 17 bytes): `$FEBE` palette_now (stage modules: write colours X..X+Y-1 of the RAM palette to the VCE at once, in the mode's colours), `$FEC0` vblank upload; both map bank `$46` into MPR2 and restore the MPR2 they found (the SMS mode switches MPR2 to bank `$3B` on the way) |
 | `$FECF–$FEDF` | Free (`$FF`, 17 bytes) |
 | `$FE40 / $FE46` | Early wrapper / preserved-scratch renderer entry |
 | `$FEE0` | Development cinema sprite reset wrapper (bank 04 `$802D` hook) |
@@ -321,10 +322,33 @@ copies it to `$2100`.
 
 ## Palette modes
 
-`$2100` bits 3-4 (1.11-dev; module `src/palette`): 00 Original, 01 NES
-(reserved; shown as Original), 10 GB DMG, 11 HELL. Evidence:
+`$2100` bits 3-5 (1.11-dev; module `src/palette`). Bits 3-4 are the upload
+family, bit 5 a variant within it; bit 7 is set exactly when the mode is
+SMS:
+
+| Value | Mode | Upload |
+| --- | --- | --- |
+| `$00` | Original (default) | native |
+| `$08` | NES-A (`nes-palette` branch: other palette data loaded into the RAM palette) | native |
+| `$28` | NES-B (planned: a second NES data set) | native |
+| `$20` | unassigned | native (as Original) |
+| `$10` | GB DMG | mapped, GB DMG table |
+| `$30` | unassigned | as GB DMG |
+| `$18` | HELL | HELL's own upload (bank `$43`) |
+| `$38` (`$B8` with bit 7) | SMS | GB DMG's upload with the SMS table (bank `$3B`) |
+
+The upload masks `$2100` with `$98` (bits 3, 4 and 7) and compares with
+`$10`, the instructions it had before SMS with another mask: equal is GB
+DMG, below (carry clear) the native upload, above family 11, where the N
+flag of the same compare tells SMS (`$98 - $10`) from HELL (`$18 - $10`).
+So the SMS copy in bit 7 costs nothing to tell apart; whoever writes bits
+3-5 writes bit 7 with them (the menu's `set_palette` does). A test for "an
+NES mode" is `and #$18 / cmp #$08` (the `nes-palette` branch's test,
+unchanged); "which NES" is bit 5 (`and #$20`, or `bit #$20` with A already
+holding `$2100`). Bit 6 is free for a further option. Evidence:
 [validation/gb-palette.md](validation/gb-palette.md),
-[validation/hell-palette.md](validation/hell-palette.md).
+[validation/hell-palette.md](validation/hell-palette.md),
+[validation/sms-palette.md](validation/sms-palette.md).
 
 The native game writes colours only into the RAM palette `$2286` and queues
 ranges (`$F350`); the vblank interrupt (`$FCD7`) uploads the queue at `$FD13`
@@ -336,7 +360,7 @@ merged palettes (below).
 
 The upload goes through the trampoline at `$FEC0` to bank `$46` `$5000`:
 
-- Original (and NES, reserved), or `$2240` != 0 (cinema, title,
+- Original (and NES, and `$20`), or `$2240` != 0 (cinema, title,
   ending): the native `$F3B5`.
 - GB DMG in gameplay: the same queue, each colour looked up in a 512-entry
   table (`scripts/palette_tables.py` from `src/palette/gb-dmg.json`:
@@ -354,7 +378,7 @@ The upload goes through the trampoline at `$FEC0` to bank `$46` `$5000`:
   is left becomes one entry that starts where the upload stopped and runs on
   past colour 511 to 0 far enough to cover the rest (only this upload ever
   sees such an entry: the native one always gets a full re-queue first),
-  marked by `$2100` bit 5. A left-over entry alone gets 16 colours a vblank when the main loop was
+  marked by `$2104` bit 5. A left-over entry alone gets 16 colours a vblank when the main loop was
   waiting for vblank (interrupted PC in `$FD67-$FD6F`) at this vblank and at
   the last one with palette work (bit 6), otherwise none. A full queue (8
   entries: `$F350` may have dropped one) leaves all 512 colours over.
@@ -371,18 +395,45 @@ The upload goes through the trampoline at `$FEC0` to bank `$46` `$5000`:
   has). The code (848 bytes) and the table are in bank `$43` `$7800-$7FFF`,
   mapped in MPR3 for the upload (pushed and restored; code running in MPR3
   cannot unmap itself, so the exits that restore it are in bank `$46`).
+- SMS in gameplay: GB DMG's upload, instruction for instruction, with the
+  SMS table (`src/palette/sms.json`: each channel to the nearest of the
+  Master System's four levels 0/85/170/255 in linear terms, shown as PC
+  Engine 0/2/5/7, so 0-1 → 0, 2-3 → 2, 4-5 → 5, 6-7 → 7; the owner's
+  mock-up candidate A; every output is one of 64 colours). Bank `$3B`
+  `$5000-$57FF` holds a byte-for-byte copy of bank `$46` `$5000-$53FF`
+  (assembled from the same source lines, `;@mirror` in `main.asm`, as
+  `sms-mirror.inc`; a guard per label checks each copy's address) and the
+  SMS table at `$5400` where bank `$46` has GB DMG's. In family 11 a `bmi`
+  sends SMS to `vblank_sms` / `now_sms` (bank `$46` `$5A00-$5AFF`, with
+  `fold_queue`, which moved there to make room), which do `lda #$3B / tam
+  #2` and carry on at GB DMG's `vblank_gb` / `now_gb`, now bank `$3B`'s copy,
+  reading the SMS table. The trampoline restores MPR2 when the upload
+  returns. Because the code is GB DMG's, SMS has GB DMG's budget,
+  left-over and full-queue behaviour, and timing, plus 25 CPU cycles of
+  dispatch in the vblank (23 in palette_now; about 0.05 line).
 - The Original and GB DMG paths take exactly the cycles they took before
   HELL: the HELL test rides on branches those paths already took (the
   vblank's `bne` for Original now leads to a `bcs` that Original falls
   through, paid for by a `bpl` turned into a `bmi`; palette_now's entry
   saves 2 cycles that the Original and GB paths spend on a `bcs` and a
   `nop`). Only the frame a mapped mode is left for Original starts its
-  re-queue 4 cycles later.
-- `$2100` bit 7 records whether the VCE holds mapped colours; when the
+  re-queue 4 cycles later. SMS added no instruction to them: the state
+  moved from `$2100` to `$2104` with the same absolute `lda`/`sta`, and the
+  SMS test rides on the compare. HELL's paths also take exactly the cycles
+  they took before SMS: the family-11 `bmi` (2 cycles, not taken) is paid
+  inside them. The gameplay vblank tests `$2240` before mapping bank `$43`
+  (a `bne` not taken in bank `$46` instead of a taken `beq` in bank `$43`:
+  31 cycles from the `bcs` to `hell_gameplay` either way); HELL's cinema
+  vblank no longer maps bank `$43` and is padded to the old 42 cycles to
+  `vblank_cinema` (`tma/pha/pla/tam`, an `lda`, three `nop`s, so the stack
+  sees the same byte); palette_now's HELL path drops a `sec` (the dispatch's
+  compare leaves carry set) and, in a cinema, leaves by a 2-cycle shorter
+  exit.
+- `$2104` bit 7 records whether the VCE holds mapped colours; when the
   colours due differ (Original against a mapped mode, cinema started or
   ended) the upload queues all 512 first (`$F394`). The bit does not say
   which table (the cycle-exact GB DMG path cannot test more), so whoever
-  changes bits 3-4 between GB DMG and HELL must also call `$F394`; the menu
+  changes bits 3-5 between mapped modes must also call `$F394`; the menu
   does that on every change of the live mode. The RAM palette always holds
   the original colours.
 
@@ -394,24 +445,37 @@ stored 1-1 run) put back the native palette 1 and showed the Enhanced
 backdrop in wrong colours until the stage changed.
 
 The menu's **PALETTE** row (1.11-dev) offers the values listed in
-`src/options/menu.txt` (ORIGINAL, GB_DMG, HELL; NES is one more `$08=NES`
-item there once this module implements it). While the menu is open the live
-bits 3-4 follow the draft, and every change of them queues all 512 colours
-(`$F394`), so the module re-uploads every colour at the next vblanks and the
-choice shows at once (the menu waits in `$FD67`, so the left-over rule gets
-its 16 colours a vblank: GB DMG's 512 in about 25 frames, HELL's in about
-12); Select puts the old bits back (queuing all 512 again if they differ)
-and waits until the queue is empty (at most 48 vblanks; Original is back
-after one) before the game runs on. Run keeps the bits and restarts the
-stage, which reloads the palettes.
+`src/options/menu.txt` (ORIGINAL, GB_DMG, HELL, SMS; mask `$38`; NES-A and
+NES-B are two more items, `$08=NES-A $28=NES-B`, once the `nes-palette`
+branch is merged). While the menu is open the live bits 3-5 follow the
+draft, and every change of them queues all 512 colours (`$F394`), so the
+module re-uploads every colour at the next vblanks and the choice shows at
+once (the menu waits in `$FD67`, so the left-over rule gets its 16 colours a
+vblank: GB DMG's and SMS's 512 in about 25 frames, HELL's in about 12);
+Select puts the old bits back (queuing all 512 again if they differ) and
+waits until the queue is empty (at most 48 vblanks; Original is back after
+one) before the game runs on. Run keeps the bits and restarts the stage,
+which reloads the palettes.
 
 Bank `$46` (1.11-dev): `$4000-$40FF` dispatch, `$4100-$42FF` unowned
-(512 bytes), `$4300-$43FF` cinema sprite reset, `$4400-$4AFF` the menu
-(`options`), `$4B00-$4FFF` unowned (1,280 bytes, contiguous), `$5000-$53FF`
-palette code (1,023 bytes used), `$5400-$57FF` its GB DMG table,
-`$5800-$583F` 6-1 dispatch, `$5840-$58FF` options' renderer gate,
-`$5900-$5FFF` speed. Bank `$45` `$4000-$43FF`, the menu's old range, is
-unowned again (1 KiB; the rest of bank `$45` is `stage61-upload`).
+(512 bytes; reserved for the backup-RAM save code), `$4300-$43FF` cinema
+sprite reset, `$4400-$4AFF` the menu (`options`), `$4B00-$4FFF` unowned
+(1,280 bytes, contiguous; reserved for the backup-RAM save code),
+`$5000-$53FF` palette code (905 bytes used), `$5400-$57FF` its GB DMG
+table, `$5800-$583F` 6-1 dispatch, `$5840-$58FF` options' renderer gate,
+`$5900-$59FF` speed (143 bytes used), `$5A00-$5AFF` the palette module's
+`fold_queue` and SMS stubs (163 bytes used), `$5B00-$5FFF` unowned (1,280 bytes;
+the `$FF` tail of speed's old claim `$5900-$5FFF`, never read or executed:
+docs/validation/sms-palette.md). Bank `$45` `$4000-$43FF`, the menu's old
+range, is unowned again (1 KiB; the rest of bank `$45` is
+`stage61-upload`; the `nes-palette` branch uses `$4000-$43FF` and
+`$5200-$5FFF`).
+
+Bank `$3B` (original game data to `$761CE`, then `$FF`; file offsets
+`$76000-$77FFF`): `$5000-$57FF` and `$5A00-$5AFF` in the MPR2 view (file
+`$77000-$777FF`, `$77A00-$77AFF`) are the SMS copy of bank `$46`'s palette
+code, dispatch and the SMS table (1.11-dev). Read/execute watches over them
+on the build before saw nothing (cold boot and all 11 stored runs).
 
 Bank `$43` `$7800-$7FFF` (MPR3 view; file offsets `$87800-$87FFF`, 1.11-dev):
 the palette module's HELL code (`$7800-$7B4F`, 176 bytes spare to `$7BFF`)
@@ -517,8 +581,8 @@ values are `src/options/menu.txt`, generated into `menu-text.inc` by
   restarts the stage shown (health refilled, timer reset, palettes
   reloaded), Select cancels. The menu returns once Select, Run, I and II are
   released. Rows: STAGE (22 entries), SMOOTH PARALLAX (bit 0 clear = ON),
-  NO DAMAGE (bit 1), NES FIREWHEEL (bit 2), PALETTE (bits 3-4), LANGUAGE
-  (`$3227`). Each option row is a mask and a value list in `menu.txt`
+  NO DAMAGE (bit 1), NES FIREWHEEL (bit 2), PALETTE (bits 3-5), LANGUAGE
+  (`$3227`; draft bits 6-7). Each option row is a mask and a value list in `menu.txt`
   (`choice_*` tables): the draft's value is looked up in the list (an
   unlisted value shows the first entry) and Left/Right step through it.
 - **Language.** Only the title (bank 4 `$8610-$8643`, `$91B8`) and the story

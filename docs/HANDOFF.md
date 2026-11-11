@@ -23,7 +23,8 @@
   [evidence](validation/nes-firewheel.md), emulator only). With it off the
   game plays as 1.10. Code: `src/nes-firewheel` in bank 3's unused tail;
   no fixed-bank bytes.
-- **Palette modes** (1.11-dev, branch `gb-palette`): `$2100` bits 3-4,
+- **Palette modes** (1.11-dev, branch `gb-palette`): `$2100` bits 3-4 (bits
+  3-5 since the SMS palette, below),
   00 Original (default), 01 NES (reserved, shown as Original), 10 GB DMG
   (four dark olive shades by luminance, `src/palette/gb-dmg.json`), menu row
   `PALETTE` (previewed while the menu is open). The vblank palette upload maps the native queue in GB DMG gameplay;
@@ -42,10 +43,37 @@
   ([architecture](ARCHITECTURE.md#palette-modes),
   [evidence](validation/hell-palette.md), emulator only). The NES palette
   (`nes-palette`, value 01) is a parallel branch from the same base: merging
-  touches the PALETTE line of `menu.txt` (make it
-  `@ $18 $00=ORIGINAL $08=NES $10=GB_DMG $18=HELL`), the vblank dispatch in
+  touches the PALETTE line of `menu.txt` (since the SMS palette:
+  `@ $38 $00=ORIGINAL $08=NES-A $28=NES-B $10=GB_DMG $18=HELL $38=SMS`), the vblank dispatch in
   `src/palette/main.asm` (keep the Original and GB DMG cycle counts; HELL
   enters from `vblank_other` with carry set) and `modules.json`.
+- **SMS palette** (1.11-dev, branch `sms-palette`, from `hell-palette`):
+  `$2100` = `$38`, menu value `SMS` after HELL: everything on screen in the
+  Sega Master System's 64 colours (each channel to the nearest SMS level,
+  shown as PC Engine 0/2/5/7; the owner's mock-up candidate A,
+  `src/palette/sms.json`), border and sprites included, mapped at the
+  upload like GB DMG. **The palette mode is now three bits, `$2100` bits
+  3-5** (bits 3-4 the upload family as before, bit 5 a variant: `$00`
+  Original, `$08` NES-A, `$28` NES-B, `$10` GB DMG, `$18` HELL, `$38` SMS,
+  `$20`/`$30` unassigned) and **bit 7 is set exactly with SMS** (`$B8`; the
+  upload's existing compare tells SMS from HELL by it). The palette module's
+  state moved from `$2100` bits 5-7 to `$2104` bits 5-7 (same instructions;
+  the watched stack margin is now `$2105-$213F`); `$2100` holds only
+  settings (bit 6 free). Original, GB DMG and HELL keep their cycle counts
+  exactly. The menu's
+  draft keeps the options in bits 0-5 and the language in bits 6-7. SMS
+  runs GB DMG's own code from a byte-identical copy in bank `$3B`
+  (`$5000-$57FF`, with the SMS table at `$5400`), entered by a `bmi` on the
+  dispatch's own compare and stubs in bank `$46` `$5A00-$5AFF` (speed's
+  unused tail, now also holding `fold_queue`; speed claims `$5900-$59FF`); no fixed-bank bytes, no bank `$45`, `$37` or bank
+  3 bytes ([architecture](ARCHITECTURE.md#palette-modes),
+  [evidence](validation/sms-palette.md), emulator only). Merging with
+  `nes-palette-2`: the PALETTE line becomes
+  `@ $38 $00=ORIGINAL $08=NES-A $28=NES-B $10=GB_DMG $18=HELL $38=SMS`; the
+  NES hooks' `and #$18 / cmp #$08` already accept NES-A and NES-B; NES-B's
+  data choice tests bit 5; the NES menu code's `PALETTE_BITS`/`OPENED_OPTIONS`
+  logic must use the `$38` mask and compare the family (`and #$18`) to
+  `$08`; see the [merge notes](validation/sms-palette.md#merging-with-nes-palette-2).
 - **Popup menu** (1.11-dev, branch `popup-menu`): Select opens a 26 x 10
   window over the playfield (BAT rows 7-16) instead of covering the HUD:
   STAGE, SMOOTH PARALLAX, NO DAMAGE, NES FIREWHEEL, PALETTE, LANGUAGE, then

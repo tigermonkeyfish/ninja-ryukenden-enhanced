@@ -88,8 +88,9 @@ the trace log's cycle counts are both master clocks (see EMULATOR.md).
   with a sentinel, set a read/write watchpoint over it, exercise every
   lifecycle path (boot, menus, every stage entry, combat, death, Continue,
   cinemas) and check that the watchpoint never fired and the sentinel
-  survived. Ninja's options live at the bottom of the stack page (`$2100-$2103`)
-  and the remaining margin `$2104-$213F` is watched; it is a reserved margin,
+  survived. Ninja's options live at the bottom of the stack page (`$2100-$2104`;
+  `$2104`, the palette module's state, since 1.11-dev) and the remaining
+  margin `$2105-$213F` is watched; it is a reserved margin,
   not free RAM, and changes to call depth need the guard rerun. *Basis:
   emulated (REV8-era guards, 2026-09); a watchpoint covers only the paths you
   exercised.*

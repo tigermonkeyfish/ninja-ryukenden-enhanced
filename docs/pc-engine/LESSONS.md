@@ -872,6 +872,19 @@ rare event that needs it. Verify with the same whole-run identity check.
 Original and GB DMG ([validation](../validation/hell-palette.md)); cycle
 counts from the HuC6280 tables and the trace log.
 
+**Again with SMS (1.11-dev):** a first SMS build tested the SMS/HELL
+variant inside HELL's path (13 cycles more): Original and GB DMG stayed
+identical, but HELL's stored runs differed in the music driver's RAM in
+hundreds of frames and in a few fade frames. The fix made the test free: a
+copy of the variant in an option bit the dispatch already loads (`$2100`
+bit 7, included in its `and` mask) makes the existing `cmp` leave N set
+for SMS only, so family 11 needs just a `bmi`, and its 2 cycles were found
+inside HELL's own paths (a `sec` the carry made redundant, a branch sense
+flipped by testing earlier, a cinema path padded to its old length).
+**Lesson:** before adding a test, look at the flags the existing compare
+already produces; an extra copy bit in the byte being masked can carry a
+mode split for free ([validation](../validation/sms-palette.md)).
+
 ## Code running in a mapped bank cannot unmap it
 
 **Observed:** the first HELL build crashed at the end of its first upload:
@@ -890,3 +903,35 @@ code in place with the MPR it must restore checked afterwards.
 
 **Confidence/limits:** HuC6280 behaviour, general to any banked 6502-family
 code; seen in the emulator.
+
+## Same code, other data: switch the bank under the running code
+
+**Observed:** the SMS palette mode is the GB DMG mode with another colour
+table. GB DMG's upload reads its table with absolute indexed loads
+(`lda table,x`) from the same bank as its code; pointing it at another
+table would have cost cycles (an indirect load, or a test and a second
+copy of every lookup) in a path whose timing had to stay exact.
+
+**Finding/fix:** a second bank holds a byte-for-byte copy of the code at the
+same addresses, with the other table where the first bank has its own. The
+SMS dispatch (reached only in SMS) does `lda #bank / tam #2` while running
+in MPR2 and goes on at the next instruction, which the CPU now fetches from
+the copy; every later table read hits the SMS table. The fixed-bank
+trampoline that called the code restores MPR2 on return, so no exit path
+changed. The copy is assembled from the same source lines (marked
+`;@mirror` and copied by the build with each label renamed), with a guard
+per label that the copy's address equals the original's, so the two can
+never drift apart; a tampered copy fails to assemble.
+
+**Reusable lesson:** when a routine must run unchanged with other data at
+no cost to its existing callers, give the data its own bank and duplicate
+the code into it at the same addresses; switch banks under the running code
+at an instruction both copies share. Generate the copy from the same source
+and guard it by address, never by hand. It costs the code's size again in
+free ROM at the same bank offset.
+
+**Confidence/limits:** HuC6280 MPR semantics (the switch takes effect at the
+next fetch), emulator evidence in
+[validation/sms-palette.md](../validation/sms-palette.md); needs free space
+at the same offset in another bank, and the interrupted code must not depend
+on the switched MPR (here the trampoline saves and restores it).

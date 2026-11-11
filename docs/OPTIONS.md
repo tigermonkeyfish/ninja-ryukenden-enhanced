@@ -114,6 +114,10 @@ default) keeps the PC Engine game's Fire Wheel.
   red and orange, greens scorch to brown, greys and whites become embers and
   ash. Ryu, the enemies and the status bar keep their own colours, so they
   stand out.
+- **SMS**: everything on screen (scenery, status bar, Ryu, enemies, bosses)
+  in the Sega Master System's 64 colours, with all of the PC Engine
+  picture's detail: each colour is moved to the nearest Master System
+  shade, channel by channel.
 
 The colours change at once while the window is open, so you can look at the
 choice before you accept it; **Select** (cancel) puts the old colours back.
