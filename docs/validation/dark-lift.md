@@ -204,22 +204,23 @@ for the candidate's captures.
 
 ## Dark lift 2: the flash and the shade order (branch `dark-lift-fix`)
 
-Work on the three open points of the record above. **Also incomplete**:
-the host stopped one survey run for low memory, and what had not finished
-is listed under [Not verified](#not-verified-on-the-fix-build) and was not
-rerun.
+Work on the three open points of the record above. The regression and the
+dark lift's own evidence are complete. **One part is not**: the host
+stopped a survey run for low memory, it was not started again, and what it
+leaves unrecorded (three stage changes in SMS, one in HELL) is listed under
+[Not verified](#not-verified-on-the-fix-build).
 
 | Build | SHA-256 | Source |
 | --- | --- | --- |
 | Dark lift (before) | `23871f8fe45ebdd8f2e8fda65a3a585b17248a4af17f27b1805b436b0bdf39d7` | branch `dark-lift`, rebuilt here: the same bytes |
-| Fix build | `1678b2e1b2eaabcb27ae8a23e51dd95d0f411c2e570a1bd3f2e224aa3541e2ae` | branch `dark-lift-fix`, `b045238` (the same bytes from the headered and the headerless original) |
+| Fix build | `1678b2e1b2eaabcb27ae8a23e51dd95d0f411c2e570a1bd3f2e224aa3541e2ae` | branch `dark-lift-fix`, `b045238` and the later commits, which change no byte of it (the same bytes from the headered and the headerless original) |
 
 Work folder (private): `build/dark-lift-fix/` (`dl.pce`, `fix2.pce`,
 `trans/` the transition recordings, `capidx/` index captures of all 22
 stages, `hell/` the grey candidates, `hellmock2/` their pictures). New
 probes in [`research/tools/dark-lift/`](../../research/tools/dark-lift):
 `trans.py`, `transreport.py`, `unittest_fade.py`, `leftover_cost.py`,
-`hellorder.py`, `hellmock.py`.
+`diffwhere.py`, `blackruns.py`, `hellorder.py`, `hellmock.py`.
 
 ### A. The SMS flash: cause
 
@@ -518,14 +519,9 @@ per-frame transition survey (`trans.py`) of the fix build is missing for:
 Also not run: deaths, Continue and Game Over in any mode; the stack and
 free-ROM probes (no call, push or new range was added).
 
-```sh
-W=build/dark-lift-fix; D=research/tools/dark-lift    # GB_WORK=$W NES_WORK=$W NG_DEBUGGER_FAST=1
-python3 $D/mkjobs.py trans $W $W/fix2.pce $W/dl.pce > $W/jobs/trans.txt
-python3 $D/runjobs.py $W/jobs/trans.txt 2 $W/jobs/log         # 48 jobs; `grep ^trans-new` for the fix build only
-python3 $D/transreport.py $W/trans old,new
-python3 $D/unittest_fade.py $W/fix2.pce 300 22                 # NO_FADE_MODEL=1: control
-python3 $D/leftover_cost.py $W/fix2.pce 0xb8                   # and 0x10, 0x18; dl.pce
-```
+The missing part is the `trans-new-sms-*`, `trans-new-hell-*` and
+`trans-new-gb-dmg-run-b` lines of `jobs/trans.txt`
+([commands](#rerunning-fix-build)).
 
 ### B. HELL's grey order
 
@@ -706,6 +702,43 @@ For the owner's review, in `roms/` (new names; nothing there was changed):
 The ROM is the fix build (`scripts/project.py build` from either original
 gives these bytes); the patches are the build's own (`--bps-output`), and
 `scripts/bps.py apply` of each to its original gives the ROM again.
+
+### Rerunning (fix build)
+
+From the repository root, `W=build/dark-lift-fix` holding `original.pce`,
+`seed.state`, `dl.pce`, `h1.pce`, `fix2.pce`, `rec/dl-*` (the dark-lift
+record's recordings) and `tt/h1-orig-*`, `tt/h1-hell-*` (the `hell-1-1`
+record's traces), in the emulator environment of `run-check.sh` with
+`GB_WORK=$W NES_WORK=$W NG_DEBUGGER_FAST=1`. One emulator session at a time
+was the host's limit here (`JOBS=1`, `runjobs.py … 1`).
+
+```sh
+D=research/tools/dark-lift; S=research/tools/sms-palette; G=research/tools/gb-palette
+python3 -m unittest tests.test_tools; python3 scripts/audit_public.py
+python3 $D/unittest_fade.py $W/fix2.pce 300 22                 # and 31; NO_FADE_MODEL=1: control
+python3 $D/leftover_cost.py $W/fix2.pce 0xb8                   # and 0x10, 0x18; dl.pce for the build before
+python3 $D/mkjobs.py trans $W $W/fix2.pce $W/dl.pce > $W/jobs/trans.txt
+python3 $D/runjobs.py $W/jobs/trans.txt 1 $W/jobs/log         # 48 jobs: old = dl.pce, new = fix2.pce (the part not finished here)
+python3 $D/transreport.py $W/trans old,new                     # --modes gb-dmg; --all
+JOBS=1 sh $D/recall.sh $W $W/fix2.pce fx                       # 11 runs x 6 modes
+python3 $S/analyse.py $W/rec identity dl-orig fx-orig          # and nesa, nesb
+python3 $D/summary.py $W/rec dl fx gb,sms,hell
+python3 $D/diffwhere.py $W/rec dl fx gb,sms,hell
+python3 $D/blackruns.py $W/rec dl,fx
+python3 scripts/check_boot.py --emulator $E --original $W/original.pce --candidate $W/fix2.pce --output $W/boot
+python3 scripts/check_menu.py --emulator $E --original $W/original.pce --candidate $W/fix2.pce --output $W/menu
+python3 $G/timing_trace.py $W/fix2.pce 1-1 $W/tt/fx-sms-1-1.json 0xb8   # every run; fx-hell 0x18, fx-gb 0x10
+python3 $G/split.py $W/tt h1-orig fx-sms; python3 $G/updates.py $W/tt fx-sms $W/tt h1-orig   # and hell, gb; split h1-hell fx-hell
+python3 $D/cap.py $W/dl.pce $W/capidx hell warp 0              # ... 21: index captures of every area
+python3 $D/hellorder.py --min 3 $W/capidx                      # --hell FILE for a candidate; --sms build/dark-survey/cap
+python3 $D/hellmock.py $W/hellmock2 049,092 O=original,D=$W/hell/D.json,dl=src/palette/hell.json,g310=$W/hell/g310.json $W/capidx/ls12-a0-start-hell
+for k in starts caps shots onscreen; do python3 $D/mkjobs.py $k $W $W/fix2.pce $W/h1.pce > $W/jobs/$k.txt; done
+python3 $D/runjobs.py $W/jobs/caps.txt 1 $W/jobs/log; python3 $D/measure.py $W/cap build/dark-survey/cap; python3 $D/nescheck.py $W/cap $W/original.pce
+python3 $D/runjobs.py $W/jobs/shots.txt 1 $W/jobs/log; python3 $D/sheets.py $W/sheets build/dark-survey/cap $W/cap $W/shots/old $W/shots/new
+python3 $D/runjobs.py $W/jobs/starts.txt 1 $W/jobs/log; python3 $D/runjobs.py $W/jobs/onscreen.txt 1 $W/jobs/log
+python3 scripts/project.py build --rom ORIGINAL --output rom.pce --assembler pceas --bps-output patch.bps
+python3 scripts/bps.py apply ORIGINAL patch.bps check.pce      # check.pce is rom.pce
+```
 
 ## Rerunning
 
