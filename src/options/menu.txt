@@ -3,15 +3,18 @@
 # The popup window, 26 columns x 10 rows between the bars, drawn over the
 # playfield at screen columns 3-28, BAT rows 7-16. '#' runs are the value
 # fields: STAGE, then one per option row (the @ lines below, in order). The
-# '?' run is the save status field (the ? line below; not selectable).
+# '!' run is the reset row's field (the ! line below): selectable after the
+# option rows; I or II there sets every option to its default (the first
+# value of each @ line). The '?' run is the save status field (the ? line
+# below; not selectable).
 |                          |
 | STAGE: #####             |
 | SMOOTH PARALLAX: ###     |
 | NO DAMAGE: ###           |
 | NES FIREWHEEL: ###       |
-| PALETTE: ########        |
+| PALETTE: ##########      |
 | LANGUAGE: ########       |
-|                          |
+| RESET OPTIONS: !!!!!!!   |
 | RUN: OK  SELECT: CANCEL  |
 | SAVE: ????????           |
 #
@@ -23,14 +26,21 @@
 # Option values: the draft-byte bits the field owns, then value=TEXT in
 # Left/Right order ('_' is a space). Draft bits 0-5 are $2100's options on
 # Run (0 original background, 1 No Damage, 2 NES Firewheel, 3-5 palette
-# mode: $00 Original, $08 NES-A, $28 NES-B, $10 GB DMG, $18 HELL, $38 SMS;
-# $20 and $30 unassigned; see src/palette/main.asm; the menu sets $2100 bit 7
-# with SMS); bits 6-7 the language ($3227: 0 Japanese, 1 English, 2 Chinese).
+# mode: $00 Original, $08 NES-A, $28 NES-B, $10 GB DMG, $18 APOCALYPSE
+# (named HELL in the source), $38 SMS; $20 and $30 unassigned; see
+# src/palette/main.asm; the menu sets $2100 bit 7 with SMS); bits 6-7 the
+# language ($3227: 0 Japanese, 1 English, 2 Chinese). The first value of
+# each line is the option's default, the one the reset row sets: the power-on
+# settings without saved ones (src/bram: $2100 = 0, $3227 = 1 English).
 @ $01 $00=ON $01=OFF
 @ $02 $00=OFF $02=ON
 @ $04 $00=OFF $04=ON
-@ $38 $00=ORIGINAL $08=NES-A $28=NES-B $10=GB_DMG $18=HELL $38=SMS
+@ $38 $00=ORIGINAL $08=NES-A $28=NES-B $10=GB_DMG $18=APOCALYPSE $38=SMS
 @ $c0 $40=ENGLISH $00=JAPANESE $80=CHINESE
+#
+# The reset row's field text ('_' is a space); it blinks while the row is
+# selected.
+! PRESS_I
 #
 # The save status (src/bram/main.asm, $2105), in the order of its ST_
 # values: no backup RAM; settings loaded or saved; backup RAM ready, nothing

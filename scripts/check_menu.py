@@ -63,6 +63,20 @@ options Each option row changed and accepted with Run, from 1-1: $2100 and
         compared with the run without the menu for LONG frames.
 select  also checks, after a cold boot, that the LANGUAGE row reads
         ENGLISH with $3227 = 1.
+reset   The reset row (RESET OPTIONS, after LANGUAGE), from 1-1: from
+        settings accepted with Run (each option changed, several at once,
+        SMS and APOCALYPSE (HELL in the source), Japanese and Chinese), the
+        reset row with I (or II) shows every default in the window, previews
+        Original's colours, and Run gives $2100 = 0 (bit 7 clear), $3227 = 1
+        (the cold-boot defaults), the same stage ($2E5F) and the VCE of a
+        stage start that never left Original; a STAGE changed before or
+        after the reset is the stage that starts; an option changed after
+        the reset is kept; Up from STAGE wraps to the reset row and Down from
+        it to STAGE; Left/Right there do nothing; its field blinks. Select
+        after a reset is exact_cycle's cancel (nothing changes; compared
+        with the run without the menu for LONG frames), the language kept.
+        Pictures of the open window (APOCALYPSE, the reset row) are kept in
+        the output folder.
 
 Writes a JSON report to the output folder; captures stay private there.
 """
@@ -179,9 +193,10 @@ def expected_window(status):
 
 
 def window_problems(game, c0):
-    """Differences between the BAT window and menu.txt (value fields: any
-    font cell; the save status field: the text of the status in $2105)."""
-    fields = {(r, c + k) for r, c, w in MENU['fields'] for k in range(w)}
+    """Differences between the BAT window and menu.txt (value fields and the
+    reset field: any font cell; the save status field: the text of the
+    status in $2105)."""
+    fields = {(r, c + k) for r, c, w in MENU['fields'] + [MENU['reset']] for k in range(w)}
     window = expected_window(game.read(0x105, 1)[0])
     problems = []
     for j, row in enumerate(window_words(game, c0)):
@@ -194,6 +209,12 @@ def window_problems(game, c0):
 
 def field_text(game, c0, field):
     row, col, width = MENU['fields'][field]
+    words = window_words(game, c0)[row][col:col + width]
+    return ''.join(DECODE.get(w[0], '?') if w[1] == 0xf7 else '#' for w in words)
+
+
+def reset_field_text(game, c0):
+    row, col, width = MENU['reset']
     words = window_words(game, c0)[row][col:col + width]
     return ''.join(DECODE.get(w[0], '?') if w[1] == 0xf7 else '#' for w in words)
 
@@ -916,12 +937,239 @@ def check_options(emulator, candidate, seed, output, original=None):
     return results
 
 
+RESET_ROW = len(MENU['fields'])     # rows: STAGE, the options, then the reset row
+DEFAULT_OPTIONS, DEFAULT_LANGUAGE = 0x00, 1     # a cold boot without saved settings (src/bram)
+
+
+def default_texts():
+    """The option fields' texts for the defaults (each @ line's first
+    value), as the window shows them."""
+    return [''.join(DECODE[c] for c in entries[0][1]) for _, entries in MENU['choices']]
+
+
+def option_texts(game):
+    c0 = box_column(game.read(0, 0x2000))
+    return [field_text(game, c0, k) for k in range(1, len(MENU['fields']))]
+
+
+def open_menu(game):
+    press(game, 'select', after=6)
+
+
+def finish(game, accept=True):
+    """Run (to the restarted stage's first update) or Select, then settle
+    as menu_to does."""
+    game.press({'run' if accept else 'select'})
+    game.step(2)
+    game.press(set())
+    if accept:
+        if not stop_at(game, FIRST_UPDATE, 600):
+            raise RuntimeError('stage did not restart')
+    else:
+        game.step(40)
+    game.step(90)
+    return game.read(0, 0x2000)
+
+
+def check_reset(emulator, candidate, seed, output):
+    """The reset row (see the module's description, part `reset`)."""
+    work = Path(tempfile.mkdtemp(prefix='menu-reset-', dir=output))
+    results = {}
+    R, L, D, U = 'right', 'left', 'down', 'up'
+    defaults = default_texts()
+    # The VCE of 1-1 after two Runs that never left Original: what every
+    # reset-and-Run case below must end with (its first Run sets the
+    # options it starts from, its second is the reset's).
+    with Game(emulator, work) as game:
+        to_level(game, candidate, seed)
+        for _ in range(2):
+            menu_to(game, 0, [])
+        plain = game.read(0, 1024, area=8)
+    # The settings before the reset, set with one Run: (row, presses) steps.
+    everything_sms = [(1, [R]), (1, [R]), (1, [R]), (1, [L]), (1, [L])]     # parallax off, No Damage,
+    everything_apocalypse = [(1, [R]), (1, [R]), (1, [R]), (1, [R] * 4), (1, [R])]  # NES Firewheel; SMS/APOCALYPSE;
+    #                                                                       Chinese / Japanese
+    starts = [('parallax off', [(1, [R])], 0x01, 1), ('no damage on', [(2, [R])], 0x02, 1),
+              ('nes firewheel on', [(3, [R])], 0x04, 1), ('palette nes-a', [(4, [R])], 0x08, 1),
+              ('palette nes-b', [(4, [R] * 2)], 0x28, 1), ('palette gb dmg', [(4, [R] * 3)], 0x10, 1),
+              ('palette apocalypse', [(4, [R] * 4)], 0x18, 1), ('palette sms', [(4, [L])], 0x38, 1),
+              ('language japanese', [(5, [R])], 0x00, 0), ('language chinese', [(5, [L])], 0x00, 2),
+              ('everything, sms, chinese', everything_sms, 0x3f, 2),
+              ('everything, apocalypse, japanese', everything_apocalypse, 0x1f, 0),
+              ('nothing changed', [], 0x00, 1)]
+
+    def set_up(game, steps):
+        """Open the menu, make the steps (each `row` Downs from the row
+        before, then presses), Run; the options and language it set."""
+        open_menu(game)
+        for down, presses in steps:
+            for _ in range(down):
+                press(game, D)
+            for button in presses:
+                press(game, button)
+        ram = finish(game)
+        return ram[0x100], ram[0x1227]
+
+    def reset_case(name, steps, bits, language, way, button='I', expect_stage=0, expect_options=DEFAULT_OPTIONS,
+                   expect_texts=None):
+        with Game(emulator, work) as game:
+            to_level(game, candidate, seed)
+            entry = {'problems': []}
+            if steps:
+                options, lang = set_up(game, steps)
+                entry['before'] = {'options': f'{options:#04x}', 'language': lang}
+                if options & 0x3f != bits or lang != language:
+                    entry['problems'].append('the starting settings were not set')
+            else:
+                menu_to(game, 0, [])
+            stage = game.read(0xe5f, 1)[0]
+            open_menu(game)
+            for button_name in way[0]:                  # before the reset (e.g. STAGE)
+                press(game, button_name)
+            press(game, button)
+            game.step(40)                               # the live preview's upload
+            ram = game.read(0, 0x2000)
+            c0 = box_column(ram)
+            entry['after_reset_texts'] = option_texts(game)
+            entry['reset_field'] = reset_field_text(game, c0)
+            if expect_texts is None and entry['after_reset_texts'] != defaults:
+                entry['problems'].append(f'window after the reset: {entry["after_reset_texts"]}')
+            vce = game.read(0, 1024, area=8)
+            entry['preview_original'] = ram[0x100] & 0xb8 == 0 and vce[:512] == ram[0x286:0x486]
+            if not entry['preview_original']:
+                entry['problems'].append('the reset did not preview Original')
+            for button_name in way[1]:                  # after it
+                press(game, button_name)
+            if expect_texts is not None:
+                entry['texts_before_run'] = option_texts(game)
+                if entry['texts_before_run'] != expect_texts:
+                    entry['problems'].append(f'window before Run: {entry["texts_before_run"]}')
+            ram = finish(game)
+            entry.update({'options': f'{ram[0x100]:#04x}', 'language': ram[0x1227], 'stage_before': stage,
+                          'stage': ram[0xe5f]})
+            if ram[0x100] != expect_options or ram[0x1227] != DEFAULT_LANGUAGE:
+                entry['problems'].append('options or language not the defaults after Run')
+            if ram[0xe5f] != expect_stage:
+                entry['problems'].append(f'stage {ram[0xe5f]}, expected {expect_stage}')
+            if ram[0xead] != 16:
+                entry['problems'].append('health not refilled')
+            if expect_options == DEFAULT_OPTIONS and expect_stage == 0:
+                entry['vce_as_never_changed'] = game.read(0, 1024, area=8) == plain
+                if not entry['vce_as_never_changed']:
+                    entry['problems'].append('VCE differs from a stage start that never left Original')
+            entry['ok'] = not entry['problems']
+            return entry
+
+    to_reset = [D] * RESET_ROW
+    for name, steps, bits, language in starts:
+        case = f'reset and run, from {name}'
+        results[case] = reset_case(case, steps, bits, language, (to_reset, []))
+        print(case, results[case], flush=True)
+    for case, steps, bits, language, way, kwargs in (
+            ('reset with II and run, from everything, sms, chinese', everything_sms, 0x3f, 2, (to_reset, []),
+             {'button': 'II'}),
+            ('up from stage wraps to the reset row, from palette apocalypse', [(4, [R] * 4)], 0x18, 1, ([U], []), {}),
+            ('stage changed before the reset is kept (2-1), from everything, sms, chinese', everything_sms, 0x3f, 2,
+             ([R, R] + to_reset, []), {'expect_stage': 2}),
+            ('stage changed after the reset is kept (1-2, down wraps to stage), from palette apocalypse',
+             [(4, [R] * 4)], 0x18, 1, (to_reset, [D, R]), {'expect_stage': 1}),
+            ('an option changed after the reset is kept (gb dmg), from everything, apocalypse, japanese',
+             everything_apocalypse, 0x1f, 0, (to_reset, [U, U, R, R, R]),
+             {'expect_options': 0x10, 'expect_texts': defaults[:3] + ['GB DMG    '] + defaults[4:]})):
+        results[case] = reset_case(case, steps, bits, language, way, **kwargs)
+        print(case, results[case], flush=True)
+    # Left and Right on the reset row change nothing; Run then keeps SMS.
+    with Game(emulator, work) as game:
+        to_level(game, candidate, seed)
+        set_up(game, [(4, [L])])                        # SMS
+        open_menu(game)
+        for button in to_reset + [R, L, R, R, L]:
+            press(game, button)
+        entry = {'problems': [], 'texts': option_texts(game)}
+        if entry['texts'] != defaults[:3] + ['SMS       '] + defaults[4:]:
+            entry['problems'].append('Left/Right on the reset row changed the window')
+        ram = finish(game)
+        entry.update({'options': f'{ram[0x100]:#04x}', 'language': ram[0x1227], 'stage': ram[0xe5f]})
+        if ram[0x100] != 0xb8 or ram[0x1227] != 1 or ram[0xe5f] != 0:
+            entry['problems'].append('settings changed')
+        entry['ok'] = not entry['problems']
+        results['left and right on the reset row do nothing, from palette sms'] = entry
+        print('left and right on the reset row', entry, flush=True)
+    # The reset field blinks while selected, and pictures of the window.
+    with Game(emulator, work) as game:
+        to_level(game, candidate, seed)
+        set_up(game, [(4, [R] * 4)])                    # APOCALYPSE
+        open_menu(game)
+        c0 = box_column(game.read(0, 0x2000))
+        entry = {'problems': [], 'palette_text': field_text(game, c0, 4), 'reset_text': reset_field_text(game, c0)}
+        (Path(output) / 'reset-menu-apocalypse.png').write_bytes(game.screenshot())
+        for _ in range(4):
+            press(game, D)
+        seen, shots = set(), 0
+        for _ in range(40):
+            game.step(1)
+            text = field_text(game, c0, 4)
+            seen.add(text)
+            if text.strip() and shots == 0:
+                (Path(output) / 'reset-menu-apocalypse-selected.png').write_bytes(game.screenshot())
+                shots += 1
+        entry['palette_row_seen'] = sorted(seen)
+        press(game, D, after=0)
+        press(game, D, after=0)
+        seen = set()
+        for _ in range(40):
+            game.step(1)
+            text = reset_field_text(game, c0)
+            if text.strip() and 'shown' not in entry:
+                (Path(output) / 'reset-menu-reset-row-selected.png').write_bytes(game.screenshot())
+                entry['shown'] = True
+            seen.add(text)
+        entry['reset_row_seen'] = sorted(seen)
+        want_reset = ''.join(DECODE[c] for c in MENU['reset_text'])
+        if entry['palette_text'] != 'APOCALYPSE' or entry['reset_text'] != want_reset:
+            entry['problems'].append('window texts')
+        if set(entry['palette_row_seen']) != {'APOCALYPSE', ' ' * 10}:
+            entry['problems'].append('PALETTE APOCALYPSE does not blink')
+        if set(entry['reset_row_seen']) != {want_reset, ' ' * len(want_reset)}:
+            entry['problems'].append('the reset field does not blink')
+        entry['problems'] += window_problems(game, c0)
+        finish(game, accept=False)
+        entry['ok'] = not entry['problems']
+        results['window: apocalypse and the blinking reset field'] = entry
+        print('window', entry, flush=True)
+    # Select after a reset: nothing changes (exact_cycle's cancel, compared
+    # with the run without the menu), from settings set with one Run.
+    for name, steps, actions in (
+            ('cancel after reset, from everything, sms, chinese', everything_sms, to_reset + ['I']),
+            ('cancel after reset, from everything, apocalypse, japanese', everything_apocalypse, to_reset + ['I']),
+            ('cancel after reset with II, from palette gb dmg', [(4, [R] * 3)], to_reset + ['II']),
+            ('cancel after reset, from palette nes-b', [(4, [R] * 2)], to_reset + ['I']),
+            ('cancel after reset and a stage change, from palette apocalypse', [(4, [R] * 4)],
+             to_reset + ['I', D, R]),
+            ('cancel after reset, from nothing changed', [], to_reset + ['I'])):
+        with Game(emulator, work) as game:
+            to_level(game, candidate, seed)
+            if steps:
+                set_up(game, steps)
+            before = game.read(0, 0x2000)
+            found = exact_cycle(game, work, actions=actions, n=LONG) \
+                if select_at_hook(game) else {'ok': False, 'problems': ['menu not available']}
+            after = game.read(0, 0x2000)
+            found['options_and_language_kept'] = (after[0x100] == before[0x100] and after[0x1227] == before[0x1227]
+                                                  and after[0xe5f] == before[0xe5f])
+            found['ok'] = found['ok'] and found['options_and_language_kept']
+            results[name] = found
+            print(name, found, flush=True)
+    shutil.rmtree(work, ignore_errors=True)
+    return results
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ['emulator', 'original', 'candidate', 'output']:
         parser.add_argument('--' + name, type=Path, required=True)
     parser.add_argument('--every', type=int, default=300, help='frames between menu checks in a run')
-    parser.add_argument('--only', choices=('runs', 'sweep', 'select', 'options'), action='append',
+    parser.add_argument('--only', choices=('runs', 'sweep', 'select', 'options', 'reset'), action='append',
                         help='run these parts only (repeatable)')
     parser.add_argument('--parallax-off', action='store_true', help='runs: with $2100 bit 0 set')
     parser.add_argument('--preview', action='store_true', help='runs: change the palette too before cancelling')
@@ -936,7 +1184,7 @@ def main():
     args = parser.parse_args()
     args.output = args.output.resolve()
     args.output.mkdir(parents=True, exist_ok=True)
-    parts = set(args.only or ('runs', 'sweep', 'select', 'options'))
+    parts = set(args.only or ('runs', 'sweep', 'select', 'options', 'reset'))
     global SAME_MUSIC, STATE_IN_2104, STATUS_IN_2105, STRICT
     SAME_MUSIC = args.same_music
     STRICT = args.strict
@@ -958,7 +1206,7 @@ def main():
         'physical_hardware_tested': False, 'audio_compared': False, 'same_music': args.same_music,
     }
     seed = None
-    if parts & {'runs', 'sweep', 'options'}:
+    if parts & {'runs', 'sweep', 'options', 'reset'}:
         seed = make_seed(args.emulator, args.original, args.output / 'seed.state')
     oks = []
     if 'runs' in parts:
@@ -984,6 +1232,9 @@ def main():
         report['options'] = check_options(args.emulator, args.candidate, seed, args.output,
                                           rom[512:] if len(rom) % 8192 == 512 else rom)
         oks += [e['ok'] for e in report['options'].values()]
+    if 'reset' in parts:
+        report['reset'] = check_reset(args.emulator, args.candidate, seed, args.output)
+        oks += [e['ok'] for e in report['reset'].values()]
     # Every frame accepted as timer phase only, listed in one place.
     timer = []
     for name, r in report.get('runs', {}).items():
@@ -991,9 +1242,10 @@ def main():
     for window, outcome in report.get('sweep', {}).items():
         timer += [{'part': 'sweep', 'window': window, 'opened_at': o['frame'], 'frames': o['timer_phase_frames']}
                   for o in outcome if o.get('timer_phase_frames')]
-    for name, r in report.get('options', {}).items():
-        if r.get('timer_phase_frames'):
-            timer.append({'part': 'options', 'case': name, 'frames': r['timer_phase_frames']})
+    for part in ('options', 'reset'):
+        for name, r in report.get(part, {}).items():
+            if r.get('timer_phase_frames'):
+                timer.append({'part': part, 'case': name, 'frames': r['timer_phase_frames']})
     for e in report.get('level_select', []):
         if e.get('timer_phase_frames'):
             timer.append({'part': 'select', 'stage': e.get('stage'), 'frames': e['timer_phase_frames']})

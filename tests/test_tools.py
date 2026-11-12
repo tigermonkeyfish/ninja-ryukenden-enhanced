@@ -878,7 +878,7 @@ class ReleaseTests(unittest.TestCase):
             include = (work / 'menu-text.inc').read_text()
         self.assertIn('BOX_WIDTH = 26\nBOX_ROWS = 10\nFIELDS = 6\n', include)
         self.assertEqual(len(menu['window']), BOX_WIDTH * BOX_ROWS)
-        self.assertEqual([w for _, _, w in menu['fields']], [5, 3, 3, 3, 8, 8])
+        self.assertEqual([w for _, _, w in menu['fields']], [5, 3, 3, 3, 10, 8])
         # The dev version fits only without GITHUB.COM/; a release version with it.
         self.assertEqual(menu['band_text'], 'V1.11-DEV TIGERMONKEYFISH')
         self.assertEqual(band('V{version} {credit}', '1.11')[1], 'V1.11 GITHUB.COM/TIGERMONKEYFISH')
@@ -886,14 +886,28 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(len(menu['band']), 32)
         palette = menu['choices'][3]
         # PALETTE offers every mode, in the encoding of src/palette/main.asm:
-        # Original, NES-A and NES-B (src/nes-palette), GB DMG, HELL, SMS.
-        self.assertIn('\n@ $38 $00=ORIGINAL $08=NES-A $28=NES-B $10=GB_DMG $18=HELL $38=SMS\n', source)
+        # Original, NES-A and NES-B (src/nes-palette), GB DMG, APOCALYPSE
+        # (HELL in the source), SMS.
+        self.assertIn('\n@ $38 $00=ORIGINAL $08=NES-A $28=NES-B $10=GB_DMG $18=APOCALYPSE $38=SMS\n', source)
         self.assertEqual((palette[0], [v for v, _ in palette[1]]), (0x38, [0x00, 0x08, 0x28, 0x10, 0x18, 0x38]))
-        for k, text in enumerate(['ORIGINAL', 'NES-A   ', 'NES-B   ', 'GB DMG  ', 'HELL    ', 'SMS     ']):
+        for k, text in enumerate(['ORIGINAL', 'NES-A', 'NES-B', 'GB DMG', 'APOCALYPSE', 'SMS']):
+            text = text.ljust(10)
             self.assertEqual(palette[1][k][1], bytes(CODES[c] for c in text))
         # The language owns draft bits 6-7 (bits 0-5 are $2100's on Run).
         self.assertEqual(menu['choices'][4][0], 0xc0)
         self.assertEqual([v for v, _ in menu['choices'][4][1]], [0x40, 0x00, 0x80])
+        # The reset row: its field after LANGUAGE, in the row that was blank
+        # before RUN: OK; the defaults (each option's first value) are the
+        # power-on settings without saved ones (src/bram, bram_image).
+        import re
+        from bram_image import DEFAULTS
+        self.assertEqual(menu['reset'], (7, 16, 7))
+        self.assertEqual(menu['reset_text'], bytes(CODES[c] for c in 'PRESS I'))
+        bram = (ROOT / 'src/bram/main.asm').read_text()
+        self.assertEqual(int(re.search(r'^DEFAULT_LANGUAGE = (\d+)', bram, re.M)[1]), DEFAULTS[1])
+        self.assertEqual(menu['default'], DEFAULTS[0] | DEFAULTS[1] << 6)
+        self.assertIn('FIELDS = 6\nRESET_TEXT_AT = 102\nDEFAULT_DRAFT = $40\n', include)
+        self.assertIn('field_row:\n .db 1,2,3,4,5,6,7\n', include)
         for broken in (source.replace('| STAGE: #####             |', '| STAGE: ####              |'),  # STAGE width
                        source.replace('| NO DAMAGE: ###           |', '| NO DAMAGE: ###            |'),  # 27 columns
                        source.replace('LANGUAGE', 'LANGUAGE!'),
@@ -906,7 +920,10 @@ class ReleaseTests(unittest.TestCase):
                        source.replace('| SAVE: ????????           |', '| SAVE: ????? ??          |'),  # two
                        source.replace('| SAVE: ????????           |', '| SAVE: ??????            |'),  # ERROR 1 does not fit
                        source.replace(' ERROR_5\n', '\n'),                                          # a status without a text
-                       source.replace('? NONE OK', '? NONE O!K')):                                  # not in the HUD font
+                       source.replace('? NONE OK', '? NONE O!K'),                                   # not in the HUD font
+                       source.replace('| RESET OPTIONS: !!!!!!!   |', '| RESET OPTIONS:           |'),  # no reset field
+                       source.replace('\n! PRESS_I\n', '\n! PRESS_II\n'),                          # wider than its field
+                       source.replace('\n! PRESS_I\n', '\n')):                                       # no reset text
             with self.assertRaises(ValueError):
                 layout(broken, '1.11')
         # The save status: one field in the window's last row, a text for

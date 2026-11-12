@@ -65,6 +65,22 @@ original_background:
  cla
  rts
 renderer_gate_end:
+ ; The menu's glyphs (below; read with this bank in MPR2 like the rest of
+ ; the menu) after the gate, in the options module's claim $5840-$58FF:
+ ; they moved here from the menu's $4400-$4AFF when the reset row filled it.
+ ; '.', ':' and '/' in the HUD font's style, for tiles $7AA, $7AD and $7B9:
+ ; planes 0 and 1, row by row (colours 1-3 as in the font's own glyphs).
+menu_glyphs:
+ ; '.': the bottom two rows of the HUD font's '1' stem, three pixels wide.
+ .db $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$20,$18,$18,$38,$00,$00
+ ; ':': the same dot at rows 1-2 (shaded like the font's top rows) and 4-5.
+ .db $00,$00,$38,$00,$38,$00,$00,$00,$20,$18,$20,$18,$00,$00,$00,$00
+ ; '/': a three-pixel diagonal, shaded like the '1' stem row by row.
+ .db $0e,$00,$1c,$00,$1c,$00,$38,$00,$40,$30,$40,$30,$60,$e0,$00,$00
+menu_glyphs_end:
+ .if (menu_glyphs_end > $5900)
+ .fail
+ .endif
 
 ; ---------------------------------------------------------------------------
 ; The in-game menu: a popup window over the playfield (docs/ARCHITECTURE.md,
@@ -115,7 +131,7 @@ SET_WRITE = $fc34           ; native: VRAM write address = X:A, register 2
 SPACE = $9f
 ; Zero page borrowed by the menu; saved on entry and restored on exit.
 STAGE = $25                 ; Level Select entry shown
-ROW = $26                   ; field selected (0 STAGE, 1.. options)
+ROW = $26                   ; row selected (0 STAGE, 1.. options, FIELDS reset)
 BLINK = $27                 ; frame counter: value hidden while bit 4 is set
 BAT_ROW = $28               ; drawing/copy cursor: BAT row
 BAT_COL = $29               ; and column (0-63)
@@ -211,25 +227,39 @@ menu_loop:
  beq field_up
  inc <ROW
  lda <ROW
- cmp #FIELDS
+ cmp #FIELDS+1              ; the rows: STAGE, the options, the reset row
  bcc redraw
  stz <ROW
  bra redraw
 field_up:
  lda <ROW
  bne field_decrement
- lda #FIELDS
+ lda #FIELDS+1
  sta <ROW
 field_decrement:
  dec <ROW
  bra redraw
 horizontal:
+ ldx <ROW
+ cpx #FIELDS
+ beq reset_row
  lda PAD_NEW
  and #$a0
  beq menu_loop
- ldx <ROW
+ cpx #0
  beq stage_change
  jsr choice_change
+ bra redraw
+ ; The reset row: I or II sets the draft's options and language to the
+ ; defaults (menu.txt: the first value of each option; the power-on
+ ; settings without saved ones, src/bram). STAGE is kept; Run applies the
+ ; draft and Select discards it, as after any change. Left/Right do nothing.
+reset_row:
+ lda PAD_NEW
+ and #3
+ beq menu_loop
+ lda #DEFAULT_DRAFT
+ sta DRAFT
  bra redraw
 stage_change:
  and #$20
@@ -441,9 +471,10 @@ choice_set:
  sta DRAFT
  rts
 
- ; Every value field; the selected one blinks (16 frames shown, 16 blank).
+ ; Every value field and the reset field; the selected one blinks (16 frames
+ ; shown, 16 blank).
 draw_values:
- ldx #FIELDS-1
+ ldx #FIELDS                ; the reset field, then the value fields
 value_loop:
  phx
  jsr draw_field
@@ -470,11 +501,15 @@ field_shown:
  beq draw_stage
  lda field_width,x
  pha
+ ldy #RESET_TEXT_AT
+ cpx #FIELDS
+ beq reset_label
  jsr choice_entry
- pla
- sta <SCRATCH
  lda choice_text_at,y
  tay
+reset_label:
+ pla
+ sta <SCRATCH
 label_loop:
  lda choice_text,y
  jsr put
@@ -871,18 +906,9 @@ zero_words:
  rts
  .include "options-text.inc"
  .include "menu-text.inc"
- ; '.', ':' and '/' in the HUD font's style, for tiles $7AA, $7AD and $7B9:
- ; planes 0 and 1, row by row (colours 1-3 as in the font's own glyphs).
-menu_glyphs:
- ; '.': the bottom two rows of the HUD font's '1' stem, three pixels wide.
- .db $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$20,$18,$18,$38,$00,$00
- ; ':': the same dot at rows 1-2 (shaded like the font's top rows) and 4-5.
- .db $00,$00,$38,$00,$38,$00,$00,$00,$20,$18,$20,$18,$00,$00,$00,$00
- ; '/': a three-pixel diagonal, shaded like the '1' stem row by row.
- .db $0e,$00,$1c,$00,$1c,$00,$38,$00,$40,$30,$40,$30,$60,$e0,$00,$00
 menu_end:
- ; The menu's claim in bank $46 (src/modules.json): $4400-$4AFF. The rest
- ; of the unowned gap, $4B00-$4FFF, stays free.
+ ; The menu's claim in bank $46 (src/modules.json): $4400-$4AFF (src/bram
+ ; owns $4B00-$4FFF).
  .if (menu_end > $4b00)
  .fail
  .endif

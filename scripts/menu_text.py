@@ -13,7 +13,11 @@ character:
 - `@` lines: the values of the option fields after STAGE, in field order:
   the draft-byte bits the field owns, then `value=TEXT` choices in
   Left/Right order (`_` is a space in TEXT). Adding a choice is adding one
-  `value=TEXT` item to its line.
+  `value=TEXT` item to its line. The first choice of each line is the
+  option's default: the reset row sets them all (DEFAULT_DRAFT).
+- `!` line: the text of the reset row's field (the one run of '!' in the
+  window, as wide as the text; `_` a space). It is selectable after the
+  option rows and blinks while selected.
 - `?` line: the texts of the save status field (the one run of '?' in the
   window; not selectable), one per status of src/bram/main.asm (ST_NONE
   first), `_` a space. The window must hold exactly one such field, wide
@@ -47,30 +51,42 @@ def encode(text, what):
 
 def box(lines):
     """(window bytes, [(row, column, width)] value fields, the status field
-    (row, column, width)) for the `|` lines."""
+    and the reset field (row, column, width)) for the `|` lines."""
     if len(lines) != BOX_ROWS:
         raise ValueError(f'The menu window needs {BOX_ROWS} lines, found {len(lines)}')
-    data, fields, status = bytearray(), [], []
+    data, fields, status, reset = bytearray(), [], [], []
     for row, line in enumerate(lines):
         if len(line) != BOX_WIDTH + 2 or not line.endswith('|'):
             raise ValueError(f'Window line {row + 1} must be {BOX_WIDTH} columns between bars: {line!r}')
         line = line[1:-1]
         column = 0
         while column < BOX_WIDTH:
-            if line[column] in '#?':
+            if line[column] in '#?!':
                 end = column
                 while end < BOX_WIDTH and line[end] == line[column]:
                     end += 1
-                (fields if line[column] == '#' else status).append((row, column, end - column))
+                {'#': fields, '?': status, '!': reset}[line[column]].append((row, column, end - column))
                 column = end
             else:
                 column += 1
-        data += encode(line.replace('#', ' ').replace('?', ' '), f'Window line {row + 1}')
+        data += encode(line.replace('#', ' ').replace('?', ' ').replace('!', ' '), f'Window line {row + 1}')
     if not fields or fields[0][2] != STAGE_WIDTH:
         raise ValueError(f'The first value field is STAGE, {STAGE_WIDTH} wide')
     if len(status) != 1:
         raise ValueError(f"The window needs exactly one save status field (a run of '?'), found {len(status)}")
-    return bytes(data), fields, status[0]
+    if len(reset) != 1:
+        raise ValueError(f"The window needs exactly one reset field (a run of '!'), found {len(reset)}")
+    return bytes(data), fields, status[0], reset[0]
+
+
+def reset_text(lines, width):
+    """The reset field's text, as wide as its field."""
+    if len(lines) != 1 or len(lines[0][1:].split()) != 1:
+        raise ValueError('The layout needs exactly one ! (reset field) line with one text')
+    text = lines[0][1:].strip().replace('_', ' ')
+    if len(text) != width:
+        raise ValueError(f'The reset text {text!r} must be as wide as its field ({width})')
+    return encode(text, 'The reset text')
 
 
 def statuses(lines, width):
@@ -124,16 +140,20 @@ def choices(lines, widths):
 def layout(text, version):
     """Everything the menu module needs, from menu.txt's text."""
     lines = [line for line in text.splitlines() if line and not line.startswith('#')]
-    window, fields, status = box([line for line in lines if line.startswith('|')])
+    window, fields, status, reset = box([line for line in lines if line.startswith('|')])
     bands = [line[1:].strip() for line in lines if line.startswith('=')]
     if len(bands) != 1:
         raise ValueError('The layout needs exactly one = (band) line')
     band_bytes, band_text = band(bands[0], version)
     rows = choices([line for line in lines if line.startswith('@')], [w for _, _, w in fields[1:]])
-    if any(not line.startswith(('|', '=', '@', '?')) for line in lines):
-        raise ValueError('Every line must start with |, =, @, ? or #')
+    if any(not line.startswith(('|', '=', '@', '?', '!')) for line in lines):
+        raise ValueError('Every line must start with |, =, @, ?, ! or #')
+    default = 0
+    for _, entries in rows:
+        default |= entries[0][0]
     return {'window': window, 'fields': fields, 'band': band_bytes, 'band_text': band_text,
-            'choices': rows, 'status': status,
+            'choices': rows, 'status': status, 'reset': reset, 'default': default,
+            'reset_text': reset_text([line for line in lines if line.startswith('!')], reset[2]),
             'status_texts': statuses([line for line in lines if line.startswith('?')], status[2])}
 
 
@@ -152,9 +172,16 @@ def generate(directory, version):
             text_at.append(len(text))
             text += label
         end.append(len(values))
+    reset_at = len(text)
+    text += menu['reset_text']
     if len(text) > 256 or len(values) > 255:
         raise ValueError('Option value texts exceed 256 bytes')
-    out = f'BOX_WIDTH = {BOX_WIDTH}\nBOX_ROWS = {BOX_ROWS}\nFIELDS = {len(fields)}\n'
+    # FIELDS counts STAGE and the option fields; the field tables hold one
+    # more entry, the reset field (row FIELDS), whose text is choice_text
+    # from RESET_TEXT_AT.
+    fields = fields + [menu['reset']]
+    out = f'BOX_WIDTH = {BOX_WIDTH}\nBOX_ROWS = {BOX_ROWS}\nFIELDS = {len(fields) - 1}\n'
+    out += f'RESET_TEXT_AT = {reset_at}\nDEFAULT_DRAFT = ${menu["default"]:02x}\n'
     out += 'box_text:\n'
     for row in range(BOX_ROWS):
         out += db(menu['window'][row * BOX_WIDTH:(row + 1) * BOX_WIDTH])
