@@ -142,6 +142,118 @@ def first_diff(a, b):
     return None if len(a) == len(b) else min(len(a), len(b))
 
 
+VBLANK_INC = 'FD1F'     # INC $12 in the vblank interrupt handler ($FCD7)
+WAIT_STZ = 'FD67'       # STZ $12 at the start of the wait-for-vblank routine ($FD67-$FD6F)
+FRAME_CLOCKS = 358995   # master clocks per frame (263 lines x 1365)
+
+
+def master_clock(game, tmp):
+    game.call('save_state_file', {'file_path': str(tmp)})
+    return int.from_bytes(Path(tmp).read_bytes()[1:9], 'little')
+
+
+def margin(runname, variant, start, frames):
+    """Replay with frame steps to boundary `start`, then run on with
+    breakpoints at the vblank handler's INC $12 and the wait routine's
+    STZ $12 and report the master clock of each stop. The input held at
+    `start` must stay constant for `frames` frames (checked by the caller).
+    Returns [(kind, clock, update counter, ryu x)] ."""
+    run = load_run(runname)
+    rom, enhanced, mode = VARIANTS[variant]
+    inputs = []
+    for count, buttons in run['segments']:
+        inputs += [frozenset(buttons)] * count
+    inputs += [frozenset()] * TAIL
+    log = OUT / 'work' / f'{runname}-{variant.replace(" ", "")}-margin'
+    tmp = log / 'clock.state'
+    events = []
+    with Game(EMULATOR, log) as game:
+        start_point(game, rom, seed_state(), enhanced)
+        if mode is None:
+            start_stage(game, run['stage'])
+        else:
+            pv.enter_stage(game, run['stage'], mode, 0)
+        for n in range(start):
+            game.press(set(inputs[n]))
+            game.checked_step(1)
+        game.press(set(inputs[start]))
+        base = master_clock(game, tmp)
+        for addr in (VBLANK_INC, WAIT_STZ):
+            game.call('set_breakpoint', {'address': addr.lower(), 'memory_area': 'cpu_addr', 'execute': True})
+        vblanks = 0
+        while vblanks <= frames:
+            game.call('debug_continue')
+            for _ in range(200000):
+                status = game.call('debug_get_status')
+                if status.get('paused'):
+                    break
+            else:
+                raise TimeoutError('no breakpoint hit')
+            pc = status['pc']
+            ram = game.read(0, 0xf00)
+            kind = {VBLANK_INC: 'vblank', WAIT_STZ: 'update-done'}.get(pc)
+            if kind is None:
+                raise RuntimeError(f'stopped at {pc}')
+            events.append((kind, master_clock(game, tmp) - base, ram[0], int.from_bytes(ram[0xe9e:0xea0], 'little')))
+            vblanks += kind == 'vblank'
+    return events
+
+
+def updates(events):
+    """Per completed update: (counter after it, clocks the update took from
+    its waking vblank, clocks left before the next vblank; negative = the
+    update ran past it, a lag frame)."""
+    rows, prev_done = [], None
+    vb = [e[1] for e in events if e[0] == 'vblank']
+    for kind, clock, counter, _ in events:
+        if kind != 'update-done':
+            continue
+        if prev_done is not None:
+            wake = min((v for v in vb if v > prev_done), default=None)
+            after = [v for v in vb if wake is not None and v > wake]
+            if wake is not None and after:
+                rows.append((counter, clock - wake, after[0] - clock))
+        prev_done = clock
+    return rows
+
+
+def end_frame(trace, stage):
+    """First frame of the stage-end transition (the update counter stops
+    there by design): a cinema flag, another stage, or 5-4's boss dead."""
+    for t in trace:
+        if t['master'] != 0 or t['stage'] != stage or (stage == 15 and t['boss'] == 0 and t['f'] > 100):
+            return t['f']
+    return len(trace)
+
+
+def stats(trace, stage):
+    d = deltas(trace)
+    end = end_frame(trace, stage)
+    lag = [i for i in range(1, end) if d[i] == 0]
+    dbl = [i for i in range(1, end) if d[i] > 1]
+    return {'frames': len(trace), 'end': end, 'lag': lag, 'double': dbl}
+
+
+def report(runs, variants):
+    lines = []
+    head = ['run', 'build / mode', 'frames', 'play frames', 'lag frames', 'double', 'first lag frames',
+            'first diff vs 1.11 ORIGINAL', 'first diff vs 1.10']
+    lines.append('| ' + ' | '.join(head) + ' |')
+    lines.append('|' + '---|' * len(head))
+    for run in runs:
+        stage = load_run(run)['stage']
+        tr = {v: json.loads(trace_path(run, v).read_text()) for v in variants if trace_path(run, v).exists()}
+        for v in variants:
+            if v not in tr:
+                continue
+            s = stats(tr[v], stage)
+            a = first_diff(tr['original'], tr[v]) if 'original' in tr and v != 'original' else None
+            b = first_diff(tr['v1.10'], tr[v]) if 'v1.10' in tr and v != 'v1.10' else None
+            lines.append(f"| {run} | {v} | {s['frames']} | {s['end']} | {len(s['lag'])} | {len(s['double'])} | "
+                         f"{', '.join(map(str, s['lag'][:6]))} | {'-' if a is None else a} | {'-' if b is None else b} |")
+    return '\n'.join(lines)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest='command', required=True)
@@ -151,12 +263,29 @@ def main():
     sv = sub.add_parser('survey')
     sv.add_argument('--runs', nargs='*')
     sv.add_argument('--variants', nargs='*')
+    mg = sub.add_parser('margin')
+    mg.add_argument('run')
+    mg.add_argument('variant')
+    mg.add_argument('start', type=int)
+    mg.add_argument('frames', type=int)
+    mg.add_argument('--raw', action='store_true')
+    sub.add_parser('report')
     args = parser.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
     if args.command == 'record':
         trace = record(args.run, args.variant)
         (OUT / 'traces').mkdir(exist_ok=True)
         trace_path(args.run, args.variant).write_text(json.dumps(trace))
+    elif args.command == 'margin':
+        events = margin(args.run, args.variant, args.start, args.frames)
+        if args.raw:
+            for kind, clock, c, x in events:
+                print(f'{kind:12s} +{clock:8d} clk  line {clock / 1365:7.1f}  counter {c}  ryu_x {x}')
+        for c, busy, left in updates(events):
+            print(f'{args.run} {args.variant:10s} update->counter {c:3d}  busy {busy:7d} clk ({busy / 1365:6.1f} lines)  '
+                  f'left {left:7d} clk ({left / 1365:6.1f} lines){"  OVERRUN" if left < 0 else ""}')
+    elif args.command == 'report':
+        print(report([p.stem for p in RUN_FILES], list(VARIANTS)))
     elif args.command == 'survey':
         runs = args.runs or [p.stem for p in RUN_FILES]
         survey(runs, args.variants or list(VARIANTS))
