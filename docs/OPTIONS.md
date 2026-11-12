@@ -53,6 +53,7 @@ menu's **LANGUAGE** row changes the same setting.
    PALETTE: ORIGINAL
    LANGUAGE: ENGLISH
    RESET OPTIONS: PRESS I
+
    RUN: OK  SELECT: CANCEL
    ```
 
@@ -212,7 +213,8 @@ flash cartridge), so the line says "backup memory" for all of them.
 
 | Text | Meaning | What to do |
 | --- | --- | --- |
-| `SETTINGS SAVED` | Before Run: the saved settings were found and loaded. After Run: the settings were saved and read back. | Nothing. |
+| `SETTINGS LOADED` | At power-on or reset: the saved settings were found and are in use. | Nothing. |
+| `SETTINGS SAVED` | After Run: the settings were saved and read back (or were saved already). | Nothing. |
 | `BACKUP MEMORY FOUND` | Backup RAM is there and formatted; no settings saved yet. | Press Run to save. |
 | `NO BACKUP MEMORY` | No backup RAM was found, or it is blank. Nothing was written (a blank, writable memory is formatted by the first Run and then shows SETTINGS SAVED). | See the platform notes below. Without backup RAM the game works as before, with the defaults at every start. |
 | `BACKUP MEMORY FULL` | The backup RAM has no room for the 26 bytes. Nothing was written. | Delete a save you no longer need in a backup manager. |

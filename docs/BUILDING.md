@@ -66,7 +66,7 @@ all equal (`uniform_rows`). `scripts/native_seams.py` is the development tool th
 chose each loop; the build does not run it.
 
 The in-game menu's text is also generated: `src/options/menu.txt` lays out
-the popup window as it appears (10 lines of 26 columns; `#` runs are the
+the popup window as it appears (11 lines of 25 columns; `#` runs are the
 value fields), the band line under the HUD (`{version}` from `VERSION`,
 `{credit}` with `GITHUB.COM/` only when the line fits 32 columns) and each
 option's values (`@` lines: draft bits, then `value=TEXT` choices), and

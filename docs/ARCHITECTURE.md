@@ -688,9 +688,9 @@ the exact previous palette (fade state, animated and enemy colours)
 restored on cancel: 1 KiB of backup the menu does not have; not done.
 
 Bank `$46` (1.11-dev): `$4000-$40FF` dispatch, `$4100-$41FF` the menu's
-status texts (`options`, 216 bytes, since the reset-row build), `$4200-$42FF`
+status texts (`options`, 207 bytes, since the reset-row build), `$4200-$42FF`
 unowned (256 bytes, still free), `$4300-$43FF` cinema
-sprite reset, `$4400-$4AFF` the menu (`options`, 1,677 bytes used to `$4A8C`), `$4B00-$4FFF`
+sprite reset, `$4400-$4AFF` the menu (`options`, 1,692 bytes used to `$4A9B`), `$4B00-$4FFF`
 the saved settings (`bram`, 962 bytes used to `$4EC1`; entries `$4B00`
 reset loader, `$4B03` save),
 `$5000-$53FF` palette code (926 bytes used), `$5400-$57FF` its GB DMG
@@ -763,10 +763,10 @@ no longer in the repository.
 Since 1.11-dev the menu is a popup window over the playfield; the HUD rows
 28-30 are never written. Select in gameplay (hook `$FF70`, unchanged open
 conditions `$2E63 = 0`, `$2201 != 0`) calls bank `$46` `$4400`
-(`src/options`, 1,677 bytes, `$4400-$4A8C`, of the claimed `$4400-$4AFF`,
+(`src/options`, 1,692 bytes, `$4400-$4A9B`, of the claimed `$4400-$4AFF`,
 since the reset-row build; to make room the three menu glyphs moved to
 `$584F-$587E`, after the renderer gate in the module's claim
-`$5840-$58FF`, and the save status texts to `$4100-$41D7`). Its layout and option
+`$5840-$58FF`, and the save status texts to `$4100-$41CE`). Its layout and option
 values are `src/options/menu.txt`, generated into `menu-text.inc` by
 `scripts/menu_text.py`.
 
@@ -778,16 +778,19 @@ values are `src/options/menu.txt`, generated into `menu-text.inc` by
   The hook's own conditions refuse area changes, fades and stage loads
   (`$2E63` counting down, `$2201` = 0) but let the death animation through,
   where the stage reload clears both sprite-table buffers.
-- **Window.** 26 x 10 cells in the HUD font (palette 15, `$F7xx`, opaque:
-  the font's colour-4 background), BAT rows 7-16 (screenshot y 106-185),
+- **Window.** 25 x 11 cells (26 x 10 before the reset row's blank line,
+  `v111-reset`) in the HUD font (palette 15, `$F7xx`, opaque:
+  the font's colour-4 background), BAT rows 7-17 (screenshot y 106-193),
   starting at BAT column `((BXR >> 3) + 3) & 63` with BXR the playfield's
-  `$2E4B/$2E4C`, so it sits at screen columns 3-28 (less the fine scroll).
+  `$2E4B/$2E4C`, so it sits at screen columns 3-27 (less the fine scroll).
   A row reaching BAT column 63 continues at column 0 (copied and drawn in
   two pieces). No frame: there is no audited tile space for frame graphics.
-- **Backup.** The 260 covered BAT words go to VRAM: rows 0-8 (234 words) to
+- **Backup.** The 275 covered BAT words go to VRAM: rows 0-9 (250 words) to
   the sprite-table buffer the game is building (`$7E00` or `$7F00`, chosen
-  by `$2B81` and the native table `$FAA2`), row 9 to the HUD font's blank
-  tiles `$7AB-$7AC` (`$7AB0-$7AC9`). The building buffer is free at the
+  by `$2B81` and the native table `$FAA2`), row 10 to the HUD font's blank
+  tiles `$7AB-$7AC` (`$7AB0-$7AC8`). (A 26-column window of 11 rows would
+  need 260 words in the 256-word buffer, or a row split between the two
+  places; so the eleventh row cost the window its blank last column.) The building buffer is free at the
   hook: the main loop (`$E061`) runs the update (which contains the hook)
   and then `$F8E0`, which writes all 64 entries (256 words; `$2E44` is 64)
   of that buffer and only then points the VDC's SATB register (`$13`) at it
@@ -820,11 +823,12 @@ values are `src/options/menu.txt`, generated into `menu-text.inc` by
   reloaded) and saves the settings to backup RAM when there is one
   ([saved settings](#saved-settings-backup-ram)), Select cancels. The
   window's top row shows the save status (`$2105`; one of the `?` line's
-  texts in `menu.txt`, 24 columns, plain statements such as `SETTINGS
+  texts in `menu.txt`, 23 columns, plain statements such as `SETTINGS
   SAVED` or `NO BACKUP MEMORY` since the reset-row build, before it the
   last row with `SAVE:` and a short name), drawn once when the window
   opens; a blank row parts it from the options. The texts are in bank
-  `$46` `$4100-$41FF` (options' third claim; 216 bytes). The menu returns once Select, Run, I and II are
+  `$46` `$4100-$41FF` (options' third claim; 207 bytes). A blank row parts
+  the reset row from the controls line, the window's last row. The menu returns once Select, Run, I and II are
   released. Rows: STAGE (22 entries), SMOOTH PARALLAX (bit 0 clear = ON),
   NO DAMAGE (bit 1), NES FIREWHEEL (bit 2), PALETTE (bits 3-5), LANGUAGE
   (`$3227`; draft bits 6-7), then RESET OPTIONS (row index `FIELDS`, 6;
@@ -905,12 +909,17 @@ open menu: 21 bytes below its entry); the watched margin ends at `$213F`.
   (`ERROR 5`, defaults) and is rewritten by the next Run.
 - **Status** in `$2105` (`ST_` values, the menu's status texts in
   `src/options/menu.txt` in the same order, `scripts/bram_image.py`
-  `STATUS_TEXT`: `NO BACKUP MEMORY`, `SETTINGS SAVED` (a load or a save:
-  one status), `BACKUP MEMORY FOUND`, `BACKUP MEMORY FULL`, `BACKUP MEMORY
-  ERROR n`): `NONE`, `OK`, `READY`, `FULL`,
+  `STATUS_TEXT`: `NO BACKUP MEMORY`, `SETTINGS SAVED`, `BACKUP MEMORY
+  FOUND`, `BACKUP MEMORY FULL`, `BACKUP MEMORY ERROR n`, `SETTINGS
+  LOADED`): `NONE`, `OK` (a Run saved, or found the settings saved
+  already; inside the module also the scan's "directory sound"), `READY`,
+  `FULL`,
   `ERROR 1` unformatted and not blank, `ERROR 2` directory not sound,
   `ERROR 3` an entry of our name with another length, `ERROR 4` not read
-  back, `ERROR 5` our entry's contents do not check out.
+  back, `ERROR 5` our entry's contents do not check out, `LOADED` (9,
+  since `v111-reset`; `OK` before) the reset read the settings. Only the
+  load path's final `lda #ST_LOADED` differs from the build before
+  (one operand byte, bank `$46` `$4CDE`).
 - **No backup RAM.** With no "HUBM" the save looks at bytes `$8001-$8012`:
   all alike and neither `$00` nor `$FF` is taken for an unmapped bank
   (`NONE`); otherwise a write test of byte `$8000` (two patterns, then its

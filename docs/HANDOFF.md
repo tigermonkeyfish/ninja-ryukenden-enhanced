@@ -51,15 +51,20 @@
   load as before); a **RESET OPTIONS** row (`PRESS I`, I or II) sets the
   draft to the power-on defaults (palette preview at once, STAGE kept; Run
   applies and saves, Select discards); the save status is a plain line at
-  the window's top (`SETTINGS SAVED`, `BACKUP MEMORY FOUND`, `NO BACKUP
+  the window's top (`SETTINGS LOADED` at power-on, `SETTINGS SAVED` after a Run, `BACKUP MEMORY FOUND`, `NO BACKUP
   MEMORY`, `BACKUP MEMORY FULL`, `BACKUP MEMORY ERROR n`) instead of
-  `SAVE: …` under the controls. Only the `options` module changed (its
-  status texts take the unowned bank `$46` `$4100-$41FF`; the glyphs moved
-  to `$584F-$587E`); `src/bram` is byte for byte `v111-final`'s. Build
-  `558fc5d2…c672` in `/workspace/roms/` as `Ninja Ryukenden - Enhanced v1.11-dev
-  (apocalypse, reset).pce` with a patch for each original and the
-  checklist copy `settings-save-hardware-checklist-apocalypse-reset-build.md`
-  (steps 1.8a-1.8b test the reset row). Emulator only
+  `SAVE: …` under the controls; a blank row between the reset row and the
+  controls line (the window is 25 x 11 since build "reset 2": an eleventh
+  26-column row would not fit the BAT backup). Only the `options` module
+  changed, and in `src/bram` one operand byte (the load's new status
+  `ST_LOADED` = 9; nothing of the reads, writes, scan, format or lock
+  changed). The status texts take the unowned bank `$46` `$4100-$41FF`;
+  the glyphs moved to `$584F-$587E`. Build `cec5f7b3…8059` in `/workspace/roms/` as `Ninja
+  Ryukenden - Enhanced v1.11-dev (apocalypse, reset 2).pce` with a patch
+  for each original and the checklist copy
+  `settings-save-hardware-checklist-apocalypse-reset-2-build.md` (steps
+  1.8a-1.8b test the reset row); it replaces `(apocalypse, reset)`
+  (`558fc5d2…c672`, 26 x 10, no blank row before the controls). Emulator only
   ([record](validation/v111-reset.md)); **waiting for the maintainer's
   look and hardware test**. The guide's menu screenshots still show the
   1.10 window.
