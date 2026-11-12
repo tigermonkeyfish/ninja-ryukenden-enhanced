@@ -316,6 +316,97 @@ def load_timing(rom, stage, bits, vce_log=None):
     return events
 
 
+def step_recording(game, hits, tmp, frame):
+    """One frame step; every stop at an armed breakpoint inside it is
+    recorded (frame, PC, master clock) and stepped over, then the step goes
+    on to the frame's end."""
+    while True:
+        if game.step(1) is not None:
+            return
+        pc = game.call('debug_get_status')['pc']
+        hits.append((frame, pc, master_clock(game, tmp)))
+        area = {'4006': MUSIC_ENTRY}.get(pc)
+        if area is None:
+            raise RuntimeError(f'unexpected stop at {pc}')
+        game.call('remove_breakpoint', {'address': f'{area:x}', 'memory_area': 'rom'})
+        game.call('debug_step_into')
+        game.call('set_breakpoint', {'address': f'{area:x}', 'memory_area': 'rom', 'execute': True})
+
+
+def e2e(mode, runname, rom, out):
+    """Power-on with backup RAM holding settings in `mode` (the menu never
+    opened), the title left with Run as comparison_video.boot does, the
+    game's own start into 1-1, then `runname`'s input from 1-1's first
+    update (stop at $8457, saved and reloaded). Records the per-frame trace
+    (as record) and every sound-driver command call ($38:$4006) with its
+    master clock, from power-on."""
+    import bram_image as bi
+    run = load_run(runname)
+    inputs = []
+    for count, buttons in run['segments']:
+        inputs += [frozenset(buttons)] * count
+    inputs += [frozenset()] * TAIL
+    log = OUT / 'work' / f'e2e-{mode.replace(" ", "")}'
+    tmp = log / 'clock.state'
+    bram = bi.image([bi.settings_entry(options=MODE_BITS[mode])])
+    hits, trace = [], []
+    with Game(EMULATOR, log) as game:
+        game.power_on(rom, bram)
+        game.call('set_breakpoint', {'address': f'{MUSIC_ENTRY:x}', 'memory_area': 'rom', 'execute': True})
+        previous, since, presses, pressed = None, 0, [200], False
+        for frame in range(1, 20000):
+            step_recording(game, hits, tmp, -frame)
+            since += 1
+            ram = game.read(0, 0x300)
+            master = bytes(ram[0x240:0x242])
+            if master != previous:
+                previous, since = master, 0
+            if master == b'\x01\x01' and since == 180 and not pressed:
+                presses.append(frame)
+                pressed = True
+            if master in (b'\x00\x00', b'\x01\x00') and since % 300 == 150:
+                presses.append(frame)
+            for p in presses:
+                if frame == p:
+                    game.call('controller_button', {'player': 1, 'button': 'run', 'action': 'press'})
+                elif frame == p + 2:
+                    game.call('controller_button', {'player': 1, 'button': 'run', 'action': 'release'})
+            if pressed and master[0] == 0 and frame > presses[-1] + 2:
+                break
+        else:
+            raise RuntimeError('gameplay not reached')
+        status = {'opt': game.read(0x100, 1)[0], 'save_status': game.read(0x105, 1)[0], 'boot_frames': frame}
+        # 1-1's first update
+        game.call('set_breakpoint', {'address': f'{FIRST_UPDATE_ROM:x}', 'memory_area': 'rom', 'execute': True})
+        while True:
+            pc = game.run_to(None, polls=400000)
+            if pc == '8457':
+                break
+            hits.append((0, pc, master_clock(game, tmp)))
+            game.call('remove_breakpoint', {'address': f'{MUSIC_ENTRY:x}', 'memory_area': 'rom'})
+            game.call('debug_step_into')
+            game.call('set_breakpoint', {'address': f'{MUSIC_ENTRY:x}', 'memory_area': 'rom', 'execute': True})
+        game.call('remove_breakpoint', {'address': f'{FIRST_UPDATE_ROM:x}', 'memory_area': 'rom'})
+        status['first_update'] = master_clock(game, tmp)
+        entered = log / 'entered.state'
+        game.call('save_state_file', {'file_path': str(entered)})
+        game.call('load_state_file', {'file_path': str(entered)})
+        game.held = set()
+        prev_vce = None
+        for n, buttons in enumerate(inputs):
+            game.press(set(buttons))
+            step_recording(game, hits, tmp, n)
+            ram = game.read(0, 0x2000)
+            vce = game.read(0, 1024, area=8)
+            trace.append({'f': n, 'c': ram[0], 'sat': hashlib.sha1(game.read(0, 512, area=6)).hexdigest()[:10],
+                          'vce': hashlib.sha1(vce).hexdigest()[:10], 'ryu': ram[0xe9e:0xeb8].hex(),
+                          'timer': ram[0xeda:0xede].hex(), 'stage': ram[0xe5f], 'area': ram[0xe60],
+                          'health': ram[0xead], 'cam': int.from_bytes(ram[0x20f:0x211], 'little'),
+                          'master': ram[0x240]})
+    out.write_text(json.dumps({'status': status, 'hits': hits, 'trace': trace}))
+    return status, hits, trace
+
+
 def updates(events):
     """Per completed update: (counter after it, clocks the update took from
     its waking vblank, clocks left before the next vblank; negative = the
@@ -392,6 +483,11 @@ def main():
     it.add_argument('start', type=int)
     it.add_argument('frames', type=int)
     it.add_argument('out')
+    ee = sub.add_parser('e2e')
+    ee.add_argument('--modes', nargs='*')
+    ee.add_argument('--run', default='1-1')
+    ee.add_argument('--rom', default=str(ROM_111))
+    ee.add_argument('--out', default=str(OUT / 'e2e'))
     lt = sub.add_parser('loadtime')
     lt.add_argument('--stages', nargs='*', type=int)
     lt.add_argument('--modes', nargs='*')
@@ -413,6 +509,22 @@ def main():
                   f'left {left:7d} clk ({left / 1365:6.1f} lines){"  OVERRUN" if left < 0 else ""}')
     elif args.command == 'itrace':
         itrace(args.run, args.variant, args.start, args.frames, args.out)
+    elif args.command == 'e2e':
+        folder = Path(args.out)
+        folder.mkdir(parents=True, exist_ok=True)
+        ref = None
+        for mode in args.modes or list(MODE_BITS):
+            status, hits, trace = e2e(mode, args.run, Path(args.rom), folder / f'{args.run}.{mode.replace(" ", "")}.json')
+            if ref is None:
+                ref = (status, hits, trace)
+            keys = ['c', 'sat', 'ryu', 'timer', 'stage', 'area', 'health', 'cam', 'master']
+            diff = next((i for i, (a, b) in enumerate(zip(ref[2], trace)) if any(a[k] != b[k] for k in keys)), None)
+            dh = [(h[0], h[2] - r[2]) for h, r in zip(hits, ref[1]) if h[2] != r[2] or h[0] != r[0]]
+            margins = [FRAME_CLOCKS - ((h[2] - VBLANK_PHASE) % FRAME_CLOCKS) for h in hits]
+            print(f"{mode:10s} $2100={status['opt']:02x} save status {status['save_status']} boot frames {status['boot_frames']} "
+                  f"first update {status['first_update'] - ref[0]['first_update']:+d} clk; sound commands {len(hits)} "
+                  f"(vs first mode: {len(ref[1])}), differing clocks {len(dh)} {dh[:4]}; min margin to next vblank "
+                  f"{min(margins) if margins else None}; first differing frame {diff} of {len(trace)}", flush=True)
     elif args.command == 'loadtime':
         stages = args.stages if args.stages is not None else list(range(22))
         modes = args.modes or list(MODE_BITS)

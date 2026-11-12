@@ -1133,7 +1133,9 @@ worker_gameplay:
  lda #$10
  sta LIVE
  lda PALETTE_LOCK
- bne worker_exit            ; locked: no upload at this vblank anyway
+ beq worker_unlocked
+ jmp worker_exit            ; locked: no upload at this vblank anyway
+worker_unlocked:
  lda PALETTE_STATE
  bmi worker_vce_mapped
  ; The VCE holds original colours (the mode was chosen, or a cinema or
@@ -1148,6 +1150,55 @@ worker_gameplay:
 worker_vce_mapped:
  and #LEFTOVER
  beq worker_convert
+ ; An entry the fallback left over (slot 0; it may run past colour 511 to
+ ; 0): split it at 511 into two entries the native upload's layout can
+ ; take (all 512 colours when the queue has no room), so the fast upload
+ ; carries it on.
+ lda PALETTE_STATE
+ and #$ff - LEFTOVER
+ sta PALETTE_STATE
+ lda QUEUE_INDEX_LO
+ asl a
+ sta W_INDEX
+ lda QUEUE_INDEX_HI
+ and #1
+ rol a
+ sta W_INDEX+1              ; 2 x first colour
+ lda #LOW(1024)
+ sec
+ sbc W_INDEX
+ sta W_LEFT
+ lda #HIGH(1024)
+ sbc W_INDEX+1
+ sta W_LEFT+1               ; bytes up to colour 511
+ cmp QUEUE_BYTES_HI
+ bcc worker_split
+ bne worker_convert
+ lda W_LEFT
+ cmp QUEUE_BYTES_LO
+ bcs worker_convert         ; it does not run past 511
+worker_split:
+ ldx QUEUE_COUNT
+ cpx #8
+ bcs worker_split_full
+ lda QUEUE_BYTES_LO
+ sec
+ sbc W_LEFT
+ sta QUEUE_BYTES_LO,x
+ lda QUEUE_BYTES_HI
+ sbc W_LEFT+1
+ sta QUEUE_BYTES_HI,x
+ stz QUEUE_INDEX_LO,x
+ stz QUEUE_INDEX_HI,x
+ inc QUEUE_COUNT
+ lda W_LEFT
+ sta QUEUE_BYTES_LO
+ lda W_LEFT+1
+ sta QUEUE_BYTES_HI
+ bra worker_convert
+worker_split_full:
+ jsr QUEUE_ALL
+ bra worker_convert
 worker_exit:
  ply
  plx

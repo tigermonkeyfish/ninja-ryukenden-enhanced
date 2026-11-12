@@ -1207,6 +1207,6 @@ fast_7:
  tia $6020,$0002,32
  rts
 fast_sky_end:
- .if (fast_sky_end > $5200)          ; bank $45 $5200-$5FFF: nes-palette
+ .if (fast_sky_end > $5120)          ; bank $45 $5120-$5FFF: nes-palette (palette-lag: $5120-$51FF, unused here)
  .fail
  .endif

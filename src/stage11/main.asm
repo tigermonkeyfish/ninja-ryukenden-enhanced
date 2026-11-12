@@ -118,8 +118,21 @@ nes_palette:
  ; out of line (nes_b_palette_loop) to keep this block short.
  lda $2100
  and #$20
- beq nes_palette_loop
- jmp nes_b_palette_loop
+ beq nes_palette_a
+ jmp nes_b_palette_peeled
+nes_palette_a:
+ ; Palette timing (palette-lag): NES-A reaches its loop 9 cycles after
+ ; Original's copy would end there, NES-B 15: the first two (three)
+ ; colour bytes are copied unrolled, 8 cycles faster each than a loop
+ ; pass, which pays for the difference with ldx and a pad, so every mode
+ ; reaches palette_written at the same cycle.
+ lda extra_palette_nes
+ sta $22a6
+ lda extra_palette_nes+1
+ sta $22a6+1
+ nop
+ sxy
+ ldx #2
 nes_palette_loop:
  lda extra_palette_nes,x
  sta $22a6,x
@@ -319,6 +332,16 @@ set_ports:
 copy_dispatch:
  jmp [$2029]
  ; NES-B's copy loop (from initialize), back to palette_written.
+nes_b_palette_peeled:
+ lda extra_palette_nes_b
+ sta $22a6
+ lda extra_palette_nes_b+1
+ sta $22a6+1
+ lda extra_palette_nes_b+2
+ sta $22a6+2
+ php
+ plp
+ ldx #3
 nes_b_palette_loop:
  lda extra_palette_nes_b,x
  sta $22a6,x

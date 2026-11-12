@@ -45,6 +45,21 @@ WINDOW = $2000              ; this bank runs in MPR2 ($4000), F2BE reads MPR3 ($
 IN_BANK45 = $80             ; a copy's high byte + $80: the copy is in bank $45
 ANIM_TABLE = $cf32          ; bank 3: the original animation set pointers
 
+ ; Palette timing (fast_unpack): colour \1 of a group, 37 cycles: its low
+ ; byte, then bit 8 from the group byte's top bit (shifted out), as the
+ ; native $F2FE-$F30F writes them.
+fu_colour .macro
+ ldy #\1 + 1               ; 2
+ lda [$29],y                ; 7
+ ldy #2 * \1               ; 2
+ sta [$2b],y                ; 7
+ cla                        ; 2
+ asl <$23                   ; 6
+ rol a                      ; 2
+ iny                        ; 2
+ sta [$2b],y                ; 7
+ .endm
+
  ; The two loaders' unpack calls (native: jsr $f2be), with bank $37 in MPR3.
  .bank 0
  .org $f1dc
@@ -153,141 +168,267 @@ nes_anim_end:
  ; twice the palette number when $F1C0 called). X and Y are kept, MPR3 is
  ; bank $37 again on return, <$19/<$1A as they came.
 nes_unpack:
- lda MASTER_STATE
- beq nes_unpack_gameplay
- jmp UNPACK
-nes_unpack_gameplay:
- phx
- phy
+ ; Palette timing (1.11-dev, palette-lag): every way from the hook through
+ ; here takes exactly the cycles of the Original way (the hook's 15 and the
+ ; native unpack $F2BE's), so an NES mode adds no time to a load. Every
+ ; path below reaches nu_pad's end at cycle 162 (counted from here, the
+ ; jsr not counted; HuC6280 cycles as Geargrafx's table), then fast_unpack
+ ; does the unpack with its first two groups of 8 colours NU_SPARE cycles
+ ; shorter than the native ones (docs/validation/palette-lag.md, "NES").
+ ; X and Y are kept, MPR3 is bank $37 again on return, <$19/<$1A as they
+ ; came; the colours as before (the NES copy where one exists, in
+ ; gameplay; else the original).
+ phx                        ; 3
+ phy                        ; 3
+ lda <$19                   ; 4
+ pha                        ; 3
+ lda <$1a                   ; 4
+ pha                        ; 3: 20
+ lda MASTER_STATE           ; 5
+ bne nu_cinema              ; 2: 27 (taken: 29)
  ; A sprite palette? Only $F1C0 unpacks from $7180 up.
- lda <$1a
- cmp #HIGH($7180)
- bcc set_lookup
- bne sprite_lookup
- lda <$19
- cmp #LOW($7180)
- bcc set_lookup
-sprite_lookup:
- lda <$22
- lsr a
- lda <$21
- ror a                      ; the palette number
- sec
- sbc #NES_SPRITE_FIRST
- cmp #NES_SPRITE_COUNT      ; (numbers below the first wrap above the count)
- bcs unpack_original_pop
- tax
- ldy nes_sprite_hi,x
- beq unpack_original_pop    ; no NES copy
- lda nes_sprite_lo,x
- bra unpack_nes
-set_lookup:
+ lda <$1a                   ; 4
+ cmp #HIGH($7180)           ; 2
+ bcc nu_set1                ; 2: 35 (taken: 37)
+ bne nu_sprite1             ; 2: 37 (taken: 39)
+ lda <$19                   ; 4
+ cmp #LOW($7180)            ; 2
+ bcc nu_set2                ; 2: 45 (taken: 47)
+ bra nu_sprite              ; 4: 49
+nu_set2:
+ bra nu_set                 ; 4: 51
+nu_cinema:
+ lda #DATA_BANK             ; 2: 31
+ ldx #18                    ; pad 131: 6 x 18 + 14 = 122
+ jsr nu_delay
+ nop                        ; 2
+ php                        ; 3
+ plp                        ; 4: 162
+ jmp nu_go
+nu_sprite1:
+ nop                        ; 2
+ nop
+ nop
+ nop
+ nop                        ; 10: 49
+nu_sprite:
+ lda <$22                   ; 4
+ lsr a                      ; 2
+ lda <$21                   ; 4
+ ror a                      ; 2: the palette number
+ sec                        ; 2
+ sbc #NES_SPRITE_FIRST      ; 2
+ cmp #NES_SPRITE_COUNT      ; 2: 67 (numbers below the first wrap above the count)
+ bcs nu_sprite_out          ; 2: 69 (taken: 71)
+ tax                        ; 2
+ ldy nes_sprite_hi,x        ; 5: 76
+ beq nu_sprite_none         ; 2: 78 (taken: 80)
+ lda nes_sprite_lo,x        ; 5: 83
+ sta <$19                   ; 4
+ tya                        ; 2
+ bmi nu_sprite_45           ; 2: 91 (taken: 93)
+ sta <$1a                   ; 4
+ lda #DATA_BANK             ; 2: 97
+ ldx #7                     ; pad 65: 56
+ jsr nu_delay
+ nop
+ php
+ plp                        ; 9: 162
+ jmp nu_go
+nu_sprite_45:
+ and #$7f                   ; 2
+ sta <$1a                   ; 4
+ lda #NES_BANK              ; 2: 101
+ ldx #6                     ; pad 61: 50
+ jsr nu_delay
+ nop
+ nop
+ php
+ plp                        ; 11: 162
+ jmp nu_go
+nu_sprite_out:
+ lda #DATA_BANK             ; 2: 73
+ ldx #11                    ; pad 89: 80
+ jsr nu_delay
+ nop
+ php
+ plp                        ; 9: 162
+ jmp nu_go
+nu_sprite_none:
+ lda #DATA_BANK             ; 2: 82
+ ldx #11                    ; pad 80: 80
+ jsr nu_delay               ; 162
+ jmp nu_go
+nu_set1:
+ nop                        ; 2
+ nop
+ nop
+ nop
+ nop
+ nop
+ nop                        ; 14: 51
+nu_set:
  ; A colour set: <$21 holds the set, and its table entry must name this
  ; source.
- lda <$21
- cmp #SETS
- bcs unpack_original_pop
- asl a
- asl a
- tax
- lda $6000,x
- cmp <$19
- bne unpack_original_pop
- lda $6001,x
- cmp <$1a
- bne unpack_original_pop
- ; NES-B takes its own copies (set_lookup_b).
- ldx <$21
- lda OPTIONS
- and #PALETTE_VARIANT
- bne set_lookup_b
- ; A variant of this set for the stage being loaded (3-2)?
- ldy STAGE
- cpy #SETS
- bcs set_copy
- txa
- cmp nes_variant_set,y
- bne set_copy
- lda nes_variant_lo,y
- pha
- lda nes_variant_hi,y
- tay
- pla
- bra unpack_nes
-set_copy:
- ldy nes_set_hi,x
- beq unpack_original_pop    ; no NES copy: title and cinema sets
- lda nes_set_lo,x
-unpack_nes:
+ lda <$21                   ; 4
+ cmp #SETS                  ; 2
+ bcs nu_set_out             ; 2: 59 (taken: 61)
+ asl a                      ; 2
+ asl a                      ; 2
+ tax                        ; 2
+ lda $6000,x                ; 5
+ cmp <$19                   ; 4
+ bne nu_set_other1          ; 2: 76 (taken: 78)
+ lda $6001,x                ; 5
+ cmp <$1a                   ; 4
+ bne nu_set_other2          ; 2: 87 (taken: 89)
+ ldx <$21                   ; 4
+ lda OPTIONS                ; 5
+ and #PALETTE_VARIANT       ; 2
+ bne nu_set_b               ; 2: 100 (taken: 102)
+ ; NES-A: a variant of this set for the stage being loaded (3-2)?
+ ldy STAGE                  ; 5
+ cpy #SETS                  ; 2
+ bcs nu_set_a_copy1         ; 2: 109 (taken: 111)
+ txa                        ; 2
+ cmp nes_variant_set,y      ; 5
+ bne nu_set_a_copy2         ; 2: 118 (taken: 120)
+ lda nes_variant_lo,y       ; 5
+ pha                        ; 3
+ lda nes_variant_hi,y       ; 5
+ tay                        ; 2
+ pla                        ; 4
+ bra nu_set_a_got           ; 4: 141
+nu_set_a_copy1:
+ nop                        ; 2
+ php                        ; 3
+ plp                        ; 4: 120
+nu_set_a_copy2:
+ ldy nes_set_hi,x           ; 5
+ beq nu_set_a_none          ; 2: 127 (taken: 129)
+ lda nes_set_lo,x           ; 5: 132
+ nop                        ; 2
+ php                        ; 3
+ plp                        ; 4: 141
+nu_set_a_got:
  ; A/Y = the NES copy in the $6000 window; Y + $80 marks bank $45, else
  ; it is in bank $37 (already in MPR3).
- tax
- lda <$19
- pha
- lda <$1a
- pha
- stx <$19
- tya
- bmi copy_in_bank45
- sta <$1a
- jsr UNPACK
- bra unpack_done
-copy_in_bank45:
- and #$7f
- sta <$1a
- lda #NES_BANK
- tam #3
- jsr UNPACK
- lda #DATA_BANK
- tam #3
-unpack_done:
- pla
- sta <$1a
- pla
- sta <$19
- ply
- plx
- rts
-unpack_original_pop:
- ply
- plx
-unpack_original:
- jmp UNPACK
-
+ sta <$19                   ; 4
+ tya                        ; 2
+ bmi nu_set_a_45            ; 2: 149 (taken: 151)
+ sta <$1a                   ; 4
+ lda #DATA_BANK             ; 2: 155
+ php                        ; 3
+ plp                        ; 4: 162
+ jmp nu_go
+nu_set_a_45:
+ and #$7f                   ; 2
+ sta <$1a                   ; 4
+ lda #NES_BANK              ; 2: 159
+ sxy                        ; 3: 162
+ jmp nu_go
+nu_set_a_none:
+ lda #DATA_BANK             ; 2: 131 (no NES copy: title and cinema sets)
+ ldx #1                     ; pad 31: 20
+ jsr nu_delay
+ nop
+ nop
+ php
+ plp                        ; 11: 162
+ jmp nu_go
+nu_set_out:
+ lda #DATA_BANK             ; 2: 63
+ ldx #13                    ; pad 99: 92
+ jsr nu_delay
+ php
+ plp                        ; 7: 162
+ jmp nu_go
+nu_set_other1:
+ lda #DATA_BANK             ; 2: 80
+ ldx #11                    ; pad 82: 80
+ jsr nu_delay
+ nop                        ; 2: 162
+ jmp nu_go
+nu_set_other2:
+ lda #DATA_BANK             ; 2: 91
+ ldx #8                     ; pad 71: 62
+ jsr nu_delay
+ nop
+ php
+ plp                        ; 9: 162
+ jmp nu_go
+nu_set_b:
  ; NES-B (X = the set): the variant for this stage or the set's copy, all
- ; in bank NES_B_BANK, unpacked as unpack_nes does for bank $45.
-set_lookup_b:
- ldy STAGE
- cpy #SETS
- bcs set_copy_b
- txa
- cmp nes_variant_set,y
- bne set_copy_b
- lda nes_b_variant_lo,y
- pha
- lda nes_b_variant_hi,y
- tay
- pla
- bra unpack_b
-set_copy_b:
- ldy nes_b_set_hi,x
- beq unpack_original_pop    ; no NES copy: title and cinema sets
- lda nes_b_set_lo,x
-unpack_b:
- tax
- lda <$19
- pha
- lda <$1a
- pha
- stx <$19
- sty <$1a
- lda #NES_B_BANK
- tam #3
- jsr UNPACK
- lda #DATA_BANK
- tam #3
- bra unpack_done
+ ; in bank NES_B_BANK.
+ ldy STAGE                  ; 5
+ cpy #SETS                  ; 2
+ bcs nu_set_b_copy1         ; 2: 111 (taken: 113)
+ txa                        ; 2
+ cmp nes_variant_set,y      ; 5
+ bne nu_set_b_copy2         ; 2: 120 (taken: 122)
+ lda nes_b_variant_lo,y     ; 5
+ pha                        ; 3
+ lda nes_b_variant_hi,y     ; 5
+ tay                        ; 2
+ pla                        ; 4
+ bra nu_set_b_got           ; 4: 143
+nu_set_b_copy1:
+ nop                        ; 2
+ php                        ; 3
+ plp                        ; 4: 122
+nu_set_b_copy2:
+ ldy nes_b_set_hi,x         ; 5
+ beq nu_set_b_none          ; 2: 129 (taken: 131)
+ lda nes_b_set_lo,x         ; 5: 134
+ nop                        ; 2
+ php                        ; 3
+ plp                        ; 4: 143
+nu_set_b_got:
+ sta <$19                   ; 4
+ sty <$1a                   ; 4
+ lda #NES_B_BANK            ; 2: 153
+ nop                        ; 2
+ php                        ; 3
+ plp                        ; 4: 162
+ jmp nu_go
+nu_set_b_none:
+ lda #DATA_BANK             ; 2: 133
+ ldx #1                     ; pad 29: 20
+ jsr nu_delay
+ nop
+ php
+ plp                        ; 9: 162
+ jmp nu_go
+nu_go:
+ ; 166 here. A = the bank holding [<$19].
+ tam #3                     ; 5
+ jsr fast_unpack            ; 7: 178
+ lda #DATA_BANK             ; 2
+ tam #3                     ; 5
+ pla                        ; 4
+ sta <$1a                   ; 4
+ pla                        ; 4
+ sta <$19                   ; 4
+ ply                        ; 4
+ plx                        ; 4
+ rts                        ; 7: 38 after fast_unpack
 
+nes_code_end:
+
+ ; Tables, the HUD words and variant sets; NES-B's set addresses.
+ .include "nes-tables.inc"
+ .include "nes-b-tables.inc"
+nes_tables_end:
+ .if (nes_tables_end > $4400)
+ .fail
+ .endif
+ .if (NES_SPRITE_FIRST + NES_SPRITE_COUNT > 256)
+ .fail
+ .endif
+
+ ; Bank $45 $5120-$51FF (palette-lag; stage61-upload's code ends at $5113,
+ ; guarded below $5120): the HUD colours.
+ .org $5120
  ; The HUD colours, in NES gameplay from nes_hud_colours, else from bank 1
  ; $83E5, written as the native routine does.
 nes_hud:
@@ -299,7 +440,36 @@ nes_hud:
  cmp #PALETTE_NES
  bne hud_native
  lda MASTER_STATE
- bne hud_native
+ bne hud_native_peeled
+ ; Palette timing (palette-lag): the NES way reaches here 5 cycles after
+ ; the Original way reaches hud_native (bne not taken 2, lda 5, bne 2,
+ ; against bne taken 4), so its first colour is written 7 cycles faster
+ ; than a loop pass (constants for inc/lda HUD_COUNTER, no inx/cpx/bne,
+ ; ldx #2 and a bra), less a nop: the same cycles as Original's.
+ lda #$f1                   ; 2 (inc HUD_COUNTER: 7, with the sta)
+ sta HUD_COUNTER            ; 5
+ lda nes_hud_colours        ; 5
+ sta NEW_COLOUR             ; 5
+ lda nes_hud_colours+1      ; 5 (inx, lda abs,x: 7)
+ sta NEW_COLOUR+1           ; 5
+ lda #$f1                   ; 2 (lda HUD_COUNTER: 5)
+ jsr SET_COLOUR
+ ldx #2                     ; 2 (inx)
+ nop                        ; 2 (cpx/bne: 6; bra 4 below)
+ bra hud_nes
+hud_native_peeled:
+ ; In a cinema the NES way reaches here 7 cycles after Original reaches
+ ; hud_native: the native first colour, 7 cycles faster (as above, no nop).
+ lda #$f1
+ sta HUD_COUNTER
+ lda HUD_TABLE
+ sta NEW_COLOUR
+ lda HUD_TABLE+1
+ sta NEW_COLOUR+1
+ lda #$f1
+ jsr SET_COLOUR
+ ldx #2
+ bra hud_native
 hud_nes:
  inc HUD_COUNTER
  lda nes_hud_colours,x
@@ -326,25 +496,111 @@ hud_native:
  cpx #14
  bne hud_native
  rts
-nes_code_end:
-
- ; Tables, the HUD words and variant sets; NES-B's set addresses.
- .include "nes-tables.inc"
- .include "nes-b-tables.inc"
-nes_tables_end:
- .if (nes_tables_end > $4400)
- .fail
- .endif
- .if (NES_SPRITE_FIRST + NES_SPRITE_COUNT > 256)
+nes_hud_end:
+ .if (nes_hud_end > $5200)
  .fail
  .endif
 
  ; The NES copies of the colour sets, then sprite palettes that did not fit
- ; bank $37: bank $45 $5200-$5FFF (stage61-upload ends before $5200).
+ ; bank $37: bank $45 $5200-$5FFF (stage61-upload ends before $5120).
  .org $5200
  .include "nes-sets.inc"
 nes_sets_end:
  .include "nes-sprites-45.inc"
+nes_sprites_45_end:
+
+ ; Palette timing: the native unpack ($F2BE, from its pha/phy on) with
+ ; the 8 colours of a group unrolled: the same RAM palette and zero-page
+ ; results, the same queue call ($F350), MPR3 holding [<$19]'s bank. A
+ ; group takes 363 cycles here, padded to the native 505, except the first
+ ; two, which are NU_SPARE (122) shorter: nes_unpack's lookup and banking
+ ; spend those 244 (and its own 16 over the native pha/phy and ply/plx/rts).
+ ; Called with X free (nes_unpack keeps the caller's X and Y).
+NU_SPARE = 122
+FU_COUNT = $37e9            ; RAM (src/palette's audited block): short groups left
+fast_unpack:
+ lda <$19                   ; the native $F2C0-$F2F1, cycle for cycle (110)
+ sta <$29
+ lda <$1a
+ sta <$2a
+ lda <$15
+ asl a
+ sta <$2b
+ lda <$16
+ rol a
+ sta <$2c
+ lda <$2b
+ clc
+ adc #$86
+ sta <$2b
+ lda #$22
+ adc <$2c
+ sta <$2c
+ lda <$17
+ sta <$21
+ lda <$18
+ sta <$22
+ lsr <$22
+ ror <$21
+ lsr <$22
+ ror <$21
+ lsr <$22
+ ror <$21
+ lda #2                     ; 2
+ sta FU_COUNT               ; 5: 117
+fu_group:
+ cly                        ; 2
+ lda [$29],y                ; 7: the group's bit-8 byte (first colour in bit 7)
+ sta <$23                   ; 4: 13
+ fu_colour 0
+ fu_colour 1
+ fu_colour 2
+ fu_colour 3
+ fu_colour 4
+ fu_colour 5
+ fu_colour 6
+ fu_colour 7                ; 8 x 37: 309 (13 + 296)
+ lda <$29                   ; the native $F316-$F32D (44): 353 (group cycles)
+ clc
+ adc #$09
+ sta <$29
+ cla
+ adc <$2a
+ sta <$2a
+ lda <$2b
+ clc
+ adc #$10
+ sta <$2b
+ cla
+ adc <$2c
+ sta <$2c
+ lda FU_COUNT               ; 5
+ beq fu_full                ; 2 (taken: 4)
+ dec FU_COUNT               ; 7
+ bra fu_padded              ; 4: 371 (the short pad, 122 - NU_SPARE, is 0)
+fu_full:
+ ldx #18                    ; 131: 6 x 18 + 14 = 122
+ jsr nu_delay
+ nop
+ php
+ plp                        ; 9: 492
+fu_padded:
+ dec <$21                   ; 6
+ beq fu_done                ; 2
+ jmp fu_group               ; 4: 505 (short groups 383) as the native
+                            ; bne's 4; the last group's beq (4) is 2 more
+                            ; than the native last bne (2), as every
+                            ; group's is: the pads above count it.
+fu_done:
+ jsr $f350                  ; the native unpack's queue call
+ rts
+
+ ; ldx #k / jsr nu_delay: 6 k + 14 cycles (k >= 1). X = 0 after.
+nu_delay:
+ dex                        ; 2
+ bne nu_delay               ; 4 (2)
+ rts                        ; 7
+
 nes_bank45_end:
  .if (nes_bank45_end > $6000)
  .fail
