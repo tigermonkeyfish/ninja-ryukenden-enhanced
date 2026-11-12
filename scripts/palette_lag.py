@@ -353,7 +353,7 @@ def e2e(mode, runname, rom, out):
     with Game(EMULATOR, log) as game:
         game.power_on(rom, bram)
         game.call('set_breakpoint', {'address': f'{MUSIC_ENTRY:x}', 'memory_area': 'rom', 'execute': True})
-        previous, since, presses, pressed = None, 0, [200], False
+        previous, since, presses, pressed, title = None, 0, [200], False, False
         for frame in range(1, 20000):
             step_recording(game, hits, tmp, -frame)
             since += 1
@@ -361,17 +361,19 @@ def e2e(mode, runname, rom, out):
             master = bytes(ram[0x240:0x242])
             if master != previous:
                 previous, since = master, 0
+            if master == b'\x01\x01':
+                title = True
             if master == b'\x01\x01' and since == 180 and not pressed:
                 presses.append(frame)
                 pressed = True
-            if master in (b'\x00\x00', b'\x01\x00') and since % 300 == 150:
+            if master in (b'\x00\x00', b'\x01\x00') and since % 300 == 150 and not title:
                 presses.append(frame)
             for p in presses:
                 if frame == p:
                     game.call('controller_button', {'player': 1, 'button': 'run', 'action': 'press'})
                 elif frame == p + 2:
                     game.call('controller_button', {'player': 1, 'button': 'run', 'action': 'release'})
-            if pressed and master[0] == 0 and frame > presses[-1] + 2:
+            if title and master[0] == 0 and frame > presses[-1] + 2:
                 break
         else:
             raise RuntimeError('gameplay not reached')
@@ -405,6 +407,59 @@ def e2e(mode, runname, rom, out):
                           'master': ram[0x240]})
     out.write_text(json.dumps({'status': status, 'hits': hits, 'trace': trace}))
     return status, hits, trace
+
+
+def busy_run(runname, variant, out):
+    """Per update, from a whole replay: the master clock of every vblank
+    handler's INC $12 ($FD1F) and of every wait's STZ $12 ($37C0 in RAM
+    since palette-lag, else $FD67), stepping frame by frame with the stored
+    input (breakpoint stops recorded and stepped over). Busy = STZ - the
+    INC $12 that woke the update; left = the next INC $12 - STZ."""
+    run = load_run(runname)
+    rom, enhanced, mode = VARIANTS[variant]
+    inputs = []
+    for count, buttons in run['segments']:
+        inputs += [frozenset(buttons)] * count
+    inputs += [frozenset()] * TAIL
+    log = OUT / 'work' / f'busy-{runname}-{variant.replace(" ", "")}'
+    tmp = log / 'clock.state'
+    points = [('rom', 0x1d1f, 'FD1F'), ('rom', 0x1d67, 'FD67'), ('cpu_addr', 0x37c0, '37C0')]
+    events = []
+    with Game(EMULATOR, log) as game:
+        start_point(game, rom, seed_state(), enhanced)
+        if mode is None:
+            start_stage(game, run['stage'])
+        else:
+            pv.enter_stage(game, run['stage'], mode, 0)
+        for area, addr, _ in points:
+            game.call('set_breakpoint', {'address': f'{addr:x}', 'memory_area': area, 'execute': True})
+        for n, buttons in enumerate(inputs):
+            game.press(set(buttons))
+            while game.step(1) is None:
+                pc = game.call('debug_get_status')['pc']
+                point = next(p for p in points if p[2] == pc)
+                events.append((n, pc, master_clock(game, tmp), game.read(0, 1)[0]))
+                game.call('remove_breakpoint', {'address': f'{point[1]:x}', 'memory_area': point[0]})
+                game.call('debug_step_into')
+                game.call('set_breakpoint', {'address': f'{point[1]:x}', 'memory_area': point[0], 'execute': True})
+    Path(out).write_text(json.dumps(events))
+    return events
+
+
+def busy_rows(events):
+    """[(counter after the update, busy, left)] from busy_run's events."""
+    rows, wake = [], None
+    incs = [e[2] for e in events if e[1] == 'FD1F']
+    for frame, pc, clock, counter in events:
+        if pc == 'FD1F':
+            if wake is None:
+                wake = clock
+            continue
+        if wake is not None:
+            nxt = next((c for c in incs if c > clock), None)
+            rows.append((frame, counter, clock - wake, None if nxt is None else nxt - clock))
+        wake = None
+    return rows
 
 
 def updates(events):
@@ -483,6 +538,10 @@ def main():
     it.add_argument('start', type=int)
     it.add_argument('frames', type=int)
     it.add_argument('out')
+    bz = sub.add_parser('busy')
+    bz.add_argument('run')
+    bz.add_argument('--variants', nargs='*')
+    bz.add_argument('--out', default=str(OUT / 'busy'))
     ee = sub.add_parser('e2e')
     ee.add_argument('--modes', nargs='*')
     ee.add_argument('--run', default='1-1')
@@ -509,6 +568,23 @@ def main():
                   f'left {left:7d} clk ({left / 1365:6.1f} lines){"  OVERRUN" if left < 0 else ""}')
     elif args.command == 'itrace':
         itrace(args.run, args.variant, args.start, args.frames, args.out)
+    elif args.command == 'busy':
+        folder = Path(args.out)
+        folder.mkdir(parents=True, exist_ok=True)
+        rows = {}
+        for v in args.variants or ['original', 'apocalypse', 'sms', 'gb dmg', 'nes-a', 'nes-b']:
+            rows[v] = busy_rows(busy_run(args.run, v, folder / f'{args.run}.{v.replace(" ", "")}.json'))
+        ref = rows.get('original')
+        for v, r in rows.items():
+            if v == 'original' or ref is None:
+                continue
+            d = [(b[0], b[2] - a[2]) for a, b in zip(ref, r) if a[1] == b[1]]
+            nonzero = [x for x in d if x[1]]
+            worst = max(d, key=lambda x: x[1], default=(None, 0))
+            print(f"{args.run} {v:10s} updates {len(r)} (ORIGINAL {len(ref)}); added busy: nonzero {len(nonzero)}, "
+                  f"max {worst[1]} clk at frame {worst[0]}, min {min((x[1] for x in d), default=0)}; "
+                  f"overruns {sum(1 for x in r if x[3] is not None and x[3] < 0)} (ORIGINAL "
+                  f"{sum(1 for x in ref if x[3] is not None and x[3] < 0)}); min left {min((x[3] for x in r if x[3] is not None), default=None)}", flush=True)
     elif args.command == 'e2e':
         folder = Path(args.out)
         folder.mkdir(parents=True, exist_ok=True)

@@ -408,6 +408,16 @@ set_palette:
  and #PALETTE_BITS
  cmp <SCRATCH
  beq palette_kept
+ ; Palette timing (palette-lag): the colours are queued only when the old
+ ; or the new mode is a mapped one (bit 4: GB DMG, HELL, SMS). Between
+ ; Original and NES-A/NES-B the VCE shows the RAM palette's colours as
+ ; they are either way (NES colours come with Run's stage restart), so a
+ ; full re-upload would change nothing on screen and only cost the restart
+ ; time Original's Run does not spend.
+ lda OPTIONS
+ ora <SCRATCH
+ and #$10
+ pha
  lda <SCRATCH
  cmp #PALETTE_SMS
  bne palette_flagged
@@ -421,8 +431,11 @@ palette_flagged:
  ora <SCRATCH
  sta OPTIONS
  plp
+ pla
+ beq palette_unqueued
  jsr QUEUE_ALL
- jmp PALETTE_CONFIGURE      ; src/palette: WAITR and LIVE for the new mode
+palette_unqueued:
+ jmp PALETTE_CONFIGURE      ; src/palette: WAITR, ANIMR and LIVE for the new mode
 palette_kept:
  rts
 
