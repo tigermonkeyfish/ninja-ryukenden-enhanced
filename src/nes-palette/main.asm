@@ -44,6 +44,7 @@ SETS = 22
 WINDOW = $2000              ; this bank runs in MPR2 ($4000), F2BE reads MPR3 ($6000)
 IN_BANK45 = $80             ; a copy's high byte + $80: the copy is in bank $45
 ANIM_TABLE = $cf32          ; bank 3: the original animation set pointers
+ANIMR = $37ea               ; RAM (src/palette, palette-lag): the animation table choice
 
  ; Palette timing (fast_unpack): colour \1 of a group, 37 cycles: its low
  ; byte, then bit 8 from the group byte's top bit (shifted out), as the
@@ -127,32 +128,17 @@ hud_colours_end:
  .bank 3
  .org $ce98
  plx
- jsr nes_anim_table
+ jsr ANIMR                  ; palette-lag: src/palette's ANIMR in RAM ($37EA)
  nop
  .org $d400
- ; A/Y = the animation set pointer table: the NES copy in NES gameplay.
- ; X is kept.
-nes_anim_table:
- lda OPTIONS
- and #PALETTE_BITS
- cmp #PALETTE_NES
- bne anim_original
- lda MASTER_STATE
- bne anim_original
- lda OPTIONS
- and #PALETTE_VARIANT
- bne anim_nes_b
- lda #LOW(nes_anim)
- ldy #HIGH(nes_anim)
- rts
-anim_original:
- lda #LOW(ANIM_TABLE)
- ldy #HIGH(ANIM_TABLE)
- rts
-anim_nes_b:
- lda #LOW(nes_anim_b)
- ldy #HIGH(nes_anim_b)
- rts
+ ; Palette timing (palette-lag): the animation set table is chosen by
+ ; ANIMR, RAM code src/palette's configure writes for the mode (from these
+ ; two pointers): in Original and the mapped modes lda/ldy of $CF32 and a
+ ; pad, in NES-A/NES-B a test of $2240 (a cinema: $CF32) and lda/ldy of
+ ; this mode's table; 24 cycles to the rts in every mode and either way,
+ ; as Original's path through the routine that was here took.
+ .dw nes_anim               ; $D400: NES-A's table
+ .dw nes_anim_b             ; $D402: NES-B's table
  .include "nes-anim.inc"
  ; NES-B's table: its own records, lists equal to NES-A's shared.
  .include "nes-b-anim.inc"

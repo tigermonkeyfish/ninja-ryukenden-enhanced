@@ -148,6 +148,9 @@ BORDER_MAP = $37e2          ; RAM, 2 bytes: the border colour as the mode shows 
 W_LEFT = $37e4              ; RAM, 2 bytes: the worker's bytes left in an entry
 W_OVR = $37e6               ; RAM: nonzero = HELL's override applies (stage)
 W_INDEX = $37e7             ; RAM, 2 bytes: SHADOW byte offset of the chunk
+ANIMR = $37ea               ; RAM, 20 bytes: the animation table choice (src/nes-palette)
+ANIM_TABLE = $cf32          ; bank 3: the original animation set pointers
+ANIM_POINTERS = $7400       ; bank 3 $D400 in MPR3: NES-A's, NES-B's table
 SHADOW = $3c00              ; RAM, 1 KiB: the mapped colours, as $2286 is laid out
 W_SRC = $20                 ; zero page borrowed by the worker (saved, restored)
 W_DST = $22
@@ -1026,10 +1029,70 @@ configure_copy:
  stz LIVE
 configure_done:
  stz FASTOK
+ ; ANIMR: the animation set table for the mode (src/nes-palette's hook at
+ ; bank 3 $CE98 calls it). 24 cycles to its rts in every mode and way.
+ lda OPTIONS
+ and #PALETTE_HELL          ; bits 3-4
+ cmp #$08
+ beq configure_nes
+ ldx #anim_plain_end - anim_plain - 1
+configure_anim:
+ lda anim_plain,x
+ sta ANIMR,x
+ dex
+ bpl configure_anim
+ bra configure_end
+configure_nes:
+ ldx #anim_nes_end - anim_nes - 1
+configure_anim_nes:
+ lda anim_nes,x
+ sta ANIMR,x
+ dex
+ bpl configure_anim_nes
+ tma #3
+ pha
+ lda #3
+ tam #3
+ ldx #0
+ lda OPTIONS
+ and #$20                   ; NES-B
+ beq configure_nes_a
+ ldx #2
+configure_nes_a:
+ lda ANIM_POINTERS,x
+ sta ANIMR + 6
+ lda ANIM_POINTERS+1,x
+ sta ANIMR + 8
+ pla
+ tam #3
+configure_end:
  plx
  pla
  plp
  rts
+
+anim_plain:
+ .db $a9, LOW(ANIM_TABLE)   ; lda #<$CF32   2
+ .db $a0, HIGH(ANIM_TABLE)  ; ldy #>$CF32   2
+ .db $08, $28               ; php, plp      7
+ .db $ea, $ea, $ea          ; nop x 3       6
+ .db $60                    ; rts           7: 24
+anim_plain_end:
+anim_nes:
+ .db $ad, LOW(MASTER_STATE), HIGH(MASTER_STATE) ; lda $2240   5
+ .db $d0, $08               ; bne (a cinema)  2 (taken 4)
+ .db $a9, $00               ; lda #<table   2 (configure)
+ .db $a0, $00               ; ldy #>table   2 (configure)
+ .db $ea, $ea, $ea          ; nop x 3       6
+ .db $60                    ; rts           7: 24
+ .db $a9, LOW(ANIM_TABLE)   ; lda #<$CF32   2
+ .db $a0, HIGH(ANIM_TABLE)  ; ldy #>$CF32   2
+ .db $ea, $ea               ; nop x 2       4
+ .db $60                    ; rts           7: 24
+anim_nes_end:
+ .if (anim_nes_end - anim_nes <> 20)
+ .fail
+ .endif
 
 wait_plain:
  ; $FD67-$FD6F byte for byte, at WAITR.

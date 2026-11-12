@@ -208,6 +208,8 @@ def start_point(game, rom, seed, enhanced=False):
         # $FD67-$FD6F in RAM; the bytes are unused in the original and in
         # builds before it.
         game.write(0x17c0, bytes.fromhex('6412a512c90190fa60'))
+        # ... and ANIMR ($37EA), the animation table choice for Original.
+        game.write(0x17ea, bytes.fromhex('a932a0cf0828eaeaea60'))
 
 
 def start_stage(game, stage):

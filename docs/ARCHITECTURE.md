@@ -204,12 +204,15 @@ files to allocate free space.
 
 | CPU address | Meaning / constraint |
 | --- | --- |
-| `$2100` | Active options: bit 0 Original, bit 1 No Damage, bit 2 Use NES Firewheel logic, bits 3-5 palette mode (1.11-dev; [palette modes](#palette-modes): `$00` Original, `$08` NES-A, `$28` NES-B, `$10` GB DMG, `$18` HELL, `$38` SMS; `$20` and `$30` unassigned), bit 6 unassigned (zero), bit 7 set exactly when bits 3-5 are SMS (a copy the upload tests; SMS is `$B8` in `$2100`). All eight bits are settings: a saved-settings record stores the byte as it is. Whoever changes bits 3-5 writes bit 7 with them and, while a mapped mode is live, also queues all 512 colours (`$F394`). Zero = the defaults |
+| `$2100` | Active options: bit 0 Original, bit 1 No Damage, bit 2 Use NES Firewheel logic, bits 3-5 palette mode (1.11-dev; [palette modes](#palette-modes): `$00` Original, `$08` NES-A, `$28` NES-B, `$10` GB DMG, `$18` HELL, `$38` SMS; `$20` and `$30` unassigned), bit 6 unassigned (zero), bit 7 set exactly when bits 3-5 are SMS (a copy the upload tests; SMS is `$B8` in `$2100`). All eight bits are settings: a saved-settings record stores the byte as it is. Whoever changes bits 3-5 writes bit 7 with them and, while a mapped mode is live, also queues all 512 colours (`$F394`), and then calls `src/palette`'s configure entry (bank `$46` `$5B03`; palette-lag) so the main loop's wait matches the mode. Zero = the defaults |
 | `$2101` | The menu's draft while it is open: bits 0-5 the options (copied into `$2100` on Run, bits 6-7 of `$2100` kept), bits 6-7 the language (written to `$3227` on Run). Meaningless while the menu is closed |
 | `$2260-$2280` | Native palette upload queue: count, then 8 entries of byte count (low `$2261`, high `$2269`) and first colour (low `$2271`, high `$2279`); `$F350` adds one under the lock and drops it when 8 are queued; `$F394` replaces the queue with all 512 colours |
 | `$2281-$2283` | Border colour (written to VCE entry `$100` after each upload) / upload lock |
 | `$2286-$2685` / `$2686-$2A85` | RAM palette (512 words, the source of every upload) / its backup (`$F718` copies to it, `$F720` back; fades compute `$2286` from it) |
 | `$2102–$2103` | Entrance anchor |
+| `$37C0-$37DD` | `WAITR` (1.11-dev palette-lag): the main loop's vblank wait in RAM (bank 0 `$E061` and the menu call it instead of `$FD67`). Original, NES-A, NES-B: `$FD67-$FD6F` byte for byte; GB DMG, HELL, SMS: the same wait with the palette worker (`src/palette`, "Palette timing"). Written by the reset (`src/bram` trampoline -> bank `$46` `$5B00`) and by configure after a mode change; the harness writes the plain bytes after loading a state made from the original game |
+| `$37E0-$37E9` | Palette timing (palette-lag): `LIVE` `$37E0` ($10 = mapped gameplay seen by the worker), `FASTOK` `$37E1` (1 = every queued colour is converted), `BORDER_MAP` `$37E2/3`, worker scratch `$37E4-$37E8`, NES `FU_COUNT` `$37E9`. Zero after the RAM clear |
+| `$3C00-$3FFF` | `SHADOW` (palette-lag): the mapped modes' converted colours, laid out as `$2286`; the fast upload reads the queued ranges from here |
 | `$2104` | The palette module's state (1.11-dev SMS; before it `$2100` bits 5-7): bit 5 a left-over palette entry is queued, bit 6 the main loop was busy at the last vblank with palette work, bit 7 the VCE holds mapped colours (GB DMG, HELL or SMS); bits 0-4 zero. Not a setting: never saved; zero at reset (the RAM clear `$E023`), and clearing it costs at most one needless full re-upload |
 | `$2105` | Save status (1.11-dev, `src/bram` ST_ values 0-8: what the reset found in backup RAM, then what the last Run's save came to); the menu shows it. Not a setting; zero (NONE) from the RAM clear until the loader sets it |
 | `$2106–$213F` | Watched stack margin; not general-purpose spare RAM |
@@ -332,6 +335,31 @@ SMS. **Names:** the mode called HELL in the source (`hell.json`,
 `PALETTE_HELL`, `HELL_*`, `hell_*` scripts and validation records) is the
 one the player sees as **APOCALYPSE** (menu value and guides, since the
 reset-row build); same value `$18`, same colours.
+
+**Palette timing** (1.11-dev, branch `palette-lag`;
+[record](validation/palette-lag.md)). No palette mode may change when the
+game completes its updates. The mapped modes (GB DMG, HELL, SMS) no longer
+map colours in the vblank interrupt: the main loop's only vblank wait (bank
+0 `$E061`, native `jsr $FD67`) calls `WAITR` in RAM (`$37C0`), which in
+Original and NES is the native wait byte for byte; in a mapped mode it
+calls the worker (bank `$46` `$5Bxx`) when the queue holds work, after the
+update, and the worker converts the queued colours into `SHADOW`
+(`$3C00-$3FFF`). The vblank then runs `fast_upload`, the native upload
+(`$F3B5-$F421`) instruction for instruction reading `SHADOW`, reached in the
+same 37 cycles: the interrupt costs what Original's costs. The dispatch at
+`$FEBE` -> `palette_entry` tests `LIVE` (`$37E0`) instead of `$2100`; the
+locked path (13 cycles), the Original/NES path (37 to `$F3B5`) and an empty
+queue (46 to the `rts`) take Original's cycles in every mode. If the worker
+did not finish before the vblank (no idle time, no wait), the mapped upload
+of before is the fallback; a left-over entry it leaves is split by the
+worker at colour 511 and carried on by the fast upload. NES-A/B: the colour
+set and sprite palette loaders' hook (`nes_unpack`, bank `$45`) pads every
+lookup path to 162 cycles and unpacks with `fast_unpack` (the native format,
+8 colours unrolled, the first two groups 122 cycles shorter, the rest padded
+to the native 505), so every loader call takes exactly Original's cycles;
+the NES HUD colours (bank `$45` `$5120`, moved there) and 1-1's/2-2's NES
+palette copies peel their first colours to the same end. The menu's waits
+call `WAITR` too.
 
 | Value | Mode | Upload |
 | --- | --- | --- |
