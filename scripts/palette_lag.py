@@ -24,7 +24,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import palette_video as pv                                              # noqa: E402
-from comparison_video import Game, start_point, start_stage, make_seed, STAGE_NAMES  # noqa: E402
+from comparison_video import Game, start_point, start_stage, make_seed, STAGE_NAMES, NEXT_SEQUENCE  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 EMULATOR = Path('/workspace/build/toolchain/geargrafx/platforms/linux/geargrafx')
@@ -145,6 +145,7 @@ def first_diff(a, b):
 VBLANK_INC = 'FD1F'     # INC $12 in the vblank interrupt handler ($FCD7)
 WAIT_STZ = 'FD67'       # STZ $12 at the start of the wait-for-vblank routine ($FD67-$FD6F)
 FRAME_CLOCKS = 358995   # master clocks per frame (263 lines x 1365)
+VBLANK_PHASE = 350895   # master clock mod FRAME_CLOCKS at which the vblank interrupt is taken (+0-9 jitter)
 
 
 def master_clock(game, tmp):
@@ -196,6 +197,110 @@ def margin(runname, variant, start, frames):
                 raise RuntimeError(f'stopped at {pc}')
             events.append((kind, master_clock(game, tmp) - base, ram[0], int.from_bytes(ram[0xe9e:0xea0], 'little')))
             vblanks += kind == 'vblank'
+    return events
+
+
+def itrace(runname, variant, start, frames, out):
+    """Replay frame steps 0..start-1, then record every CPU instruction and
+    interrupt of the next `frames` frame steps (with their stored inputs)
+    to `out` (gzip, one trace line each, prefixed by the frame index)."""
+    import gzip
+    run = load_run(runname)
+    rom, enhanced, mode = VARIANTS[variant]
+    inputs = []
+    for count, buttons in run['segments']:
+        inputs += [frozenset(buttons)] * count
+    inputs += [frozenset()] * TAIL
+    log = OUT / 'work' / f'{runname}-{variant.replace(" ", "")}-itrace'
+    with Game(EMULATOR, log) as game, gzip.open(out, 'wt') as fh:
+        start_point(game, rom, seed_state(), enhanced)
+        if mode is None:
+            start_stage(game, run['stage'])
+        else:
+            pv.enter_stage(game, run['stage'], mode, 0)
+        for n in range(start):
+            game.press(set(inputs[n]))
+            game.checked_step(1)
+        game.call('set_trace_log', {'enabled': True, 'output': 'memory', 'memory_size': '1M',
+                                    'filters': ['cpu.instructions', 'cpu.irqs']})
+        pos = game.call('get_trace_log', {'count': 1}).get('total_logged', 0)
+        for n in range(start, start + frames):
+            game.press(set(inputs[n]))
+            game.checked_step(1)
+            end = game.call('get_trace_log', {'count': 1}).get('total_logged', 0)
+            while pos < end:
+                chunk = game.call('get_trace_log', {'start': pos, 'count': min(1000, end - pos)})
+                if chunk.get('overrun'):
+                    raise RuntimeError('trace ring overrun')
+                lines = chunk.get('lines') or []
+                if not lines:
+                    raise RuntimeError(f'trace read stalled at {pos}')
+                for ln in lines:
+                    fh.write(f'{n} {ln}\n')
+                pos += len(lines)
+            ram = game.read(0, 0x100)
+            fh.write(f'{n} #frame-end counter {ram[0]} f12 {ram[0x12]}\n')
+        game.call('set_trace_log', {'enabled': False})
+
+
+MUSIC_ENTRY = 0x38 * 0x2000 + 0x0006    # bank $38 $4006: the sound driver's command entry (main loop)
+FIRST_UPDATE_ROM = 0x2457               # bank 1 $8457: a stage's first update
+MODE_BITS = {'original': 0x00, 'apocalypse': 0x18, 'nes-a': 0x08, 'nes-b': 0x28, 'sms': 0xb8, 'gb dmg': 0x10}
+
+
+def load_timing(rom, stage, bits, vce_log=None):
+    """Level Select entry into `stage` with $2100 bits 3-5/7 = `bits` set
+    before the load (the native stage load, no menu). Returns the master
+    clock (from the debugger's request) of every sound-driver command call
+    ($38:$4006) up to the stage's first update, and of that first update."""
+    log = OUT / 'work' / f'loadtime-{stage}-{bits:02x}'
+    tmp = log / 'clock.state'
+    with Game(EMULATOR, log) as game:
+        start_point(game, rom, seed_state(), True)
+        x = game.read(0x100, 1)[0]
+        game.write(0x100, bytes([(x & 0x47) | bits]))
+        # Let the mode settle (a mapped mode re-uploads every colour after
+        # the change) before the load: 60 updates, stopping at the hook.
+        game.call('set_breakpoint', {'address': '23f3', 'memory_area': 'rom', 'execute': True})
+        for _ in range(60):
+            game.run_to('83F3')
+        game.call('remove_breakpoint', {'address': '23f3', 'memory_area': 'rom'})
+        cpu = game.call('get_huc6280_status')
+        assert cpu['PC'] == '83F3', cpu
+        sp = int(cpu['S'], 16)
+        game.write(0x241, bytes([stage]))
+        game.write(0x247, bytes([NEXT_SEQUENCE[stage], 0]))
+        game.write(0xe65, bytes(22))
+        game.write(0xead, bytes([16]))
+        game.write(0x100 + sp - 1, bytes([0xf2, 0x83]))
+        game.reg('S', sp - 2)
+        game.reg('A', stage)
+        game.reg('PC', 0x8244)
+        if vce_log:
+            game.call('set_trace_log', {'enabled': True, 'output': 'memory', 'memory_size': '1M',
+                                        'filters': ['cpu.irqs', 'vce.registers']})
+            pos = game.call('get_trace_log', {'count': 1})['total_logged']
+        for addr in (MUSIC_ENTRY, FIRST_UPDATE_ROM):
+            game.call('set_breakpoint', {'address': f'{addr:x}', 'memory_area': 'rom', 'execute': True})
+        events = []
+        while True:
+            pc = game.run_to(None, polls=400000)
+            clock = master_clock(game, tmp)
+            kind = 'first-update' if pc == '8457' else 'sound-command'
+            events.append((kind, clock))
+            if kind == 'first-update':
+                break
+            game.call('remove_breakpoint', {'address': f'{MUSIC_ENTRY:x}', 'memory_area': 'rom'})
+            game.call('debug_step_into')
+            game.call('set_breakpoint', {'address': f'{MUSIC_ENTRY:x}', 'memory_area': 'rom', 'execute': True})
+        if vce_log:
+            end = game.call('get_trace_log', {'count': 1})['total_logged']
+            with open(vce_log, 'w') as fh:
+                while pos < end:
+                    chunk = game.call('get_trace_log', {'start': pos, 'count': min(1000, end - pos)})
+                    for line in chunk['lines']:
+                        fh.write(line + '\n')
+                    pos += len(chunk['lines'])
     return events
 
 
@@ -269,6 +374,16 @@ def main():
     mg.add_argument('start', type=int)
     mg.add_argument('frames', type=int)
     mg.add_argument('--raw', action='store_true')
+    it = sub.add_parser('itrace')
+    it.add_argument('run')
+    it.add_argument('variant')
+    it.add_argument('start', type=int)
+    it.add_argument('frames', type=int)
+    it.add_argument('out')
+    lt = sub.add_parser('loadtime')
+    lt.add_argument('--stages', nargs='*', type=int)
+    lt.add_argument('--modes', nargs='*')
+    lt.add_argument('--rom', default=str(ROM_111))
     sub.add_parser('report')
     args = parser.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
@@ -284,6 +399,23 @@ def main():
         for c, busy, left in updates(events):
             print(f'{args.run} {args.variant:10s} update->counter {c:3d}  busy {busy:7d} clk ({busy / 1365:6.1f} lines)  '
                   f'left {left:7d} clk ({left / 1365:6.1f} lines){"  OVERRUN" if left < 0 else ""}')
+    elif args.command == 'itrace':
+        itrace(args.run, args.variant, args.start, args.frames, args.out)
+    elif args.command == 'loadtime':
+        stages = args.stages if args.stages is not None else list(range(22))
+        modes = args.modes or list(MODE_BITS)
+        for stage in stages:
+            ref = None
+            for mode in modes:
+                ev = load_timing(Path(args.rom), stage, MODE_BITS[mode])
+                if ref is None:
+                    ref = ev
+                cells = []
+                for i, (kind, clock) in enumerate(ev):
+                    r = ref[i][1] if i < len(ref) and ref[i][0] == kind else None
+                    vb, into = divmod(clock - VBLANK_PHASE, FRAME_CLOCKS)
+                    cells.append(f"{kind[0]} vblank {vb} +{into}" + ('' if r is None else f" ({clock - r:+d})"))
+                print(f'stage {stage:2d} {mode:10s} ' + ' '.join(cells), flush=True)
     elif args.command == 'report':
         print(report([p.stem for p in RUN_FILES], list(VARIANTS)))
     elif args.command == 'survey':

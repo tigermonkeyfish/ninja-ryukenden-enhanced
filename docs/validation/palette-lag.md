@@ -107,3 +107,90 @@ that frame.
 - Which code costs the extra clocks (not diagnosed).
 - Other stored routes: `research/palette-video/2-2-firewheel.json` (NES Firewheel option) not run.
 - Real hardware; audio.
+
+## Diagnosis (palette-lag branch, second worker; emulator evidence)
+
+Tools added to `scripts/palette_lag.py`: `itrace RUN VARIANT START FRAMES OUT`
+(every CPU instruction and interrupt of FRAMES frame steps from START, gzip),
+`loadtime` (Level Select entry with the mode set and settled 60 updates
+before the load; master clock of each sound-driver command call `$38:$4006`
+and of the stage's first update `$8457`, per vblank). The vblank interrupt
+is taken at master clock 350,895 mod 358,995 (+0-9 jitter); the frame step
+of the harness ends at phase 0, i.e. **8,100 clocks after the vblank
+interrupt**.
+
+### (a) 3-2 frame 1032: the sound driver, not palette code
+
+Exact accounting from `itrace 3-2 * 1031 3` (each instruction charged its own
+clocks; update = waking vblank interrupt entry to `STZ $12`):
+
+| | main loop | waking vblank handler | other IRQs | busy | left before next vblank |
+|---|---|---|---|---|---|
+| ORIGINAL | 338,943 | 12,519 | 642 | 352,104 | +6,894 |
+| 1.10 | 338,919 | 12,291 | 651 | 351,861 | +7,134 |
+| NES-A | 339,045 | 20,484 | 639 | overrun | -1.2k |
+| SMS | 339,066 | 20,592 | 639 | overrun | -1.4k |
+
+The waking vblank handler by code page: palette code (`$FD13`, banks
+`$46`/`$3B`/`$F3xx`) costs the same within ~130 clocks in every mode
+(ORIGINAL 111+48 at `$46:$5000`/`$F3-$F4`, NES-A identical, SMS 267); the
+whole +7,965 is in the sound driver's tick (`$FD16` -> bank `$38`, pages
+`$45-$4F`, e.g. `$46xx` 0 -> 3,393, `$4Fxx` 855 -> 4,194). Main loop +102.
+
+Why the sound tick differs: the sound driver's state (zero page `$83`,
+`$3822-$3827`, `$38BB-$38E4` envelope counters) differs from ORIGINAL's at a
+fixed point (the `STZ $12` after replay step 500) in the menu routes of
+NES-A, NES-B, SMS and GB DMG for 3-2, and equals ORIGINAL's for APOCALYPSE,
+1.10 and the unpatched ROM: the music runs one driver tick off for the whole
+stage. Cause: after the menu's Run the stage restart issues the music
+command (`$38:$4006`, main loop) close to a vblank. ORIGINAL issues it
+2,292 clocks before vblank 111 of the route, APOCALYPSE 1,683 before
+(-609), SMS 17,511 after it, NES-A 39,015 after it: the extra CPU time between
+Run and that call (mapped uploads of the menu preview's left-over queue and
+of the restart's palettes in the vblanks; in NES-A the APOCALYPSE preview's
+upload and the NES colour-set lookups of the reload) moves the call across
+the vblank, so the driver's first tick of the new music comes one vblank
+later.
+
+Swap test (menu route of one mode, then `$2100` set to another mode's bits
+before frame 0, replay to 1120): SMS route with ORIGINAL bits -> lag at 1033
+and 1104; NES-A route with ORIGINAL bits -> lag at 1033 and 1104; ORIGINAL
+route with SMS bits ($B8) or GB DMG bits ($10) -> no lag. Level Select entry
+(no menu) with each of the six modes set before the load: the sound state at
+step 500 equals ORIGINAL's in all six. So in 3-2 the lost frames follow the
+route into the stage, not the palette mode played with; the palette modes'
+part is the extra CPU time they add before the music command.
+
+### (c) Stage-clear transitions: no lost frame
+
+`itrace 4-1 * 2485 5`: the update woken at frame 2488 has busy 237,561
+clocks in ORIGINAL and 260,046 in SMS (APOCALYPSE 260,052), left before the
+next vblank 121,434 and 98,952: no update overruns. The SMS/APOCALYPSE
+waking vblank handler costs 25,635 clocks (ORIGINAL 3,213): the mapped
+upload of the stage-clear fade step. The main loop's update counter
+(`INC $00` at `$E06C`, right after the wait) therefore runs after the frame
+step's end (vblank + 8,100) instead of before it, so the per-step counter
+shows 0 then 2. It is a sampling artefact of the step boundary, not a lost
+frame (NES-A/B use the native upload, 3,213 clocks, and show nothing).
+
+### Load timing (Level Select entry, mode set 60 updates before the load)
+
+| stage | mode | music command vs ORIGINAL | first update vs ORIGINAL |
+|---|---|---|---|
+| 3-2 | APOCALYPSE / SMS | +375 / +198 clk | +5,115 / +5,121 clk (same vblank) |
+| 3-2 | NES-A | +5,850 | 0 |
+| 1-1 | APOCALYPSE / SMS | +357 / +213 | +5,220 / +5,100 |
+| 1-1 | NES-A | +5,322 | 0 |
+
+With the mode set just before the load (no settling) the mapped modes'
+music command is +25k later (the mode change's full re-upload), NES +5.3k to
++5.8k. The ORIGINAL music command lands 49k (3-2) and 87k (1-1) clocks
+before the next vblank, so these loads do not flip; a load whose ORIGINAL
+margin is smaller than the mode's delay does.
+
+### Gameplay palette uploads (survey traces, 11 runs, gameplay frames)
+
+Frames whose VCE changed / colours changed: ORIGINAL 2,412 / 38,787
+(153 frames of 100+ colours), NES-A 1,976 / 33,635, APOCALYPSE 2,293 /
+26,003, SMS 2,120 / 14,821, GB DMG 1,916 / 13,088 (mapped modes cap their
+per-vblank upload, so their changes are spread over more, smaller frames).
