@@ -55,9 +55,10 @@ def trace_window_ok(trace, a, n):
             and len({x['area'] for x in w}) == 1 and len({x['lives'] for x in w}) == 1)
 
 
-def pick_window(trace, target, n):
+def pick_window(trace, target, n, wide=False):
     best = None
-    for i in range(max(0, target - 180), min(len(trace) - n, target + 181), 5):
+    lo, hi = (0, len(trace) - n + 1) if wide else (max(0, target - 180), min(len(trace) - n, target + 181))
+    for i in range(lo, hi, 5):
         if not trace_window_ok(trace, i, n):
             continue
         w = trace[i:i + n]
@@ -116,27 +117,49 @@ def main():
         assemble(args, windows)
 
 
+def first_mismatch(report):
+    """The earliest frame at which any panel differs from the Original panel."""
+    frames = [v[0] for fields in report['mismatches'].values() if isinstance(fields, dict)
+              for v in fields.values() if v[:-1]]
+    return min(frames) if frames else None
+
+
 def record_phase(args, clips, windows, seed):
     work = args.work
-    fonts = tuple(str(args.fonts / f) for f in ('SourceSansPro-Bold.ttf', 'SourceSansPro-Semibold.ttf', 'SourceSansPro-Regular.ttf'))
+    fonts = fonts_of(args.fonts)
     for name, runfile, fw, banner, target, n in clips:
         a, n = windows[name]
         run = json.loads(runfile.read_text())
         tail = 700 if name == '6-3' else 0     # audio for the end card to fade over
-        traces, dirs = {}, []
-        for mode in pv.MODES:
-            out = work / f'{name}-{mode.replace(" ", "")}'
-            audio = work / f'{name}.s16' if mode == 'original' else work / f'{name}-{mode.replace(" ", "")}.s16'
-            traces[mode] = pv.record(args.emulator, args.rom, seed, run, run['stage'], mode, fw, out,
-                                     [(a, a + n)], audio=audio, tail=tail)
-            dirs.append(out)
-            if mode != 'original':
-                audio.unlink(missing_ok=True)
-        report = sync_report(traces)
-        (work / f'{name}-sync.json').write_text(json.dumps(report, indent=1))
-        print(name, 'window', a, n, 'sync', report['summary'], flush=True)
-        if report['mismatched_frames']:
-            raise SystemExit(f'{name}: panels differ: {report}')
+        for attempt in range(3):
+            traces, dirs = {}, []
+            for mode in pv.MODES:
+                out = work / f'{name}-{mode.replace(" ", "")}'
+                audio = work / (f'{name}.s16' if mode == 'original' else f'{name}-{mode.replace(" ", "")}.s16')
+                traces[mode] = pv.record(args.emulator, args.rom, seed, run, run['stage'], mode, fw, out,
+                                         [(a, a + n)], audio=audio, tail=tail)
+                dirs.append(out)
+                if mode != 'original':
+                    audio.unlink(missing_ok=True)
+            report = sync_report(traces)
+            (work / f'{name}-sync.json').write_text(json.dumps(report, indent=1))
+            print(name, 'window', a, n, 'sync', report['summary'], flush=True)
+            if not report['mismatched_frames']:
+                break
+            f = first_mismatch(report)
+            print(f'{name}: panels first differ at frame {f} ({json.dumps(report["mismatches"])[:600]})', flush=True)
+            for d in dirs:
+                shutil.rmtree(d / 'frames', ignore_errors=True)
+            # Use a damage-free window that ends before the panels part.
+            base = traces['original'][:f]
+            new = (pick_window(base, min(a, f - n), n) or pick_window(base, min(a, f - n), n, wide=True)) if f and f > n else None
+            if new is None:
+                raise SystemExit(f'{name}: no window before frame {f}')
+            a = new
+            windows[name] = [a, n]
+            (work / 'windows.json').write_text(json.dumps(windows, indent=1))
+        else:
+            raise SystemExit(f'{name}: panels still differ')
         pv.compose_clip(dirs, a, n, banner, '', work / f'{name}.mkv', fonts, args.watermark, work / f'{name}-tmp')
         for d in dirs:
             shutil.rmtree(d / 'frames', ignore_errors=True)
@@ -156,9 +179,6 @@ def sync_report(traces):
     return {'frames': len(base), 'fields': SYNC_FIELDS, 'modes': list(traces), 'mismatches': bad,
             'mismatched_frames': bool(bad), 'summary': 'all six identical' if not bad else 'DIFFERENT'}
 
-
-if __name__ == '__main__':
-    main()
 
 
 def fonts_of(d):
@@ -191,17 +211,17 @@ def assemble(args, windows):
             ('Optional NES-style Fire Wheel', 2, 34, '0xf2d060', 728),
             ('Saves your settings to backup memory on supported systems', 2, 32, '0xf2d060', 772),
             (f'Version {version}  ·  Free patch for PC Engine / TurboGrafx-16', 2, 40, '0xf2d060', 830),
-            ('github.com/tigermonkeyfish/ninja-ryukenden-enhanced', 0, 42, 'white', 890),
+            ('github.com/tigermonkeyfish/ninja-ryukenden-enhanced', 0, 42, 'white', 880),
             None,
-            ('Development build, emulator recordings: hardware testing pending', 0, 30, '0xf2d060', 7000),
-            ('Gameplay and audio recorded in the Geargrafx emulator from scripted button-input replays', 2, 28, '0xc8c8d4', 1010)]
+            ('Development build, emulator recordings: hardware testing pending', 0, 30, '0xf2d060', 976),
+            ('Gameplay and audio recorded in the Geargrafx emulator from scripted button-input replays', 2, 28, '0xc8c8d4', 1018)]
     intro = [('NINJA RYUKENDEN ENHANCED', 0, 104, 'white', 300),
              ('Palette modes', 0, 64, '0xf2d060', 450),
              ('Six palettes, frame-synchronized, same button input', 2, 40, '0xc8c8d4', 640),
              (f'Version {version}', 2, 40, '0xf2d060', 720)]
     for kind, links in (('YouTube', 'youtube.com/@TigerMonkeyFish'),
                         ('X', 'youtube.com/@TigerMonkeyFish   ·   tigermonkeyfish.itch.io   ·   ko-fi.com/tigermonkeyfish')):
-        lines = [(links, 0, 34, 'white', 945) if c is None else c for c in card]
+        lines = [(links, 0, 34, 'white', 934) if c is None else c for c in card]
         lines = [c for c in lines if c[4] < 2000]
         pv.end_card(tmp / f'end-{kind}.png', args.banner, fonts, lines, tmp / f'e-{kind}')
     pv.end_card(tmp / 'intro.png', args.banner, fonts, intro, tmp / 'i')
@@ -268,3 +288,6 @@ def assemble(args, windows):
         print('wrote', target, flush=True)
     (work / 'build.json').write_text(json.dumps({'bounds': bounds, 'intro_frames': IN, 'game_frames': games, 'total_s': total_t,
                                                  'clips': {n: windows[n] for n in names}}, indent=1))
+
+if __name__ == '__main__':
+    main()
