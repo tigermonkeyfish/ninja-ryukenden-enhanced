@@ -247,7 +247,12 @@ def judge(seen, expect, control, reference_want=WANT_BYTES, seq_moves=True):
 
     def need(what, found, wanted):
         if found != wanted:
-            problems.append(f'{what}: {found!r}, expected {wanted!r}')
+            if isinstance(found, bytes) or isinstance(wanted, bytes):       # a memory image: digests
+                found, wanted = [x if x is None else f'{len(x)} bytes sha1 {hashlib.sha1(x).hexdigest()[:12]}'
+                                 for x in (found, wanted)]
+                problems.append(f'{what}: {found}, expected {wanted}')
+            else:
+                problems.append(f'{what}: {found!r}, expected {wanted!r}')
 
     boot, run = seen['boot'], seen['after_run']
     need('has backup RAM', seen['has_backup_ram'], expect['has_backup_ram'])
@@ -281,9 +286,11 @@ def judge(seen, expect, control, reference_want=WANT_BYTES, seq_moves=True):
     if difference:
         problems.append(f'the replay differs from the control at frame {difference[0]} in {difference[1]}')
     count, longest = stack_frames(seen['prints'], control['prints'])
+    offsets = [hex(a) for a in differing_addresses(seen['prints'], control['prints'])]
+    offsets = offsets[:12] + (['...%d in all' % len(offsets)] if len(offsets) > 12 else [])
     if count > STACK_FRAMES * len(facts) or longest > MAX_RUN or len(differing_addresses(seen['prints'], control['prints'])) > MAX_ADDRESSES or seen['prints'][-1]['ram'] != control['prints'][-1]['ram']:
         problems.append(f'work RAM differs from the control in {count} of {len(facts)} frames, '
-                        f'{longest} in a row, offsets {[hex(a) for a in differing_addresses(seen["prints"], control["prints"])]}')
+                        f'{longest} in a row, offsets {offsets}')
     return problems
 
 
