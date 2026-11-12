@@ -33,7 +33,7 @@ CODES = {' ': 0x9f, '-': 0x9a, '.': 0xaa, ':': 0xad, '/': 0xb9}
 CODES.update({chr(ord('A') + i): 0x80 + i for i in range(26)})
 CODES.update({str(i): 0xa0 + i for i in range(10)})
 
-BOX_WIDTH, BOX_ROWS = 26, 10
+BOX_WIDTH, BOX_ROWS = 25, 11
 BAND_WIDTH = 32
 STAGE_WIDTH = 5
 STATUS_COUNT = 9            # the ST_ values of src/bram/main.asm

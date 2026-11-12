@@ -1,23 +1,25 @@
 # The in-game menu (scripts/menu_text.py builds menu-text.inc from this).
 #
-# The popup window, 26 columns x 10 rows between the bars, drawn over the
-# playfield at screen columns 3-28, BAT rows 7-16. '#' runs are the value
+# The popup window, 25 columns x 11 rows between the bars, drawn over the
+# playfield at screen columns 3-27, BAT rows 7-17. '#' runs are the value
 # fields: STAGE, then one per option row (the @ lines below, in order). The
 # '!' run is the reset row's field (the ! line below): selectable after the
 # option rows; I or II there sets every option to its default (the first
 # value of each @ line). The '?' run is the save status field (the ? line
 # below; not selectable): the window's top line, a blank row from the
-# options and away from the controls line at the bottom.
-| ???????????????????????? |
-|                          |
-| STAGE: #####             |
-| SMOOTH PARALLAX: ###     |
-| NO DAMAGE: ###           |
-| NES FIREWHEEL: ###       |
-| PALETTE: ##########      |
-| LANGUAGE: ########       |
-| RESET OPTIONS: !!!!!!!   |
-| RUN: OK  SELECT: CANCEL  |
+# options; another blank row parts the options from the controls line at
+# the bottom.
+| ??????????????????????? |
+|                         |
+| STAGE: #####            |
+| SMOOTH PARALLAX: ###    |
+| NO DAMAGE: ###          |
+| NES FIREWHEEL: ###      |
+| PALETTE: ##########     |
+| LANGUAGE: ########      |
+| RESET OPTIONS: !!!!!!!  |
+|                         |
+| RUN: OK  SELECT: CANCEL |
 #
 # The band under the HUD (BAT row 31) while the menu is open, centred in 32
 # columns. {credit} is GITHUB.COM/TIGERMONKEYFISH when the line fits, else

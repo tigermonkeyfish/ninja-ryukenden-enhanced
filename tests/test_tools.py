@@ -876,7 +876,7 @@ class ReleaseTests(unittest.TestCase):
             (work / 'menu.txt').write_text(source)
             menu = generate(work, '1.11-dev')
             include = (work / 'menu-text.inc').read_text()
-        self.assertIn('BOX_WIDTH = 26\nBOX_ROWS = 10\nFIELDS = 6\n', include)
+        self.assertIn('BOX_WIDTH = 25\nBOX_ROWS = 11\nFIELDS = 6\n', include)
         self.assertEqual(len(menu['window']), BOX_WIDTH * BOX_ROWS)
         self.assertEqual([w for _, _, w in menu['fields']], [5, 3, 3, 3, 10, 8])
         # The dev version fits only without GITHUB.COM/; a release version with it.
@@ -909,31 +909,34 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(menu['default'], DEFAULTS[0] | DEFAULTS[1] << 6)
         self.assertIn('FIELDS = 6\nRESET_TEXT_AT = 102\nDEFAULT_DRAFT = $40\n', include)
         self.assertIn('field_row:\n .db 2,3,4,5,6,7,8\n', include)
-        for broken in (source.replace('| STAGE: #####             |', '| STAGE: ####              |'),  # STAGE width
-                       source.replace('| NO DAMAGE: ###           |', '| NO DAMAGE: ###            |'),  # 27 columns
+        for broken in (source.replace('| STAGE: #####            |', '| STAGE: ####             |'),  # STAGE width
+                       source.replace('| NO DAMAGE: ###          |', '| NO DAMAGE: ###           |'),  # 26 columns
                        source.replace('LANGUAGE', 'LANGUAGE!'),
                        source.replace('$10=GB_DMG', '$10=GB_DMG_PALETTE'),                         # wider than its field
                        source.replace('@ $04 $00=OFF $04=ON', '@ $04 $00=OFF $02=ON'),              # value outside its bits
                        source.replace('@ $04 $00=OFF $04=ON', '@ $02 $00=OFF $02=ON'),              # bits owned twice
                        source.replace('@ $04 $00=OFF $04=ON\n', ''),                                # a field without values
-                       source.replace('|                          |\n', '', 1),                     # nine rows
-                       source.replace('| ???????????????????????? |', '|                          |'),  # no status field
-                       source.replace('| ???????????????????????? |', '| ??????????? ???????????? |'),  # two
-                       source.replace('| ???????????????????????? |', '| ????????????????????     |'),  # ERROR 1 does not fit
+                       source.replace('|                         |\n', '', 1),                      # ten rows
+                       source.replace('| ??????????????????????? |', '|                         |'),  # no status field
+                       source.replace('| ??????????????????????? |', '| ??????????? ??????????? |'),  # two
+                       source.replace('| ??????????????????????? |', '| ????????????????????    |'),  # ERROR 1 does not fit
                        source.replace(' BACKUP_MEMORY_ERROR_5\n', '\n'),                            # a status without a text
                        source.replace('? NO_BACKUP_MEMORY', '? NO_BACKUP_MEMORY!'),                 # not in the HUD font
-                       source.replace('| RESET OPTIONS: !!!!!!!   |', '| RESET OPTIONS:           |'),  # no reset field
+                       source.replace('| RESET OPTIONS: !!!!!!!  |', '| RESET OPTIONS:          |'),  # no reset field
                        source.replace('\n! PRESS_I\n', '\n! PRESS_II\n'),                          # wider than its field
                        source.replace('\n! PRESS_I\n', '\n')):                                       # no reset text
             with self.assertRaises(ValueError):
                 layout(broken, '1.11')
+        # The window: 25 x 11 (since the reset-row build's second layout),
+        # a blank row between the reset row and the controls line.
+        self.assertEqual(menu['window'][9 * BOX_WIDTH:10 * BOX_WIDTH], bytes([CODES[' ']]) * BOX_WIDTH)
         # The save status: one field across the window's top row, a plain
         # text for each status of src/bram, in its order (bram_image's
         # STATUS_TEXT, which check_bram expects in the window).
         from bram_image import STATUS_TEXT
-        self.assertEqual(menu['status'], (0, 1, 24))
-        self.assertEqual(menu['status_texts'], [bytes(CODES[c] for c in text.ljust(24)) for text in STATUS_TEXT])
-        self.assertIn(f'STATUS_ROW = 0\nSTATUS_COL = 1\nSTATUS_WIDTH = 24\nSTATUS_COUNT = {len(STATUS_TEXT)}\n', include)
+        self.assertEqual(menu['status'], (0, 1, 23))
+        self.assertEqual(menu['status_texts'], [bytes(CODES[c] for c in text.ljust(23)) for text in STATUS_TEXT])
+        self.assertIn(f'STATUS_ROW = 0\nSTATUS_COL = 1\nSTATUS_WIDTH = 23\nSTATUS_COUNT = {len(STATUS_TEXT)}\n', include)
         self.assertNotIn('status_text', include)
 
 

@@ -19,8 +19,8 @@ LANGUAGE = 0x1227          # $3227: 0 Japanese, 1 English, 2 Chinese
 DRAFT = 0x0101             # $2101: menu settings before Run applies them (bits 5-6: language)
 ENGLISH = 0x20             # the draft's language bits for English
 TITLE_ROWS = (28, 88)      # logo and subtitle line
-MENU_ROWS = (106, 186)     # the popup window, BAT rows 7-16 (screenshot y = 8 x row + 50)
-MENU_COLUMNS = (16, 240)   # its screen columns 3-28, with a margin for the fine scroll
+MENU_ROWS = (106, 194)     # the popup window, BAT rows 7-17 (screenshot y = 8 x row + 50)
+MENU_COLUMNS = (16, 240)   # its screen columns 3-27, with a margin for the fine scroll
 SCREEN_ROWS = (18, 224)    # the visible display
 
 

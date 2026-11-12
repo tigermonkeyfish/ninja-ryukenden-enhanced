@@ -913,7 +913,8 @@ menu_end:
  .fail
  .endif
  ; The backup: BOX_ROWS-1 rows in one 256-word sprite-table buffer, the last
- ; row in the two tiles $7AB-$7AC (32 words).
+ ; row in the two tiles $7AB-$7AC (32 words). 25 x 11 since the reset row's
+ ; blank line: 250 words and 25; 26 x 11 would need 260 in the buffer.
  .if ((BOX_ROWS - 1) * BOX_WIDTH > 256)
  .fail
  .endif
