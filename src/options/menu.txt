@@ -35,7 +35,7 @@
 @ $01 $00=ON $01=OFF
 @ $02 $00=OFF $02=ON
 @ $04 $00=OFF $04=ON
-@ $38 $00=ORIGINAL $08=NES-A $28=NES-B $10=GB_DMG $18=APOCALYPSE $38=SMS
+@ $38 $00=ORIGINAL $18=APOCALYPSE $08=NES-A $28=NES-B $38=SMS $10=GB_DMG
 @ $c0 $40=ENGLISH $00=JAPANESE $80=CHINESE
 #
 # The reset row's field text ('_' is a space); it blinks while the row is

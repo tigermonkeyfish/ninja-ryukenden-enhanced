@@ -886,11 +886,12 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(len(menu['band']), 32)
         palette = menu['choices'][3]
         # PALETTE offers every mode, in the encoding of src/palette/main.asm:
-        # Original, NES-A and NES-B (src/nes-palette), GB DMG, APOCALYPSE
-        # (HELL in the source), SMS.
-        self.assertIn('\n@ $38 $00=ORIGINAL $08=NES-A $28=NES-B $10=GB_DMG $18=APOCALYPSE $38=SMS\n', source)
-        self.assertEqual((palette[0], [v for v, _ in palette[1]]), (0x38, [0x00, 0x08, 0x28, 0x10, 0x18, 0x38]))
-        for k, text in enumerate(['ORIGINAL', 'NES-A', 'NES-B', 'GB DMG', 'APOCALYPSE', 'SMS']):
+        # Left/Right order: Original, APOCALYPSE (HELL in the source), NES-A
+        # and NES-B (src/nes-palette), SMS, GB DMG; the values are $2100's
+        # (and the saved settings') as before the order changed.
+        self.assertIn('\n@ $38 $00=ORIGINAL $18=APOCALYPSE $08=NES-A $28=NES-B $38=SMS $10=GB_DMG\n', source)
+        self.assertEqual((palette[0], [v for v, _ in palette[1]]), (0x38, [0x00, 0x18, 0x08, 0x28, 0x38, 0x10]))
+        for k, text in enumerate(['ORIGINAL', 'APOCALYPSE', 'NES-A', 'NES-B', 'SMS', 'GB DMG']):
             text = text.ljust(10)
             self.assertEqual(palette[1][k][1], bytes(CODES[c] for c in text))
         # The language owns draft bits 6-7 (bits 0-5 are $2100's on Run).

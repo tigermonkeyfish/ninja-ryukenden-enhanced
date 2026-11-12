@@ -46,7 +46,7 @@ select  From a cold boot: exact_cycle in each of the 22 Level Select entries,
         band restored at its first update.
 options Each option row changed and accepted with Run, from 1-1: $2100 and
         $3227 afterwards; GB DMG shows the GB table's colours for the whole
-        RAM palette, HELL the HELL table's for entries 0-239 (with 1-1's
+        RAM palette, APOCALYPSE (HELL in the source) the HELL table's for entries 0-239 (with 1-1's
         override of $094) and the RAM colours for the rest, SMS the SMS table's for the whole RAM palette;
         NES-A and NES-B: the restarted 1-1 holds that variant's NES colours
         (src/nes-palette) in the RAM palette, uploaded unmapped (the VCE
@@ -57,8 +57,8 @@ options Each option row changed and accepted with Run, from 1-1: $2100 and
         each NES mode's colours exactly (after an NES mode, the original
         colours back in the RAM palette) and end with the same VCE as a
         stage start that never left Original. Cancel after changing
-        everything (from Original with NES-A, NES-B, GB DMG, HELL or SMS
-        highlighted, from GB DMG, HELL, SMS, NES-A and NES-B previewing
+        everything (from Original with NES-A, NES-B, GB DMG, APOCALYPSE or SMS
+        highlighted, from GB DMG, APOCALYPSE, SMS, NES-A and NES-B previewing
         other values) leaves the options and $3227 unchanged and is
         compared with the run without the menu for LONG frames.
 select  also checks, after a cold boot, that the LANGUAGE row reads
@@ -114,6 +114,22 @@ BOX_LEFT = int(re.search(r'^BOX_LEFT = (\d+)', SOURCE, re.M)[1])
 VERSION = (ROOT / 'VERSION').read_text().strip()
 MENU = layout((ROOT / 'src/options/menu.txt').read_text(), VERSION)
 HUD_WORDS = (28 * 64, 31 * 64 - 1)                 # BAT rows 28-30
+# The PALETTE row's values in Left/Right order (menu.txt; since the reset
+# row: ORIGINAL, APOCALYPSE, NES-A, NES-B, SMS, GB DMG) and the modes by
+# the names the cases use (APOCALYPSE is HELL in the source).
+PALETTE_ORDER = [value for value, _ in MENU['choices'][3][1]]
+MODE = {'original': 0x00, 'apocalypse': 0x18, 'nes-a': 0x08, 'nes-b': 0x28, 'sms': 0x38, 'gb dmg': 0x10}
+
+
+def palette_presses(start, end, way=None):
+    """The Right or Left presses that take the PALETTE row from mode name
+    `start` to `end`: `way` 'right' or 'left', or the shorter (Right on a
+    tie)."""
+    a, b, n = PALETTE_ORDER.index(MODE[start]), PALETTE_ORDER.index(MODE[end]), len(PALETTE_ORDER)
+    right, left = (b - a) % n, (a - b) % n
+    if way == 'right' or (way is None and right <= left):
+        return ['right'] * right
+    return ['left'] * left
 UPDATES = 20
 SAME_MUSIC = False          # --same-music: see exact_cycle
 STRICT = False              # --strict: timer-phase frames (compare_frames) fail too
@@ -835,14 +851,19 @@ def check_options(emulator, candidate, seed, output, original=None):
     work = Path(tempfile.mkdtemp(prefix='menu-options-', dir=output))
     results = {}
     nes = {variant: nes_expected(original, variant) for variant in ('a', 'b')}
-    # PALETTE values in Left/Right order: ORIGINAL, NES-A, NES-B, GB_DMG,
-    # HELL, SMS.
+    # PALETTE values in Left/Right order: PALETTE_ORDER. Each mode by Right
+    # from ORIGINAL, Left's wrap and Right's wrap, a mode by Left.
+    P = palette_presses
     cases = [('parallax off', 1, ['right'], 0x01, None), ('no damage on', 2, ['right'], 0x02, None),
-             ('nes firewheel on', 3, ['right'], 0x04, None), ('palette nes-a', 4, ['right'], 0x08, None),
-             ('palette nes-b', 4, ['right'] * 2, 0x28, None), ('palette gb dmg', 4, ['right'] * 3, 0x10, None),
-             ('palette hell', 4, ['right'] * 4, 0x18, None), ('palette sms', 4, ['right'] * 5, 0x38, None),
-             ('palette wraps left to sms', 4, ['left'], 0x38, None),
-             ('palette nes-a by left', 4, ['left'] * 5, 0x08, None),
+             ('nes firewheel on', 3, ['right'], 0x04, None),
+             ('palette nes-a', 4, P('original', 'nes-a', 'right'), 0x08, None),
+             ('palette nes-b', 4, P('original', 'nes-b', 'right'), 0x28, None),
+             ('palette gb dmg', 4, P('original', 'gb dmg', 'right'), 0x10, None),
+             ('palette apocalypse', 4, P('original', 'apocalypse', 'right'), 0x18, None),
+             ('palette sms', 4, P('original', 'sms', 'right'), 0x38, None),
+             ('palette wraps left to gb dmg', 4, ['left'], 0x10, None),
+             ('palette wraps right to original', 4, ['right'] * len(PALETTE_ORDER), 0x00, None),
+             ('palette nes-a by left', 4, P('original', 'nes-a', 'left'), 0x08, None),
              ('language japanese', 5, ['right'], 0x00, 0), ('language chinese', 5, ['left'], 0x00, 2)]
     for name, row, presses, bits, language in cases:
         with Game(emulator, work) as game:
@@ -851,7 +872,7 @@ def check_options(emulator, candidate, seed, output, original=None):
             entry = {'options': f'{ram[0x100]:#04x}', 'language': ram[0x1227], 'stage': ram[0xe5f]}
             entry['ok'] = (ram[0x100] & 0x3f == bits and ram[0x1227] == (1 if language is None else language)
                            and ram[0xe5f] == 0)
-            if row == 4:
+            if row == 4 and bits:
                 entry['mode_exact'] = mode_ok(game, ram, bits, nes)
                 entry['ok'] = entry['ok'] and entry['mode_exact']
                 if bits & 0x18 == 0x08:
@@ -865,18 +886,23 @@ def check_options(emulator, candidate, seed, output, original=None):
     # path must end with exactly its VCE; each accepted mode on the way must
     # show exactly its colours (mode_ok).
     R, L = 'right', 'left'
-    paths = {'original restored exactly (nes-a, original)': [[R], [L]],
-             'original restored exactly (nes-b, original)': [[R] * 2, [L] * 2],
-             'original restored exactly (gb dmg, original)': [[R] * 3, [L] * 3],
-             'original restored exactly (hell, original)': [[R] * 4, [L] * 4],
-             'original restored exactly (sms, original)': [[L], [R]],
-             'sms, hell, gb dmg, nes-b, nes-a, original': [[L]] * 6,
-             'nes-a, nes-b, gb dmg, hell, sms, original': [[R]] * 6,
-             'sms, gb dmg, original': [[L], [L, L], [L] * 3],
-             'gb dmg, sms, original': [[R] * 3, [R, R], [R]],
-             'nes-a, gb dmg, original': [[R], [R, R], [L] * 3],
-             'sms, nes-b, hell, nes-a, original': [[L], [L] * 3, [R, R], [L] * 3, [L]],
-             'nes-b, sms, nes-a, original': [[R, R], [L] * 3, [R, R], [L]]}
+
+    def path(*modes, way=None):
+        """Presses for each Run of a path through mode names from ORIGINAL."""
+        return [P(a, b, way) for a, b in zip(('original',) + modes, modes)]
+    paths = {'original restored exactly (nes-a, original)': path('nes-a', 'original'),
+             'original restored exactly (nes-b, original)': path('nes-b', 'original'),
+             'original restored exactly (gb dmg, original)': path('gb dmg', 'original'),
+             'original restored exactly (apocalypse, original)': path('apocalypse', 'original'),
+             'original restored exactly (sms, original)': path('sms', 'original'),
+             'left order: gb dmg, sms, nes-b, nes-a, apocalypse, original': [[L]] * 6,
+             'right order: apocalypse, nes-a, nes-b, sms, gb dmg, original': [[R]] * 6,
+             'sms, gb dmg, original': path('sms', 'gb dmg', 'original'),
+             'gb dmg, sms, original': path('gb dmg', 'sms', 'original'),
+             'apocalypse, gb dmg, original': path('apocalypse', 'gb dmg', 'original'),
+             'nes-a, gb dmg, original': path('nes-a', 'gb dmg', 'original'),
+             'sms, nes-b, apocalypse, nes-a, original': path('sms', 'nes-b', 'apocalypse', 'nes-a', 'original'),
+             'nes-b, sms, nes-a, original': path('nes-b', 'sms', 'nes-a', 'original')}
     runs = max(len(steps) for steps in paths.values())
     with Game(emulator, work) as game:
         to_level(game, candidate, seed)
@@ -909,18 +935,25 @@ def check_options(emulator, candidate, seed, output, original=None):
     def everything(steps):
         return [R, 'down', R, 'down', R, 'down', R, 'down'] + steps + ['down', R]
     for name, first, actions in (
-            ('cancel after changing everything, palette nes-a', None, everything([R])),
-            ('cancel after changing everything, palette nes-b', None, everything([R] * 2)),
-            ('cancel after changing everything, palette gb dmg', None, everything([R] * 3)),
-            ('cancel after changing everything, palette hell', None, everything([R] * 4)),
-            ('cancel after changing everything, palette sms', None, everything([L])),
-            ('cancel after changing everything, from GB DMG to HELL', [R] * 3, everything([R])),
-            ('cancel after changing everything, from GB DMG to NES-B', [R] * 3, everything([L])),
-            ('cancel after changing everything, from HELL to SMS', [R] * 4, everything([R])),
-            ('cancel after changing everything, from SMS to ORIGINAL', [L], everything([R])),
-            ('cancel after changing everything, from SMS to GB DMG', [L], everything([L, L])),
-            ('cancel after changing everything, from NES-A via NES-B to HELL', [R], everything([R] * 3)),
-            ('cancel after changing everything, from NES-B via NES-A to SMS', [R] * 2, everything([L] * 3))):
+            ('cancel after changing everything, palette nes-a', None, everything(P('original', 'nes-a'))),
+            ('cancel after changing everything, palette nes-b', None, everything(P('original', 'nes-b'))),
+            ('cancel after changing everything, palette gb dmg', None, everything(P('original', 'gb dmg'))),
+            ('cancel after changing everything, palette apocalypse', None, everything(P('original', 'apocalypse'))),
+            ('cancel after changing everything, palette sms', None, everything(P('original', 'sms'))),
+            ('cancel after changing everything, from GB DMG to APOCALYPSE', P('original', 'gb dmg'),
+             everything(P('gb dmg', 'apocalypse'))),
+            ('cancel after changing everything, from GB DMG to NES-B', P('original', 'gb dmg'),
+             everything(P('gb dmg', 'nes-b'))),
+            ('cancel after changing everything, from APOCALYPSE to SMS', P('original', 'apocalypse'),
+             everything(P('apocalypse', 'sms', 'left'))),
+            ('cancel after changing everything, from SMS to ORIGINAL', P('original', 'sms'),
+             everything(P('sms', 'original'))),
+            ('cancel after changing everything, from SMS to GB DMG', P('original', 'sms'),
+             everything(P('sms', 'gb dmg'))),
+            ('cancel after changing everything, from NES-A via NES-B to SMS', P('original', 'nes-a'),
+             everything(P('nes-a', 'sms', 'right'))),
+            ('cancel after changing everything, from NES-B via NES-A to APOCALYPSE', P('original', 'nes-b'),
+             everything(P('nes-b', 'apocalypse', 'left')))):
         with Game(emulator, work) as game:
             to_level(game, candidate, seed)
             if first:
@@ -986,13 +1019,17 @@ def check_reset(emulator, candidate, seed, output):
             menu_to(game, 0, [])
         plain = game.read(0, 1024, area=8)
     # The settings before the reset, set with one Run: (row, presses) steps.
-    everything_sms = [(1, [R]), (1, [R]), (1, [R]), (1, [L]), (1, [L])]     # parallax off, No Damage,
-    everything_apocalypse = [(1, [R]), (1, [R]), (1, [R]), (1, [R] * 4), (1, [R])]  # NES Firewheel; SMS/APOCALYPSE;
+    P = palette_presses
+    everything_sms = [(1, [R]), (1, [R]), (1, [R]), (1, P('original', 'sms')), (1, [L])]     # parallax off,
+    everything_apocalypse = [(1, [R]), (1, [R]), (1, [R]), (1, P('original', 'apocalypse')), (1, [R])]
+    #                                                       No Damage, NES Firewheel; SMS/APOCALYPSE;
     #                                                                       Chinese / Japanese
     starts = [('parallax off', [(1, [R])], 0x01, 1), ('no damage on', [(2, [R])], 0x02, 1),
-              ('nes firewheel on', [(3, [R])], 0x04, 1), ('palette nes-a', [(4, [R])], 0x08, 1),
-              ('palette nes-b', [(4, [R] * 2)], 0x28, 1), ('palette gb dmg', [(4, [R] * 3)], 0x10, 1),
-              ('palette apocalypse', [(4, [R] * 4)], 0x18, 1), ('palette sms', [(4, [L])], 0x38, 1),
+              ('nes firewheel on', [(3, [R])], 0x04, 1), ('palette nes-a', [(4, P('original', 'nes-a'))], 0x08, 1),
+              ('palette nes-b', [(4, P('original', 'nes-b'))], 0x28, 1),
+              ('palette gb dmg', [(4, P('original', 'gb dmg'))], 0x10, 1),
+              ('palette apocalypse', [(4, P('original', 'apocalypse'))], 0x18, 1),
+              ('palette sms', [(4, P('original', 'sms'))], 0x38, 1),
               ('language japanese', [(5, [R])], 0x00, 0), ('language chinese', [(5, [L])], 0x00, 2),
               ('everything, sms, chinese', everything_sms, 0x3f, 2),
               ('everything, apocalypse, japanese', everything_apocalypse, 0x1f, 0),
@@ -1068,20 +1105,21 @@ def check_reset(emulator, candidate, seed, output):
     for case, steps, bits, language, way, kwargs in (
             ('reset with II and run, from everything, sms, chinese', everything_sms, 0x3f, 2, (to_reset, []),
              {'button': 'II'}),
-            ('up from stage wraps to the reset row, from palette apocalypse', [(4, [R] * 4)], 0x18, 1, ([U], []), {}),
+            ('up from stage wraps to the reset row, from palette apocalypse', [(4, P('original', 'apocalypse'))], 0x18,
+             1, ([U], []), {}),
             ('stage changed before the reset is kept (2-1), from everything, sms, chinese', everything_sms, 0x3f, 2,
              ([R, R] + to_reset, []), {'expect_stage': 2}),
             ('stage changed after the reset is kept (1-2, down wraps to stage), from palette apocalypse',
-             [(4, [R] * 4)], 0x18, 1, (to_reset, [D, R]), {'expect_stage': 1}),
+             [(4, P('original', 'apocalypse'))], 0x18, 1, (to_reset, [D, R]), {'expect_stage': 1}),
             ('an option changed after the reset is kept (gb dmg), from everything, apocalypse, japanese',
-             everything_apocalypse, 0x1f, 0, (to_reset, [U, U, R, R, R]),
+             everything_apocalypse, 0x1f, 0, (to_reset, [U, U] + P('original', 'gb dmg')),
              {'expect_options': 0x10, 'expect_texts': defaults[:3] + ['GB DMG    '] + defaults[4:]})):
         results[case] = reset_case(case, steps, bits, language, way, **kwargs)
         print(case, results[case], flush=True)
     # Left and Right on the reset row change nothing; Run then keeps SMS.
     with Game(emulator, work) as game:
         to_level(game, candidate, seed)
-        set_up(game, [(4, [L])])                        # SMS
+        set_up(game, [(4, P('original', 'sms'))])
         open_menu(game)
         for button in to_reset + [R, L, R, R, L]:
             press(game, button)
@@ -1098,7 +1136,7 @@ def check_reset(emulator, candidate, seed, output):
     # The reset field blinks while selected, and pictures of the window.
     with Game(emulator, work) as game:
         to_level(game, candidate, seed)
-        set_up(game, [(4, [R] * 4)])                    # APOCALYPSE
+        set_up(game, [(4, P('original', 'apocalypse'))])                    # APOCALYPSE
         open_menu(game)
         c0 = box_column(game.read(0, 0x2000))
         entry = {'problems': [], 'palette_text': field_text(game, c0, 4), 'reset_text': reset_field_text(game, c0)}
@@ -1114,8 +1152,8 @@ def check_reset(emulator, candidate, seed, output):
                 (Path(output) / 'reset-menu-apocalypse-selected.png').write_bytes(game.screenshot())
                 shots += 1
         entry['palette_row_seen'] = sorted(seen)
-        press(game, D, after=0)
-        press(game, D, after=0)
+        press(game, D, after=1)
+        press(game, D, after=1)
         seen = set()
         for _ in range(40):
             game.step(1)
@@ -1142,9 +1180,9 @@ def check_reset(emulator, candidate, seed, output):
     for name, steps, actions in (
             ('cancel after reset, from everything, sms, chinese', everything_sms, to_reset + ['I']),
             ('cancel after reset, from everything, apocalypse, japanese', everything_apocalypse, to_reset + ['I']),
-            ('cancel after reset with II, from palette gb dmg', [(4, [R] * 3)], to_reset + ['II']),
-            ('cancel after reset, from palette nes-b', [(4, [R] * 2)], to_reset + ['I']),
-            ('cancel after reset and a stage change, from palette apocalypse', [(4, [R] * 4)],
+            ('cancel after reset with II, from palette gb dmg', [(4, P('original', 'gb dmg'))], to_reset + ['II']),
+            ('cancel after reset, from palette nes-b', [(4, P('original', 'nes-b'))], to_reset + ['I']),
+            ('cancel after reset and a stage change, from palette apocalypse', [(4, P('original', 'apocalypse'))],
              to_reset + ['I', D, R]),
             ('cancel after reset, from nothing changed', [], to_reset + ['I'])):
         with Game(emulator, work) as game:
@@ -1212,9 +1250,10 @@ def main():
     if 'runs' in parts:
         actions = None
         if args.preview:
-            # PALETTE stepped three times: NES-A and NES-B (colours kept), then GB DMG.
-            actions = ['down', 'right', 'down', 'right', 'down', 'right', 'down', 'right', 'right', 'right', 'down',
-                       'right', 'down']
+            # PALETTE stepped four times: APOCALYPSE, NES-A and NES-B (colours
+            # kept), then SMS.
+            actions = ['down', 'right', 'down', 'right', 'down', 'right', 'down', 'right', 'right', 'right', 'right',
+                       'down', 'right', 'down']
         if args.shots:
             args.shots.mkdir(parents=True, exist_ok=True)
         report['runs'] = check_runs(args.emulator, args.candidate, seed, args.every, args.output,
