@@ -194,3 +194,81 @@ Frames whose VCE changed / colours changed: ORIGINAL 2,412 / 38,787
 (153 frames of 100+ colours), NES-A 1,976 / 33,635, APOCALYPSE 2,293 /
 26,003, SMS 2,120 / 14,821, GB DMG 1,916 / 13,088 (mapped modes cap their
 per-vblank upload, so their changes are spread over more, smaller frames).
+
+## Fix design (palette-lag; emulator evidence, hardware untested)
+
+Goal: no palette mode may change when the game completes its updates. The
+design makes every mode run the same cycles as Original wherever the game
+does palette work, rather than spending fewer cycles somewhere else.
+
+**Mapped modes (GB DMG, APOCALYPSE/HELL, SMS).** Colours are converted in
+the main loop's idle time, not in the vblank interrupt.
+
+- The main loop's only vblank wait (bank 0 `$E061`, native `jsr $FD67`)
+  calls `WAITR` (`$37C0`, RAM). In Original, NES-A, NES-B it holds
+  `$FD67-$FD6F` byte for byte: identical instructions, identical cycles. In
+  a mapped mode, after the same `STZ $12`, `tst #$ff,$2260` / `bne` (10
+  cycles, a multiple of the native loop's 10, so the loop's exit after the
+  vblank interrupt lands on the same cycle as Original's) skips to the
+  native loop when the queue is empty; otherwise it maps bank `$46` and
+  calls the worker.
+- The worker (bank `$46` `$5Bxx`) sets `LIVE` (`$37E0`: $10 in gameplay, 0
+  in a cinema/title/ending), and when the palette is unlocked converts every
+  queued colour from `$2286` into `SHADOW` (`$3C00-$3FFF`, the same layout)
+  and the border into `BORDER_MAP`, checking `$12` before each colour; done,
+  it sets `FASTOK` (`$37E1`). The VCE holding original colours (a cinema or
+  the title ended, the mode was chosen) it queues all 512 first, as the old
+  upload did. A left-over entry the fallback left (it may wrap past colour
+  511) is split at 511 so the native layout can carry it.
+- The vblank dispatch (`palette_entry`) tests `LIVE` instead of `$2100`.
+  Locked: 13 cycles to the `rts` (as before). `LIVE` = 0: the native upload,
+  37 cycles to `$F3B5` (as before; the mode-change requeue as before).
+  `LIVE` = $10 and `FASTOK` = 1 (`dec FASTOK` clears it): `fast_upload`,
+  the native `$F3B5-$F421` instruction for instruction with the source base
+  `SHADOW` (`adc #$00/#$3C` for `adc #$86/#$22`) and the border from
+  `BORDER_MAP`, reached in 37 cycles: the vblank costs exactly Original's.
+  `FASTOK` = 0 with an empty queue: 46 cycles to the `rts`, Original's empty
+  upload. `FASTOK` = 0 with work: the mapped upload of before (fallback).
+- The menu's waits call `WAITR` too, so previews convert in idle time.
+- Picture: a mapped colour change now reaches the VCE at the same vblank
+  as Original's (before: at most 168 colours a vblank, the rest over the
+  next vblanks, 16 a vblank when left over).
+
+**NES-A / NES-B.** NES colours are other palette data loaded with the
+stage (unchanged); the loads now take Original's cycles exactly:
+
+- `nes_unpack` (the colour-set and sprite-palette loaders' hook, bank
+  `$45`): every lookup path is padded to 162 cycles, then `fast_unpack`
+  (bank `$45` tail) unpacks the same packed format with the 8 colours of a
+  group unrolled; its first two groups are 122 cycles shorter than the
+  native 505 (paying for the lookup and banking), the rest padded to 505.
+  So hook + unpack = Original's hook (15) + `$F2BE` for every count.
+- The NES HUD colours (moved to bank `$45` `$5120-$51FF`, unused tail of
+  stage61-upload's old claim, its guard lowered to `$5120`) and 1-1's / 2-2's
+  NES palette copies peel their first colours so every mode reaches the
+  same cycle.
+- The animation-table choice (bank 3 `$CE98`) calls `ANIMR` (`$37EA`, RAM)
+  that the palette module's configure writes per mode: 24 cycles to the
+  `rts` in every mode and way.
+
+**Configure.** `$5B03` (bank `$46`) writes `WAITR`, `ANIMR`, `LIVE`,
+`FASTOK` for `$2100`'s mode. Called by the reset (`src/bram`'s trampoline
+now `jsr $5B00`: the settings loader `$4B00`, then configure; A/X/Y/P kept)
+and by the menu's `set_palette` after any change of bits 3-5. The harness
+(`comparison_video.start_point`) writes Original's `WAITR`/`ANIMR` after
+loading a state made from the original game.
+
+## RAM audit (emulator evidence)
+
+`research/tools/palette-lag/ramaudit.py` (read/write watch, cpu addresses)
+on `$3234-$33FF`, `$3400-$37FF`, `$3C00-$3FFF`, on the original ROM and on
+the pre-fix 1.11-dev build: cold boot through the title and 3,000 frames of
+attract mode into 1-1 (watch armed after the reset's RAM clear), the 11
+stored runs each with a 1,500-frame tail (stage clears into their cinemas),
+and the 22 Level Select entries (200 frames right, 40 right+II, 200 left,
+300 idle). No access in any of the 34 scenarios on either ROM (positive
+control: the pad bytes `$2E55-$2E5E` stop at once). Not covered: the
+ending, Continue / Game Over, bosses not in the stored runs, and stages
+without a stored run beyond 740 frames. Static scan: absolute operands into
+`$3C00-$3FFF` exist in ROM bytes (data or code not reached in these
+scenarios cannot be ruled out); this is the open risk of the RAM claim.
