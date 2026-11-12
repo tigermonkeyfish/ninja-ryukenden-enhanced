@@ -80,7 +80,7 @@ def main():
                      'backup_ram_unchanged': game.backup_ram() == image}
             print(tag, found, flush=True)
             assert ram[0x100] == options, 'the mode did not come from backup RAM'
-            assert ram[0x1227] == 1 and ram[0x105] == bram_image.OK and found['backup_ram_unchanged'], found
+            assert ram[0x1227] == 1 and ram[0x105] == bram_image.LOADED and found['backup_ram_unchanged'], found
             trans.run_case(game, rec, name)
             end = game.read(0, 0x2000)
             run = load_run(name)

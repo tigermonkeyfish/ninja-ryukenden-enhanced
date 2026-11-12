@@ -53,7 +53,8 @@ FORMAT_VERSION = 1
 NAME_FIRST = $4e            ; "N", the first character of our entry's name
 
 ST_NONE = 0                 ; no "HUBM": no backup RAM, or blank and not writable
-ST_OK = 1                   ; reset: settings loaded; Run: settings saved (read back)
+ST_OK = 1                   ; Run: settings saved (read back, or already there);
+                            ; inside the module also scan's "directory sound"
 ST_READY = 2                ; reset: formatted, no settings yet, room for them
 ST_FULL = 3                 ; no settings entry and no room for one: nothing written
 ST_UNFORMATTED = 4          ; Run: no "HUBM" and not blank: nothing written
@@ -62,7 +63,8 @@ ST_SIZE = 6                 ; an entry of our name with another length: nothing 
 ST_VERIFY = 7               ; Run: what was written did not read back
 ST_DATA = 8                 ; reset: our entry does not check out (sum, version, values):
                             ; defaults kept; the next Run rewrites it
-ST_COUNT = 9
+ST_LOADED = 9               ; reset: settings loaded (since v111-reset; before, ST_OK)
+ST_COUNT = 10
 
 ; Zero page borrowed; pushed and restored by `service`.
 ZP_FIRST = $22
@@ -427,7 +429,7 @@ load_sized:
  sta LANGUAGE
  lda <LENGTH
  sta OPTIONS
- lda #ST_OK
+ lda #ST_LOADED
  rts
 load_bad:
  lda #ST_DATA
@@ -730,6 +732,6 @@ bram_end:
  .if (bram_end > $5000)
  .fail
  .endif
- .if (ST_COUNT <> 9)        ; the menu's status texts (src/options/menu.txt)
+ .if (ST_COUNT <> 10)       ; the menu's status texts (src/options/menu.txt)
  .fail
  .endif

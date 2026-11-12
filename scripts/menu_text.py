@@ -36,7 +36,7 @@ CODES.update({str(i): 0xa0 + i for i in range(10)})
 BOX_WIDTH, BOX_ROWS = 25, 11
 BAND_WIDTH = 32
 STAGE_WIDTH = 5
-STATUS_COUNT = 9            # the ST_ values of src/bram/main.asm
+STATUS_COUNT = 10           # the ST_ values of src/bram/main.asm
 CREDITS = ('GITHUB.COM/TIGERMONKEYFISH', 'TIGERMONKEYFISH')
 # Draft bits the option rows may own: bits 0-5 are copied to $2100 on Run,
 # bits 6-7 hold the language ($3227) (src/options/main.asm).

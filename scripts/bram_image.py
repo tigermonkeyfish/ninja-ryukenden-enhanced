@@ -34,12 +34,14 @@ ENTRY_SIZE = 0x18
 VERSION = 1
 # The save status the game keeps in $2105 (src/bram/main.asm ST_ values) and
 # shows in the menu (src/options/menu.txt, the ? line).
-STATUS = ('NONE', 'OK', 'READY', 'FULL', 'ERROR 1', 'ERROR 2', 'ERROR 3', 'ERROR 4', 'ERROR 5')
+STATUS = ('NONE', 'OK', 'READY', 'FULL', 'ERROR 1', 'ERROR 2', 'ERROR 3', 'ERROR 4', 'ERROR 5', 'LOADED')
 # What the menu's status line says for each (menu.txt's ? line; before the
 # reset-row build it was `SAVE: ` and the STATUS name).
 STATUS_TEXT = ('NO BACKUP MEMORY', 'SETTINGS SAVED', 'BACKUP MEMORY FOUND', 'BACKUP MEMORY FULL',
-               *(f'BACKUP MEMORY ERROR {n}' for n in range(1, 6)))
-NONE, OK, READY, FULL, UNFORMATTED, CORRUPT, WRONG_SIZE, UNVERIFIED, BAD_DATA = range(9)
+               *(f'BACKUP MEMORY ERROR {n}' for n in range(1, 6)), 'SETTINGS LOADED')
+NONE, OK, READY, FULL, UNFORMATTED, CORRUPT, WRONG_SIZE, UNVERIFIED, BAD_DATA, LOADED = range(10)
+# OK: a Run saved (or found the settings saved already); LOADED: a reset
+# read them (OK before v111-reset's split).
 PALETTES = {0x00: 'ORIGINAL', 0x08: 'NES-A', 0x28: 'NES-B', 0x10: 'GB DMG', 0x18: 'HELL', 0xb8: 'SMS'}
 DEFAULTS = (0x00, 1)        # $2100, $3227 after a reset without saved settings
 
@@ -212,7 +214,7 @@ def expected_load(data):
     if int.from_bytes(data[ours - BASE:ours - BASE + 2], 'little') != ENTRY_SIZE:
         return (WRONG_SIZE,) + DEFAULTS
     settings = _settings(data[ours - BASE:ours - BASE + ENTRY_SIZE])
-    return (OK,) + settings if settings else (BAD_DATA,) + DEFAULTS
+    return (LOADED,) + settings if settings else (BAD_DATA,) + DEFAULTS
 
 
 def expected_save(data, options, language, writable=True):

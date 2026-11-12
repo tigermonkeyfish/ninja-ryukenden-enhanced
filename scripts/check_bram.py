@@ -505,7 +505,7 @@ def check_cut(emulator, rom, output, shard):
         entry = {'scenario': label, 'writes': len(writes), 'problems': [], 'defaults': [], 'old': 0, 'new': 0}
         if status != bi.OK or bi.expected_save(image, *new) != (bi.OK, final) or writes[-1] != final:
             entry['problems'].append(f'the uncut save: status {bi.STATUS[status]}')
-        new_load = (bi.OK,) + new
+        new_load = (bi.LOADED,) + new
         files_old, files_new = others(image), others(final)
         if files_new is None or files_old not in (None, files_new):
             entry['problems'].append("the uncut save changed another game's file")

@@ -920,7 +920,7 @@ class ReleaseTests(unittest.TestCase):
                        source.replace('| ??????????????????????? |', '|                         |'),  # no status field
                        source.replace('| ??????????????????????? |', '| ??????????? ??????????? |'),  # two
                        source.replace('| ??????????????????????? |', '| ????????????????????    |'),  # ERROR 1 does not fit
-                       source.replace(' BACKUP_MEMORY_ERROR_5\n', '\n'),                            # a status without a text
+                       source.replace(' SETTINGS_LOADED\n', '\n'),                                  # a status without a text
                        source.replace('? NO_BACKUP_MEMORY', '? NO_BACKUP_MEMORY!'),                 # not in the HUD font
                        source.replace('| RESET OPTIONS: !!!!!!!  |', '| RESET OPTIONS:          |'),  # no reset field
                        source.replace('\n! PRESS_I\n', '\n! PRESS_II\n'),                          # wider than its field
@@ -949,7 +949,7 @@ class SavedSettingsTests(unittest.TestCase):
         import bram_image as bi
         source = (ROOT / 'src/bram/main.asm').read_text()
         values = {name: int(value) for name, value in re.findall(r'^ST_(\w+) = (\d+)', source, re.M)}
-        self.assertEqual(values, {'NONE': bi.NONE, 'OK': bi.OK, 'READY': bi.READY, 'FULL': bi.FULL,
+        self.assertEqual(values, {'NONE': bi.NONE, 'OK': bi.OK, 'LOADED': bi.LOADED, 'READY': bi.READY, 'FULL': bi.FULL,
                                   'UNFORMATTED': bi.UNFORMATTED, 'CORRUPT': bi.CORRUPT, 'SIZE': bi.WRONG_SIZE,
                                   'VERIFY': bi.UNVERIFIED, 'DATA': bi.BAD_DATA, 'COUNT': len(bi.STATUS)})
         self.assertIn(f'ENTRY_SIZE = ${bi.ENTRY_SIZE:02x}\n', source)
@@ -1029,7 +1029,8 @@ class SavedSettingsTests(unittest.TestCase):
         ours = b'\0\0' + bi.NAME
         for name, image in cases.items():
             status, options, language = bi.expected_load(image)
-            if status != bi.OK:
+            self.assertNotEqual(status, bi.OK, name)                # a reset loads (LOADED) or not
+            if status != bi.LOADED:
                 self.assertEqual((options, language), bi.DEFAULTS, name)
             saved, after = bi.expected_save(image, 0x0b, 2)
             if image is None:
@@ -1054,13 +1055,13 @@ class SavedSettingsTests(unittest.TestCase):
                     if at != first:
                         self.assertEqual(after[at - bi.BASE:at - bi.BASE + length],
                                          image[at - bi.BASE:at - bi.BASE + length], name)
-            self.assertEqual(bi.expected_load(after), (bi.OK, 0x0b, 2), name)
+            self.assertEqual(bi.expected_load(after), (bi.LOADED, 0x0b, 2), name)
             self.assertEqual(bi.expected_save(after, 0x0b, 2), (bi.OK, after), name)
         # The statuses of the named cases.
         wanted = {'absent': 'NONE', 'empty-8800': 'READY', 'empty-a000': 'READY', 'full': 'FULL',
-                  'full-one-short': 'FULL', 'exact-room': 'READY', 'others-before': 'OK', 'ours-bad-checksum': 'ERROR 5',
+                  'full-one-short': 'FULL', 'exact-room': 'READY', 'others-before': 'LOADED', 'ours-bad-checksum': 'ERROR 5',
                   'ours-short': 'ERROR 3', 'ours-version-2': 'ERROR 5', 'ours-mode-20': 'ERROR 5',
-                  'ours-language-3': 'ERROR 5', 'pointer-stale': 'OK', 'pointer-low': 'ERROR 2', 'end-zero': 'ERROR 2',
+                  'ours-language-3': 'ERROR 5', 'pointer-stale': 'LOADED', 'pointer-low': 'ERROR 2', 'end-zero': 'ERROR 2',
                   'entry-overruns': 'ERROR 2', 'no-terminator': 'ERROR 2', 'terminator-early': 'ERROR 2',
                   'blank-00': 'NONE', 'blank-ff': 'NONE', 'garbage': 'NONE'}
         for name, text in wanted.items():

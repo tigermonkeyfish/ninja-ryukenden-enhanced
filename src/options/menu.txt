@@ -51,6 +51,7 @@
 # 2 directory damaged, 3 an entry of our name with another size, 4 the save
 # did not read back, 5 our entry's contents do not check out (defaults used;
 # the next Run rewrites it). Nothing is written in cases FULL and ERROR 1-3.
-# OK is one status for a load and a save (src/bram), so one text for both.
+# OK is a Run's save (or the settings already saved); LOADED, added last,
+# the settings read at power-on or reset.
 # Plain statements, not prompts (scripts/bram_image.py STATUS_TEXT).
-? NO_BACKUP_MEMORY SETTINGS_SAVED BACKUP_MEMORY_FOUND BACKUP_MEMORY_FULL BACKUP_MEMORY_ERROR_1 BACKUP_MEMORY_ERROR_2 BACKUP_MEMORY_ERROR_3 BACKUP_MEMORY_ERROR_4 BACKUP_MEMORY_ERROR_5
+? NO_BACKUP_MEMORY SETTINGS_SAVED BACKUP_MEMORY_FOUND BACKUP_MEMORY_FULL BACKUP_MEMORY_ERROR_1 BACKUP_MEMORY_ERROR_2 BACKUP_MEMORY_ERROR_3 BACKUP_MEMORY_ERROR_4 BACKUP_MEMORY_ERROR_5 SETTINGS_LOADED
