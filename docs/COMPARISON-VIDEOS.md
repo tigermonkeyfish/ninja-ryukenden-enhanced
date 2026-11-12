@@ -15,7 +15,7 @@ any later build.
 - `scripts/comparison_route.py`: the route search that produced the runs.
 
 Videos, recorded frames and emulator states are generated files; keep them
-out of the repository (the maintainer's copies are in an ignored `videos/`).
+out of the repository (the maintainer's copies are in an ignored `socials/`).
 
 ## Regenerate
 
