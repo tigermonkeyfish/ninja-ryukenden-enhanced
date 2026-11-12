@@ -19,6 +19,7 @@ A lag frame is a frame step in which the update counter did not advance.
 import argparse
 import hashlib
 import json
+import re
 from pathlib import Path
 import sys
 
@@ -411,10 +412,11 @@ def e2e(mode, runname, rom, out):
 
 def busy_run(runname, variant, out):
     """Per update, from a whole replay: the master clock of every vblank
-    handler's INC $12 ($FD1F) and of every wait's STZ $12 ($37C0 in RAM
-    since palette-lag, else $FD67), stepping frame by frame with the stored
-    input (breakpoint stops recorded and stepped over). Busy = STZ - the
-    INC $12 that woke the update; left = the next INC $12 - STZ."""
+    interrupt's entry (cpu.irqs trace, IRQ1 at the vblank phase) and of
+    every wait's STZ $12 ($37C0 in RAM since palette-lag, else $FD67; a
+    breakpoint, recorded and stepped over), stepping frame by frame with the
+    stored input. Busy = STZ - the vblank interrupt that woke the update;
+    left = the next vblank interrupt - STZ; -1: another vblank came first."""
     run = load_run(runname)
     rom, enhanced, mode = VARIANTS[variant]
     inputs = []
@@ -423,7 +425,7 @@ def busy_run(runname, variant, out):
     inputs += [frozenset()] * TAIL
     log = OUT / 'work' / f'busy-{runname}-{variant.replace(" ", "")}'
     tmp = log / 'clock.state'
-    points = [('rom', 0x1d1f, 'FD1F'), ('rom', 0x1d67, 'FD67'), ('cpu_addr', 0x37c0, '37C0')]
+    points = [('rom', 0x1d67, 'FD67'), ('cpu_addr', 0x37c0, '37C0')]
     events = []
     with Game(EMULATOR, log) as game:
         start_point(game, rom, seed_state(), enhanced)
@@ -433,9 +435,22 @@ def busy_run(runname, variant, out):
             pv.enter_stage(game, run['stage'], mode, 0)
         for area, addr, _ in points:
             game.call('set_breakpoint', {'address': f'{addr:x}', 'memory_area': area, 'execute': True})
+        game.call('set_trace_log', {'enabled': True, 'output': 'memory', 'memory_size': '100K', 'filters': ['cpu.irqs']})
+        pos = game.call('get_trace_log', {'count': 1})['total_logged']
         for n, buttons in enumerate(inputs):
             game.press(set(buttons))
-            while game.step(1) is None:
+            while True:
+                stopped = game.step(1) is None
+                end = game.call('get_trace_log', {'count': 1})['total_logged']
+                while pos < end:
+                    chunk = game.call('get_trace_log', {'start': pos, 'count': min(1000, end - pos)})
+                    for line in chunk['lines']:
+                        m = re.match(r'@(\d+).*IRQ\s+IRQ1', line)
+                        if m and abs((int(m.group(1)) - VBLANK_PHASE + 2000) % FRAME_CLOCKS - 2000) < 2000:
+                            events.append((n, 'VBL', int(m.group(1)), None))
+                    pos += len(chunk['lines'])
+                if not stopped:
+                    break
                 pc = game.call('debug_get_status')['pc']
                 point = next(p for p in points if p[2] == pc)
                 events.append((n, pc, master_clock(game, tmp), game.read(0, 1)[0]))
@@ -448,18 +463,69 @@ def busy_run(runname, variant, out):
 
 def busy_rows(events):
     """[(counter after the update, busy, left)] from busy_run's events."""
-    rows, wake = [], None
-    incs = [e[2] for e in events if e[1] == 'FD1F']
+    rows, wake, extra = [], None, 0
+    events = sorted(events, key=lambda e: e[2])
+    incs = [e[2] for e in events if e[1] == 'VBL']
     for frame, pc, clock, counter in events:
-        if pc == 'FD1F':
+        if pc == 'VBL':
             if wake is None:
                 wake = clock
+            else:
+                extra += 1          # another vblank before this update ended
             continue
         if wake is not None:
             nxt = next((c for c in incs if c > clock), None)
-            rows.append((frame, counter, clock - wake, None if nxt is None else nxt - clock))
-        wake = None
+            left = None if nxt is None else nxt - clock
+            rows.append((frame, counter, clock - wake, -1 if extra else left))
+        wake, extra = None, 0
     return rows
+
+
+def event_run(runname, variant, out):
+    """The clock of every interrupt entry (with the interrupted PC), pad
+    read and VCE register write over a whole replay (hardware-event trace,
+    no breakpoints), stored per frame step. Two variants whose streams carry
+    the same clocks ran their interrupts, vblank handlers and uploads at the
+    same master clocks: a main-loop or vblank difference of even a few
+    cycles shows up as moved interrupt entries."""
+    run = load_run(runname)
+    rom, enhanced, mode = VARIANTS[variant]
+    inputs = []
+    for count, buttons in run['segments']:
+        inputs += [frozenset(buttons)] * count
+    inputs += [frozenset()] * TAIL
+    log = OUT / 'work' / f'events-{runname}-{variant.replace(" ", "")}'
+    frames = []
+    with Game(EMULATOR, log) as game:
+        start_point(game, rom, seed_state(), enhanced)
+        if mode is None:
+            start_stage(game, run['stage'])
+        else:
+            pv.enter_stage(game, run['stage'], mode, 0)
+        game.call('set_trace_log', {'enabled': True, 'output': 'memory', 'memory_size': '500K',
+                                    'filters': ['cpu.irqs', 'input.reads', 'vce.registers']})
+        pos = game.call('get_trace_log', {'count': 1})['total_logged']
+        for n, buttons in enumerate(inputs):
+            game.press(set(buttons))
+            game.checked_step(1)
+            end = game.call('get_trace_log', {'count': 1})['total_logged']
+            ev = []
+            while pos < end:
+                chunk = game.call('get_trace_log', {'start': pos, 'count': min(1000, end - pos)})
+                for line in chunk['lines']:
+                    m = re.match(r'@(\d+)\s.*?\[(\w+)\]\s+(\S+)\s*(.*)', line)
+                    if m:
+                        kind = m.group(2) + ' ' + m.group(3)
+                        extra = m.group(4)
+                        if kind.startswith('CPU'):
+                            extra = extra.split()[0] + ' ' + (re.search(r'PC:\$(\w+)', extra) or ['', ''])[1]
+                        elif kind.startswith('VCE'):
+                            extra = ''
+                        ev.append((int(m.group(1)), kind, extra))
+                pos += len(chunk['lines'])
+            frames.append(ev)
+    Path(out).write_text(json.dumps(frames))
+    return frames
 
 
 def updates(events):
@@ -538,6 +604,10 @@ def main():
     it.add_argument('start', type=int)
     it.add_argument('frames', type=int)
     it.add_argument('out')
+    ev = sub.add_parser('events')
+    ev.add_argument('run')
+    ev.add_argument('--variants', nargs='*')
+    ev.add_argument('--out', default=str(OUT / 'events'))
     bz = sub.add_parser('busy')
     bz.add_argument('run')
     bz.add_argument('--variants', nargs='*')
@@ -568,6 +638,31 @@ def main():
                   f'left {left:7d} clk ({left / 1365:6.1f} lines){"  OVERRUN" if left < 0 else ""}')
     elif args.command == 'itrace':
         itrace(args.run, args.variant, args.start, args.frames, args.out)
+    elif args.command == 'events':
+        folder = Path(args.out)
+        folder.mkdir(parents=True, exist_ok=True)
+        res = {}
+        for v in args.variants or ['original', 'apocalypse', 'sms', 'gb dmg', 'nes-a', 'nes-b']:
+            res[v] = event_run(args.run, v, folder / f'{args.run}.{v.replace(" ", "")}.json')
+        ref = res.get('original')
+        for v, fr in res.items():
+            if v == 'original' or ref is None:
+                continue
+            diff, worst, where = 0, 0, None
+            for n, (a, b) in enumerate(zip(ref, fr)):
+                ta = [e[0] for e in a if not e[1].startswith('VCE')]
+                tb = [e[0] for e in b if not e[1].startswith('VCE')]
+                va = [e[0] for e in a if e[1].startswith('VCE')]
+                vb = [e[0] for e in b if e[1].startswith('VCE')]
+                if ta != tb or va != vb:
+                    diff += 1
+                    d = max([abs(x - y) for x, y in zip(ta, tb)] + [0])
+                    if len(ta) != len(tb):
+                        d = max(d, FRAME_CLOCKS)
+                    if d > worst:
+                        worst, where = d, n
+            print(f"{args.run} {v:10s} frames {len(fr)}: frames whose interrupt/pad-read/VCE-write clocks differ from ORIGINAL: {diff}; "
+                  f"largest interrupt/pad-read shift {worst} clk (frame {where})", flush=True)
     elif args.command == 'busy':
         folder = Path(args.out)
         folder.mkdir(parents=True, exist_ok=True)
