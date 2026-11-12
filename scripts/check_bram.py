@@ -24,8 +24,10 @@ matrix  For each image of `bram_image.matrix()` (or `--cases`): mash Run
 cycle   From an image with other games' saves: change one setting in the
         menu, Run, power off (a new session with the image left behind),
         and the next boot starts with that setting; for every palette mode,
-        each option and each language in turn. The last image must list,
-        read and delete like a System Card file.
+        each option and each language in turn, and once the reset row (I)
+        from several changed settings, after which the defaults boot. The
+        window's status line must show the boot's status. The last image
+        must list, read and delete like a System Card file.
 cut     Saves cut short: a Run that creates the entry, one that rewrites
         it, one that formats a blank memory first and one that finishes a
         stale pointer are stopped after every byte written. Each image so
@@ -91,7 +93,8 @@ TEST_WRITES = {'blank-00-one-byte': 3, 'blank-00-last-byte': 3}
 # ours and loads (reading and checking it costs about 10,600 clocks more).
 MANY_ENTRIES = 48
 MANY_WITH_OURS = 42
-ROWS = {'parallax': 1, 'no damage': 2, 'firewheel': 3, 'palette': 4, 'language': 5}
+ROWS = {'parallax': 1, 'no damage': 2, 'firewheel': 3, 'palette': 4, 'language': 5,
+        'reset': len(MENU['fields'])}         # the reset row (I: every option to its default)
 MODEL = None                 # --bram-model: the test-only emulator's NG_BRAM_MODEL
 LOCKING = ('lock', 'key', 'readonly')
 BANK46 = (0x46 * 0x2000, 0x47 * 0x2000)
@@ -388,7 +391,7 @@ def change(game, row, presses):
 def check_cycle(emulator, rom, output):
     """One setting changed per power cycle."""
     steps = ([('palette', ['right'])] * 5 + [('parallax', ['right']), ('no damage', ['right']),
-             ('firewheel', ['right']), ('language', ['right']), ('language', ['right']),
+             ('firewheel', ['right']), ('language', ['right']), ('language', ['right']), ('reset', ['I']),
              ('palette', ['right']), ('language', ['right']), ('parallax', ['right']),
              ('no damage', ['right']), ('firewheel', ['right'])])
     image = bi.matrix()['others-only']
@@ -406,14 +409,19 @@ def check_cycle(emulator, rom, output):
             entry = {'step': step, 'boot_options': f"${started['options']:02X}", 'boot_language': started['language'],
                      'boot_status': bi.STATUS[started['status']]}
             if row is not None:
-                if open_menu(game) is None:
+                text = open_menu(game)
+                if text is None:
                     problems.append('the menu did not open')
+                elif text != bi.STATUS_TEXT[started['status']]:
+                    problems.append(f'status line {text!r}, expected {bi.STATUS_TEXT[started["status"]]!r}')
                 change(game, ROWS[row], presses)
                 accept(game, work, True)
                 ram = game.read(0, 0x2000)
                 saved, after = bi.expected_save(image, ram[0x100], ram[0x1227])
                 if (ram[0x100], ram[0x1227]) == (started['options'], started['language']):
                     problems.append(f'{row} did not change')
+                if row == 'reset' and (ram[0x100], ram[0x1227]) != bi.DEFAULTS:
+                    problems.append(f'the reset row did not give the defaults: ${ram[0x100]:02X}, {ram[0x1227]}')
                 if ram[0x105] != saved or game.backup_ram() != after or saved != bi.OK:
                     problems.append(f'save: status {bi.STATUS[ram[0x105]]}, expected {bi.STATUS[saved]}; '
                                     f'image as expected: {game.backup_ram() == after}')

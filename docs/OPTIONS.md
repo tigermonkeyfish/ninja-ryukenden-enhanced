@@ -44,23 +44,28 @@ menu's **LANGUAGE** row changes the same setting.
    the held item's icon) are hidden:
 
    ```
+   BACKUP MEMORY FOUND
+
    STAGE: 1-1
    SMOOTH PARALLAX: ON
    NO DAMAGE: OFF
    NES FIREWHEEL: OFF
    PALETTE: ORIGINAL
    LANGUAGE: ENGLISH
-
+   RESET OPTIONS: PRESS I
    RUN: OK  SELECT: CANCEL
-   SAVE: READY
    ```
+
+   The top line is not a setting: it says what the game found in the
+   console's backup memory (see [Saving your settings](#saving-your-settings)).
 
 2. Press **Up** or **Down** to choose a setting. The chosen setting's value
    blinks.
 3. Press **Left** or **Right** to change it.
 4. Press **Run** (**OK**) to apply your choices, or **Select** (**CANCEL**)
    to close the window and keep playing with nothing changed. **I** and
-   **II** do nothing in the menu.
+   **II** do nothing in the menu except on the **RESET OPTIONS** row
+   (below).
 
 The music and sound effects pause while the window is open, as in the
 game's own pause, and go on from the same note when it closes.
@@ -113,7 +118,16 @@ default) keeps the PC Engine game's Fire Wheel.
 
 ### Palette
 
+**Left** and **Right** step through the values in this order, wrapping
+around: ORIGINAL, APOCALYPSE, NES-A, NES-B, SMS, GB DMG.
+
 - **ORIGINAL** (the default): the game's own colours.
+- **APOCALYPSE**: the scenery turns to lava, fire and ash: skies and blues glow
+  red and orange, greens scorch to brown, stone, walls and pavements take
+  the dark golds of the 2-2 bridge columns, whites become embers and ash.
+  The darkest greens and greys stay dark brown instead of turning black, so
+  the night stages (4-1's trees, 5-1, 6-2) keep their detail. Ryu, the
+  enemies and the status bar keep their own colours, so they stand out.
 - **NES-A**: the game in the NES's own colours only, with all the PC
   Engine detail, read like NES Ninja Gaiden: every stage, Ryu, the HUD,
   enemies, items, each boss in its NES fight colours, and the colours the
@@ -123,21 +137,15 @@ default) keeps the PC Engine game's Fire Wheel.
   shades the NES stages use, so the picture reads lighter and closer to the
   NES game. Ryu, the enemies, items, bosses and the status bar are as in
   NES-A. Also a draft.
-- **GB DMG**: the four green shades of the original Game Boy.
-- **HELL**: the scenery turns to lava, fire and ash: skies and blues glow
-  red and orange, greens scorch to brown, stone, walls and pavements take
-  the dark golds of the 2-2 bridge columns, whites become embers and ash.
-  The darkest greens and greys stay dark brown instead of turning black, so
-  the night stages (4-1's trees, 5-1, 6-2) keep their detail. Ryu, the
-  enemies and the status bar keep their own colours, so they stand out.
 - **SMS**: everything on screen (scenery, status bar, Ryu, enemies, bosses)
   in the Sega Master System's 64 colours, with all of the PC Engine
   picture's detail: each colour is moved to the nearest Master System
   shade, channel by channel. The darkest greens and greys take the darkest
   Master System green, olive or grey instead of black, so the night stages
   keep their detail.
+- **GB DMG**: the four green shades of the original Game Boy.
 
-ORIGINAL, GB DMG, HELL and SMS change at once while the window is open, so
+ORIGINAL, GB DMG, APOCALYPSE and SMS change at once while the window is open, so
 you can look at the choice before you accept it; **Select** (cancel) puts
 the old colours back. NES colours are other palette data that the stage
 loads, so they appear when **Run** restarts the stage: while NES-A or NES-B
@@ -153,6 +161,22 @@ screen's switch. The new language is used from the next story scene or title
 screen on.
 
 Press **Run** to apply.
+
+### Reset options
+
+Since 1.11-dev. Choose **RESET OPTIONS** (the row under LANGUAGE; **Up**
+from STAGE also goes there) and press **I** (or **II**): every setting in
+the window goes back to its default (SMOOTH PARALLAX ON, NO DAMAGE OFF, NES
+FIREWHEEL OFF, PALETTE ORIGINAL, LANGUAGE ENGLISH; the table at the top of
+this page), and the colours on screen change back to the original ones at
+once, as when you choose ORIGINAL yourself. **STAGE** is left as it is.
+
+Nothing is applied yet: press **Run** to apply the defaults (the stage shown
+in the STAGE row restarts, the same stage you were playing unless you
+changed it, and the settings are saved as with any Run), or **Select** to
+cancel and keep everything as it was. You can still change any setting
+after the reset before you press Run. **Left** and **Right** do nothing on
+this row.
 
 ## Saving your settings
 
@@ -177,23 +201,26 @@ them.
 - To forget the saved settings, delete the file `NR ENHANCE` in a backup
   manager (the System Card's, or your cartridge's or emulator's).
 
-### The SAVE line
+### The status line
 
-The menu's last line shows what the game found at power-on, and after a
+The window's top line shows what the game found at power-on, and after a
 **Run** what the save came to. Open the menu again in the restarted stage
-to see the result of that Run.
+to see the result of that Run. (Before the reset-row build it was the last
+line and read `SAVE: OK`, `SAVE: READY` and so on.) The game cannot tell
+which device holds the memory (a Duo or CD-ROM unit, a Ten no Koe 2, a
+flash cartridge), so the line says "backup memory" for all of them.
 
 | Text | Meaning | What to do |
 | --- | --- | --- |
-| `SAVE: OK` | Before Run: the saved settings were loaded. After Run: the settings were saved and read back. | Nothing. |
-| `SAVE: READY` | Backup RAM is there and formatted; no settings saved yet. | Press Run to save. |
-| `SAVE: NONE` | No backup RAM was found, or it is blank. Nothing was written (a blank, writable memory is formatted by the first Run and then shows OK). | See the platform notes below. Without backup RAM the game works as before, with the defaults at every start. |
-| `SAVE: FULL` | The backup RAM has no room for the 26 bytes. Nothing was written. | Delete a save you no longer need in a backup manager. |
-| `SAVE: ERROR 1` | After Run: the memory is not formatted but not blank either. Nothing was written. | Format it in the System Card's backup manager (this erases what is there). |
-| `SAVE: ERROR 2` | The list of saves is damaged (sizes or pointers that do not add up). Nothing was written. | Check the other saves in a backup manager; formatting clears it. |
-| `SAVE: ERROR 3` | A file named `NR ENHANCE` of another size is there. Nothing was written. | Delete that file. |
-| `SAVE: ERROR 4` | The settings were written but did not read back. | The memory does not hold what is written to it (write-protected or failing). |
-| `SAVE: ERROR 5` | At power-on: the file is there but its contents do not check out; the defaults are used. | Press Run: the file is written again. |
+| `SETTINGS SAVED` | Before Run: the saved settings were found and loaded. After Run: the settings were saved and read back. | Nothing. |
+| `BACKUP MEMORY FOUND` | Backup RAM is there and formatted; no settings saved yet. | Press Run to save. |
+| `NO BACKUP MEMORY` | No backup RAM was found, or it is blank. Nothing was written (a blank, writable memory is formatted by the first Run and then shows SETTINGS SAVED). | See the platform notes below. Without backup RAM the game works as before, with the defaults at every start. |
+| `BACKUP MEMORY FULL` | The backup RAM has no room for the 26 bytes. Nothing was written. | Delete a save you no longer need in a backup manager. |
+| `BACKUP MEMORY ERROR 1` | After Run: the memory is not formatted but not blank either. Nothing was written. | Format it in the System Card's backup manager (this erases what is there). |
+| `BACKUP MEMORY ERROR 2` | The list of saves is damaged (sizes or pointers that do not add up). Nothing was written. | Check the other saves in a backup manager; formatting clears it. |
+| `BACKUP MEMORY ERROR 3` | A file named `NR ENHANCE` of another size is there. Nothing was written. | Delete that file. |
+| `BACKUP MEMORY ERROR 4` | The settings were written but did not read back. | The memory does not hold what is written to it (write-protected or failing). |
+| `BACKUP MEMORY ERROR 5` | At power-on: the file is there but its contents do not check out; the defaults are used. | Press Run: the file is written again. |
 
 ### What each platform needs
 
@@ -201,11 +228,11 @@ to see the result of that Run.
 | --- | --- | --- |
 | PC Engine Duo, Duo-R, Duo-RX, TurboDuo (built-in backup RAM), any flash cartridge | Nothing, if the backup RAM was ever formatted (a CD game or the System Card does that). On the Turbo EverDrive Pro the cartridge's own CD functions are off in these consoles, so the game uses the console's memory. | Expected; not yet tested on hardware |
 | A console with a CD-ROM unit, a Ten no Koe 2 or a Backup Booster | The same. | Expected (the same registers; the game sends the three-byte unlock those units' software uses) |
-| Turbo EverDrive Pro on a console without CD | In the cartridge's Options set **Default EXP Device** to `TNK2` or `CDROM` (its manual). With `OFF` the menu shows `SAVE: NONE`. | From the manual; not yet tested |
+| Turbo EverDrive Pro on a console without CD | In the cartridge's Options set **Default EXP Device** to `TNK2` or `CDROM` (its manual). With `OFF` the menu shows `NO BACKUP MEMORY`. | From the manual; not yet tested |
 | MiSTer (TurboGrafx16 core) | Backup RAM is always there. The core writes its save file only when you choose **Save Backup RAM** in the OSD, or with **Autosave** on when the OSD is opened after a save: do one of the two before switching off. | Read from the core's source; not tested |
 | Geargrafx (desktop) | Nothing: "Force Backup RAM" is on by default. | The headless build was tested with backup RAM images |
 | Other emulators | Works where the emulator gives a HuCard backup RAM. | Not tested |
-| A console with nothing attached | `SAVE: NONE`; the game plays as before. | Emulated |
+| A console with nothing attached | `NO BACKUP MEMORY`; the game plays as before. | Emulated |
 
 The first save to a blank memory formats it first, which takes about half
 a frame longer, once. With an unusually long list of saves (more than 56

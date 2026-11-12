@@ -328,7 +328,10 @@ copies it to `$2100`.
 
 `$2100` bits 3-5 (1.11-dev; module `src/palette`). Bits 3-4 are the upload
 family, bit 5 a variant within it; bit 7 is set exactly when the mode is
-SMS:
+SMS. **Names:** the mode called HELL in the source (`hell.json`,
+`PALETTE_HELL`, `HELL_*`, `hell_*` scripts and validation records) is the
+one the player sees as **APOCALYPSE** (menu value and guides, since the
+reset-row build); same value `$18`, same colours.
 
 | Value | Mode | Upload |
 | --- | --- | --- |
@@ -641,7 +644,7 @@ bank: none of the free bytes; only the two call operands change. The bank 3
 call costs every stage load in every mode about 25 cycles more.
 
 The menu's **PALETTE** row (1.11-dev) offers the values listed in
-`src/options/menu.txt` (ORIGINAL, NES-A, NES-B, GB_DMG, HELL, SMS; mask `$38`). While the menu is open the live bits 3-5 follow the
+`src/options/menu.txt` (in Left/Right order ORIGINAL, APOCALYPSE (`$18`, HELL in the source), NES-A, NES-B, SMS, GB_DMG since the reset-row build, before it ORIGINAL, NES-A, NES-B, GB_DMG, HELL, SMS; the values, and so the saved settings, are the same in either order; mask `$38`). While the menu is open the live bits 3-5 follow the
 draft, and every change of them queues all 512 colours (`$F394`), so the
 module re-uploads every colour at the next vblanks and the choice shows at
 once (the menu waits in `$FD67`, so the left-over rule gets its 16 colours a
@@ -684,9 +687,10 @@ A live NES preview would need the RAM palette rewritten with NES data and
 the exact previous palette (fade state, animated and enemy colours)
 restored on cancel: 1 KiB of backup the menu does not have; not done.
 
-Bank `$46` (1.11-dev): `$4000-$40FF` dispatch, `$4100-$42FF` unowned
-(512 bytes, still free), `$4300-$43FF` cinema
-sprite reset, `$4400-$4AFF` the menu (`options`, 1,749 bytes used), `$4B00-$4FFF`
+Bank `$46` (1.11-dev): `$4000-$40FF` dispatch, `$4100-$41FF` the menu's
+status texts (`options`, 216 bytes, since the reset-row build), `$4200-$42FF`
+unowned (256 bytes, still free), `$4300-$43FF` cinema
+sprite reset, `$4400-$4AFF` the menu (`options`, used to `$4AD4` before the status texts moved out; see Menu display), `$4B00-$4FFF`
 the saved settings (`bram`, 962 bytes used to `$4EC1`; entries `$4B00`
 reset loader, `$4B03` save),
 `$5000-$53FF` palette code (926 bytes used), `$5400-$57FF` its GB DMG
@@ -758,7 +762,9 @@ no longer in the repository.
 Since 1.11-dev the menu is a popup window over the playfield; the HUD rows
 28-30 are never written. Select in gameplay (hook `$FF70`, unchanged open
 conditions `$2E63 = 0`, `$2201 != 0`) calls bank `$46` `$4400`
-(`src/options`, 1,547 bytes, `$4400-$4A0A`, of the claimed `$4400-$4AFF`). Its layout and option
+(`src/options`, `$4400-$4AD4` of the claimed `$4400-$4AFF` since the reset row, 43 bytes
+spare; the three menu glyphs moved to `$584F-$587E`, after the renderer
+gate in the module's other claim `$5840-$58FF`, to make room). Its layout and option
 values are `src/options/menu.txt`, generated into `menu-text.inc` by
 `scripts/menu_text.py`.
 
@@ -811,11 +817,24 @@ values are `src/options/menu.txt`, generated into `menu-text.inc` by
   restarts the stage shown (health refilled, timer reset, palettes
   reloaded) and saves the settings to backup RAM when there is one
   ([saved settings](#saved-settings-backup-ram)), Select cancels. The
-  window's last row shows the save status (`$2105`; `SAVE:` and one of the
-  `?` line's texts in `menu.txt`), drawn once when the window opens. The menu returns once Select, Run, I and II are
+  window's top row shows the save status (`$2105`; one of the `?` line's
+  texts in `menu.txt`, 24 columns, plain statements such as `SETTINGS
+  SAVED` or `NO BACKUP MEMORY` since the reset-row build, before it the
+  last row with `SAVE:` and a short name), drawn once when the window
+  opens; a blank row parts it from the options. The texts are in bank
+  `$46` `$4100-$41FF` (options' third claim; 216 bytes). The menu returns once Select, Run, I and II are
   released. Rows: STAGE (22 entries), SMOOTH PARALLAX (bit 0 clear = ON),
   NO DAMAGE (bit 1), NES FIREWHEEL (bit 2), PALETTE (bits 3-5), LANGUAGE
-  (`$3227`; draft bits 6-7). Each option row is a mask and a value list in `menu.txt`
+  (`$3227`; draft bits 6-7), then RESET OPTIONS (row index `FIELDS`, 6;
+  Up/Down wrap over all seven). On the reset row Left/Right do nothing and
+  I or II (pad bits 0-1 newly pressed) writes `DEFAULT_DRAFT` (`$40`: each
+  `@` line's first value, the power-on settings without saved ones,
+  `$2100` = 0 and `$3227` = 1) to the draft `$2101` and redraws, so the
+  palette preview follows as for any PALETTE change; STAGE is untouched.
+  Run and Select then treat the draft as always (Run applies, saves and
+  restarts the STAGE row's stage; Select discards it). Its field (`!` in
+  `menu.txt`, `PRESS I`) is the field tables' last entry and blinks like a
+  value. Each option row is a mask and a value list in `menu.txt`
   (`choice_*` tables): the draft's value is looked up in the list (an
   unlisted value shows the first entry) and Left/Right step through it.
 - **Language.** Only the title (bank 4 `$8610-$8643`, `$91B8`) and the story
@@ -882,8 +901,11 @@ open menu: 21 bytes below its entry); the watched margin ends at `$213F`.
   games' files; this order can only leave it at our entry or 256 bytes
   above it in free space. An entry cut mid-rewrite fails its checksum
   (`ERROR 5`, defaults) and is rewritten by the next Run.
-- **Status** in `$2105` (`ST_` values, the menu's `SAVE:` texts in
-  `src/options/menu.txt` in the same order): `NONE`, `OK`, `READY`, `FULL`,
+- **Status** in `$2105` (`ST_` values, the menu's status texts in
+  `src/options/menu.txt` in the same order, `scripts/bram_image.py`
+  `STATUS_TEXT`: `NO BACKUP MEMORY`, `SETTINGS SAVED` (a load or a save:
+  one status), `BACKUP MEMORY FOUND`, `BACKUP MEMORY FULL`, `BACKUP MEMORY
+  ERROR n`): `NONE`, `OK`, `READY`, `FULL`,
   `ERROR 1` unformatted and not blank, `ERROR 2` directory not sound,
   `ERROR 3` an entry of our name with another length, `ERROR 4` not read
   back, `ERROR 5` our entry's contents do not check out.
