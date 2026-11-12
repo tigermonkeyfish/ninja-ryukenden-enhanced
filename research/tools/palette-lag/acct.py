@@ -32,7 +32,7 @@ def per_update(path, region=None):
     vbt={}
     for r in a:
         if r[2]=='IRQ' and r[6] in vb: vbt[r[6]]=r[0]
-    stz=[r[0] for r in a if r[2]=='00' and r[3]==0xFD67 and r[5]=='main']
+    stz=[r[0] for r in a if ((r[2]=='00' and r[3]==0xFD67) or r[3]==0x37C0) and r[5]=='main']
     vbl=sorted(vbt.items(), key=lambda x:x[1])
     rows=[]
     for s0,s1 in zip(stz,stz[1:]):
