@@ -3,6 +3,13 @@
 Emulator evidence only (Geargrafx `78fc3d7`, headless; one session at a
 time). Nothing here was seen on a console. 2026-11-12.
 
+**Current build: "reset 2"** (`cec5f7b3…8059`, section
+[Build reset 2](#build-reset-2) below): the window is 25 x 11 with a blank
+row before the controls line, and a load at power-on shows `SETTINGS
+LOADED`. The sections before it describe the first build (`558fc5d2…c672`,
+26 x 10, one `SETTINGS SAVED` for both); their checks were repeated on
+reset 2.
+
 ## What changed
 
 Branch `v111-reset`, from `v111-final` (`d1a6da6`), for four owner requests:
@@ -189,3 +196,79 @@ In `/workspace/roms/` (new names; nothing there was changed):
 | `ninja-ryukenden-enhanced-v1.11-dev-apocalypse-reset.bps` (for the headered original) | `25326503f82dd12ed48110b5983381ccf0087e4ed91dfc204fbab22197e07c1c` |
 | `ninja-ryukenden-enhanced-v1.11-dev-apocalypse-reset-headerless.bps` | `30ad8c2d757fd9dba2c863f538ae1cf04276492f36f72d53b563777775d85170` |
 | `settings-save-hardware-checklist-apocalypse-reset-build.md` | the checklist as committed |
+
+## Build reset 2
+
+Two owner follow-ups (2026-11-12), commits `1ed9789`, `bd7ab94`, `1b99585`:
+
+- **A blank row between RESET OPTIONS and the controls line.** The owner
+  preferred 26 x 11. The audit: the window's cells are kept in VRAM that is
+  provably free while the menu is open, the 256-word sprite-table buffer
+  being built (the game rewrites all of it before showing it) for every
+  row but the last, and the HUD font's blank tiles `$7AB-$7AC` (32 words,
+  zeroed on close) for the last row. 26 x 11 needs 10 x 26 = 260 words in
+  the buffer: too many, unless a row were split between the two places
+  (new copy code, longer copies) or new VRAM were borrowed (no audit).
+  **25 x 11** fits the same scheme unchanged: 10 x 25 = 250 words in the
+  buffer and 25 in the tiles (`$7AB0-$7AC8`). The column dropped was the
+  right margin; the widest line, `RUN: OK  SELECT: CANCEL`, still has one
+  column on each side. The window covers BAT rows 7-17 (screen y
+  106-193), clear of the HUD rows 28-30 and the band row 31 (the build
+  fails if `BOX_TOP + BOX_ROWS` > 28); the blank row under the status line
+  stays. No RAM is involved (the menu's RAM is the zero page it saves and
+  restores). Everything that knew the size reads it from `menu_text.py`
+  (`BOX_WIDTH`, `BOX_ROWS`: the module's copy, draw and assembly-time
+  checks, `check_menu`, `check_bram`); `guide_screenshots.py`'s crop and
+  the tests were updated. The status field is 23 wide.
+- **`SETTINGS LOADED`.** A new status `ST_LOADED` = 9 in `src/bram`, set
+  only by the reset's load (its final `lda #ST_OK` became `lda
+  #ST_LOADED`); `ST_OK` now means a Run saved (or found the settings
+  saved already). The text is the `?` line's tenth. The source diff of
+  `src/bram/main.asm` is the two constants, that one operand and the
+  `ST_COUNT` guard; in the ROM it is **one byte**, bank `$46` `$4CDE`
+  (`$01` to `$09`). No read, write, scan, format, unlock or lock step
+  changed. Nothing tests the status by value but the menu (it indexes
+  the texts with it) and the checks; `bram_image.py`'s model
+  (`expected_load` gives `LOADED`), `check_bram` (the cut part's boot
+  after a save), the unit tests and `research/tools/v111-final/savedboot.py`
+  were updated.
+
+Build `cec5f7b3d1fddc224ad8da921b20e6b0eec55295d59f001a714c209a33bb8059`,
+the same from both originals and from each patch. Against `v111-final`:
+1,713 bytes in the `options` claims and the one `bram` byte; every other
+module and everything outside the claims identical (no palette data byte
+changed). The menu uses `$4400-$4A9B`, the status texts `$4100-$41E5`
+(10 x 23 bytes). 54 unit tests and `audit_public.py` pass.
+
+Checks on this build (`$W` = `build/v111-reset/r2`):
+
+- `check_menu.py --only options --only reset`: **64 of 64** (38 + 26), no
+  timer-phase frames.
+- `check_menu.py --only select` (the window opened in each of the 22 Level
+  Select entries with the exact restore of VRAM, RAM and the following
+  frames, then Run to the next entry; and the cold boot's LANGUAGE row):
+  **23 of 23**, no timer-phase frames.
+- `check_boot.py`: pass; the log equals `v111-final`'s.
+- `check_bram.py --only cycle`: **17 of 17** and the System Card file
+  check; boots show `LOADED`, Runs `OK`, the window's line the matching
+  text, the reset step as before.
+- `check_bram.py --only matrix`, 10 images (the 9 above and
+  `pointer-stale`): **10 of 10**; with the readonly model, **2 of 2**
+  (ERROR 4). Statuses seen at boot: NONE, READY, FULL, ERROR 2, 3, 5,
+  LOADED; after Run: NONE, OK, FULL, ERROR 1, 2, 3, 4.
+- Screenshot (`$W/menu-options/reset-menu-reset-row-selected.png`,
+  private): the blank row before the controls line, text inside the
+  window, HUD and band unchanged.
+
+Not run on reset 2: the `runs` and `sweep` parts of `check_menu.py`, the
+other matrix images, the `cut`, `timing` and `lock` parts of
+`check_bram.py`, the stored runs, real hardware.
+
+Delivered (new names; nothing in `/workspace/roms/` was changed):
+
+| File | SHA-256 |
+| --- | --- |
+| `Ninja Ryukenden - Enhanced v1.11-dev (apocalypse, reset 2).pce` | `cec5f7b3d1fddc224ad8da921b20e6b0eec55295d59f001a714c209a33bb8059` |
+| `ninja-ryukenden-enhanced-v1.11-dev-apocalypse-reset-2.bps` (headered original) | `1545836cad0ca96eefd633f9bb31f77657ef2b20f31f78c58a1f6eaab0156af8` |
+| `ninja-ryukenden-enhanced-v1.11-dev-apocalypse-reset-2-headerless.bps` | `3c933c67e08a36cca751579857ced19f559b1ac873278eb2417e29f921d64e32` |
+| `settings-save-hardware-checklist-apocalypse-reset-2-build.md` | the checklist as committed |
