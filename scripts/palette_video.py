@@ -56,14 +56,14 @@ def enter_stage(game, stage, mode, firewheel):
     game.held = set()
 
 
-def record(emulator, rom, seed, run, stage, mode, firewheel, out, windows, audio=None, inputs=None):
+def record(emulator, rom, seed, run, stage, mode, firewheel, out, windows, audio=None, inputs=None, tail=0, shots=True):
     """Replay run's input; save PNGs for frames inside `windows` ([(a, b)),
     half-open, in frames since the first update) and a per-frame trace."""
     out = Path(out)
     if out.exists():
         shutil.rmtree(out)
     (out / 'frames').mkdir(parents=True)
-    last = max(b for _, b in windows)
+    last = max(b for _, b in windows) + tail
     if inputs is None:
         inputs = []
         for count, buttons in run['segments']:
@@ -93,7 +93,7 @@ def record(emulator, rom, seed, run, stage, mode, firewheel, out, windows, audio
                 'cam': int.from_bytes(ram[0x20f:0x211], 'little'), 'master': ram[0x240],
                 'fx': ram[0x110e:0x1113].hex(), 'wheel': ram[0x117a], 'state': ram[0xeab],
                 'opt': ram[0x100]})
-            if any(a <= n < b for a, b in windows):
+            if shots and any(a <= n < b for a, b in windows):
                 (out / 'frames' / f'{n:06d}.png').write_bytes(game.screenshot())
     (out / 'trace.json').write_text(json.dumps(trace))
     if audio:
