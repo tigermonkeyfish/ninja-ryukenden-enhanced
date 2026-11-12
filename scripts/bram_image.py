@@ -35,6 +35,10 @@ VERSION = 1
 # The save status the game keeps in $2105 (src/bram/main.asm ST_ values) and
 # shows in the menu (src/options/menu.txt, the ? line).
 STATUS = ('NONE', 'OK', 'READY', 'FULL', 'ERROR 1', 'ERROR 2', 'ERROR 3', 'ERROR 4', 'ERROR 5')
+# What the menu's status line says for each (menu.txt's ? line; before the
+# reset-row build it was `SAVE: ` and the STATUS name).
+STATUS_TEXT = ('NO BACKUP MEMORY', 'SETTINGS SAVED', 'BACKUP MEMORY FOUND', 'BACKUP MEMORY FULL',
+               *(f'BACKUP MEMORY ERROR {n}' for n in range(1, 6)))
 NONE, OK, READY, FULL, UNFORMATTED, CORRUPT, WRONG_SIZE, UNVERIFIED, BAD_DATA = range(9)
 PALETTES = {0x00: 'ORIGINAL', 0x08: 'NES-A', 0x28: 'NES-B', 0x10: 'GB DMG', 0x18: 'HELL', 0xb8: 'SMS'}
 DEFAULTS = (0x00, 1)        # $2100, $3227 after a reset without saved settings
@@ -376,7 +380,7 @@ def describe(data):
     except ValueError as error:
         lines.append(f'corrupt: {error}')
     status, options, language = expected_load(data)
-    lines.append(f'the game at reset: SAVE: {STATUS[status]}, $2100 = ${options:02X}, language {language}')
+    lines.append(f'the game at reset: {STATUS[status]} ({STATUS_TEXT[status]}), $2100 = ${options:02X}, language {language}')
     return lines
 
 

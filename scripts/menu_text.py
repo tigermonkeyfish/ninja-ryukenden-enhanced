@@ -21,7 +21,8 @@ character:
 - `?` line: the texts of the save status field (the one run of '?' in the
   window; not selectable), one per status of src/bram/main.asm (ST_NONE
   first), `_` a space. The window must hold exactly one such field, wide
-  enough for every text.
+  enough for every text. They go to menu-status.inc, the rest to
+  menu-text.inc.
 
 `#` starts a comment line.
 """
@@ -197,6 +198,8 @@ def generate(directory, version):
     out += 'choice_text:\n' + db(text)
     row, column, width = menu['status']
     out += f'STATUS_ROW = {row}\nSTATUS_COL = {column}\nSTATUS_WIDTH = {width}\nSTATUS_COUNT = {STATUS_COUNT}\n'
-    out += 'status_text:\n' + ''.join(db(text) for text in menu['status_texts'])
     (directory / 'menu-text.inc').write_text(out)
+    # The status texts on their own: src/options places them apart from the
+    # rest (bank $46 $4100) since they span the window's width.
+    (directory / 'menu-status.inc').write_text('status_text:\n' + ''.join(db(text) for text in menu['status_texts']))
     return menu

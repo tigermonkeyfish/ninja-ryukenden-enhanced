@@ -928,3 +928,12 @@ menu_end:
  .if (STATUS_COUNT * STATUS_WIDTH > 256)
  .fail
  .endif
+ ; The save status texts (24 columns each since the reset-row build) in the
+ ; options module's claim $4100-$41FF (src/modules.json; unowned and $FF
+ ; before, between dispatch's $4000-$40FF and cinema-sprite's $4300-$43FF).
+ .org $4100
+ .include "menu-status.inc"
+menu_status_end:
+ .if (menu_status_end > $4200)
+ .fail
+ .endif

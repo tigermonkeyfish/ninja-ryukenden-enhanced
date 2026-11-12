@@ -198,7 +198,7 @@ def boot(game, rom, bram, work, poke=None):
 
 
 def open_menu(game):
-    """Press Select; the window's SAVE row as text, or None if no window."""
+    """Press Select; the window's status row as text, or None if no window."""
     press(game, 'select', after=8)
     ram = game.read(0, 0x2000)
     row, column, width = MENU['status']
@@ -298,12 +298,12 @@ def check_case(emulator, rom, name, image, output, reference, dead=False, locked
             probed = MODEL in LOCKING and image is not None
             if probed:
                 expect('bank $F7 locked after the boot', game.locks[-1], locked)
-            expect('menu after the boot', open_menu(game), f'SAVE: {bi.STATUS[status]}')
+            expect('menu after the boot', open_menu(game), bi.STATUS_TEXT[status])
             cancel(game)
             expect('backup RAM after a cancel', game.backup_ram(), image)
             expect('status after a cancel', game.read(0x105, 1)[0], status)
             # Run with the settings as they are.
-            expect('menu before Run', open_menu(game), f'SAVE: {bi.STATUS[status]}')
+            expect('menu before Run', open_menu(game), bi.STATUS_TEXT[status])
             writes = accept(game, work, image is not None)
             ram = game.read(0, 0x2000)
             saved, after = expected_run(image, ram[0x100], ram[0x1227], dead)
@@ -319,7 +319,7 @@ def check_case(emulator, rom, name, image, output, reference, dead=False, locked
                        0 if MODEL == 'openbus' else TEST_WRITES.get(name, 0))
             if image is not None and others(image) is not None:
                 expect("other games' files after Run", others(game.backup_ram()), others(image))
-            expect('menu after Run', open_menu(game), f'SAVE: {bi.STATUS[saved]}')
+            expect('menu after Run', open_menu(game), bi.STATUS_TEXT[saved])
             again = accept(game, work, image is not None)
             expect('status after a second Run', bi.STATUS[game.read(0x105, 1)[0]], bi.STATUS[saved])
             expect('backup RAM after a second Run', game.backup_ram(), after)

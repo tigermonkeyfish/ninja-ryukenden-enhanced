@@ -902,13 +902,13 @@ class ReleaseTests(unittest.TestCase):
         # power-on settings without saved ones (src/bram, bram_image).
         import re
         from bram_image import DEFAULTS
-        self.assertEqual(menu['reset'], (7, 16, 7))
+        self.assertEqual(menu['reset'], (8, 16, 7))
         self.assertEqual(menu['reset_text'], bytes(CODES[c] for c in 'PRESS I'))
         bram = (ROOT / 'src/bram/main.asm').read_text()
         self.assertEqual(int(re.search(r'^DEFAULT_LANGUAGE = (\d+)', bram, re.M)[1]), DEFAULTS[1])
         self.assertEqual(menu['default'], DEFAULTS[0] | DEFAULTS[1] << 6)
         self.assertIn('FIELDS = 6\nRESET_TEXT_AT = 102\nDEFAULT_DRAFT = $40\n', include)
-        self.assertIn('field_row:\n .db 1,2,3,4,5,6,7\n', include)
+        self.assertIn('field_row:\n .db 2,3,4,5,6,7,8\n', include)
         for broken in (source.replace('| STAGE: #####             |', '| STAGE: ####              |'),  # STAGE width
                        source.replace('| NO DAMAGE: ###           |', '| NO DAMAGE: ###            |'),  # 27 columns
                        source.replace('LANGUAGE', 'LANGUAGE!'),
@@ -917,22 +917,24 @@ class ReleaseTests(unittest.TestCase):
                        source.replace('@ $04 $00=OFF $04=ON', '@ $02 $00=OFF $02=ON'),              # bits owned twice
                        source.replace('@ $04 $00=OFF $04=ON\n', ''),                                # a field without values
                        source.replace('|                          |\n', '', 1),                     # nine rows
-                       source.replace('| SAVE: ????????           |', '| SAVE:                    |'),  # no status field
-                       source.replace('| SAVE: ????????           |', '| SAVE: ????? ??          |'),  # two
-                       source.replace('| SAVE: ????????           |', '| SAVE: ??????            |'),  # ERROR 1 does not fit
-                       source.replace(' ERROR_5\n', '\n'),                                          # a status without a text
-                       source.replace('? NONE OK', '? NONE O!K'),                                   # not in the HUD font
+                       source.replace('| ???????????????????????? |', '|                          |'),  # no status field
+                       source.replace('| ???????????????????????? |', '| ??????????? ???????????? |'),  # two
+                       source.replace('| ???????????????????????? |', '| ????????????????????     |'),  # ERROR 1 does not fit
+                       source.replace(' BACKUP_MEMORY_ERROR_5\n', '\n'),                            # a status without a text
+                       source.replace('? NO_BACKUP_MEMORY', '? NO_BACKUP_MEMORY!'),                 # not in the HUD font
                        source.replace('| RESET OPTIONS: !!!!!!!   |', '| RESET OPTIONS:           |'),  # no reset field
                        source.replace('\n! PRESS_I\n', '\n! PRESS_II\n'),                          # wider than its field
                        source.replace('\n! PRESS_I\n', '\n')):                                       # no reset text
             with self.assertRaises(ValueError):
                 layout(broken, '1.11')
-        # The save status: one field in the window's last row, a text for
-        # each status of src/bram, in its order.
-        from bram_image import STATUS
-        self.assertEqual(menu['status'], (9, 7, 8))
-        self.assertEqual(menu['status_texts'], [bytes(CODES[c] for c in text.ljust(8)) for text in STATUS])
-        self.assertIn(f'STATUS_ROW = 9\nSTATUS_COL = 7\nSTATUS_WIDTH = 8\nSTATUS_COUNT = {len(STATUS)}\n', include)
+        # The save status: one field across the window's top row, a plain
+        # text for each status of src/bram, in its order (bram_image's
+        # STATUS_TEXT, which check_bram expects in the window).
+        from bram_image import STATUS_TEXT
+        self.assertEqual(menu['status'], (0, 1, 24))
+        self.assertEqual(menu['status_texts'], [bytes(CODES[c] for c in text.ljust(24)) for text in STATUS_TEXT])
+        self.assertIn(f'STATUS_ROW = 0\nSTATUS_COL = 1\nSTATUS_WIDTH = 24\nSTATUS_COUNT = {len(STATUS_TEXT)}\n', include)
+        self.assertNotIn('status_text', include)
 
 
 class SavedSettingsTests(unittest.TestCase):
@@ -963,7 +965,7 @@ class SavedSettingsTests(unittest.TestCase):
         row, column, width = cm.MENU['status']
         at = row * cm.BOX_WIDTH + column
         seen = set()
-        for status, text in enumerate(bi.STATUS):
+        for status, text in enumerate(bi.STATUS_TEXT):
             window = cm.expected_window(status)
             self.assertEqual(len(window), len(cm.MENU['window']))
             self.assertEqual(''.join(cm.DECODE[c] for c in window[at:at + width]), text.ljust(width))
