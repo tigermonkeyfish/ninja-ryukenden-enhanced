@@ -1006,70 +1006,83 @@ palette_boot:
  ; change of $2100 bits 3-5 (the menu's set_palette; the reset). A, X, Y
  ; and the flags are kept.
 palette_configure:
+ ; Branch-free, so it takes the same cycles in every mode (at the reset it
+ ; sets where the timer starts against the frame: a mode-dependent length
+ ; would move every timer interrupt for the whole session).
  php
  pha
  phx
+ phy
  lda OPTIONS
- and #$10
- beq configure_plain
- ldx #wait_mapped_end - wait_mapped - 1
-configure_mapped:
- lda wait_mapped,x
- sta WAITR,x
- dex
- bpl configure_mapped
- bra configure_done
-configure_plain:
- ldx #wait_plain_end - wait_plain - 1
-configure_copy:
+ and #$10                   ; mapped (GB DMG, HELL, SMS)?
+ lsr a
+ lsr a
+ lsr a
+ lsr a
+ tay                        ; 0 / 1
+ ldx wait_base,y            ; 0 / 30
+ lda LIVE
+ and live_keep,y            ; Original, NES: 0; mapped: as it is
+ sta LIVE
+ cly
+configure_wait:
  lda wait_plain,x
- sta WAITR,x
- dex
- bpl configure_copy
- stz LIVE
-configure_done:
+ sta WAITR,y
+ inx
+ iny
+ cpy #30
+ bne configure_wait
  stz FASTOK
  ; ANIMR: the animation set table for the mode (src/nes-palette's hook at
  ; bank 3 $CE98 calls it). 24 cycles to its rts in every mode and way.
  lda OPTIONS
  and #PALETTE_HELL          ; bits 3-4
- cmp #$08
- beq configure_nes
- ldx #anim_plain_end - anim_plain - 1
+ lsr a
+ lsr a
+ lsr a
+ tay                        ; 0 Original, 1 NES, 2 GB DMG, 3 HELL / SMS
+ ldx anim_base,y            ; 0 / 20
+ lda anim_target,y          ; NES: ANIMR + 6; else the unused tail
+ sta W_LEFT
+ cly
 configure_anim:
  lda anim_plain,x
- sta ANIMR,x
- dex
- bpl configure_anim
- bra configure_end
-configure_nes:
- ldx #anim_nes_end - anim_nes - 1
-configure_anim_nes:
- lda anim_nes,x
- sta ANIMR,x
- dex
- bpl configure_anim_nes
+ sta ANIMR,y
+ inx
+ iny
+ cpy #20
+ bne configure_anim
  tma #3
  pha
  lda #3
  tam #3
- ldx #0
  lda OPTIONS
- and #$20                   ; NES-B
- beq configure_nes_a
- ldx #2
-configure_nes_a:
- lda ANIM_POINTERS,x
- sta ANIMR + 6
- lda ANIM_POINTERS+1,x
- sta ANIMR + 8
+ and #$20                   ; NES-B (in NES; elsewhere unused)
+ lsr a
+ lsr a
+ lsr a
+ lsr a
+ tay                        ; 0 / 2
+ ldx W_LEFT
+ lda ANIM_POINTERS,y
+ sta ANIMR,x
+ lda ANIM_POINTERS+1,y
+ sta ANIMR+2,x
  pla
  tam #3
-configure_end:
+ ply
  plx
  pla
  plp
  rts
+wait_base:
+ .db 0, wait_mapped - wait_plain
+live_keep:
+ .db $00, $ff
+anim_base:
+ .db 0, anim_nes - anim_plain, 0, 0
+anim_target:
+ .db 16, 6, 16, 16          ; NES: the lda/ldy operands; else bytes 16-19 (after the rts)
 
 anim_plain:
  .db $a9, LOW(ANIM_TABLE)   ; lda #<$CF32   2
@@ -1077,7 +1090,11 @@ anim_plain:
  .db $08, $28               ; php, plp      7
  .db $ea, $ea, $ea          ; nop x 3       6
  .db $60                    ; rts           7: 24
+ .db $ea, $ea, $ea, $ea, $ea, $ea, $ea, $ea, $ea, $ea ; never run; 16-19: configure's unused pointer write
 anim_plain_end:
+ .if (anim_plain_end - anim_plain <> 20)
+ .fail
+ .endif
 anim_nes:
  .db $ad, LOW(MASTER_STATE), HIGH(MASTER_STATE) ; lda $2240   5
  .db $d0, $08               ; bne (a cinema)  2 (taken 4)
@@ -1101,7 +1118,12 @@ wait_plain:
  .db $c9, $01               ; cmp #1
  .db $90, $fa               ; bcc (lda)
  .db $60                    ; rts
+ .db $ea, $ea, $ea, $ea, $ea, $ea, $ea, $ea, $ea, $ea, $ea
+ .db $ea, $ea, $ea, $ea, $ea, $ea, $ea, $ea, $ea, $ea ; never run (configure copies 30 bytes)
 wait_plain_end:
+ .if (wait_plain_end - wait_plain <> 30)
+ .fail
+ .endif
 wait_mapped:
  .db $64, $12               ; $37C0 stz <$12
  .db $93, $ff, $60, $22     ; $37C2 tst #$ff, $2260: 8 cycles
