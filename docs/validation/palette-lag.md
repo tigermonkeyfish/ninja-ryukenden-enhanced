@@ -272,3 +272,51 @@ ending, Continue / Game Over, bosses not in the stored runs, and stages
 without a stored run beyond 740 frames. Static scan: absolute operands into
 `$3C00-$3FFF` exist in ROM bytes (data or code not reached in these
 scenarios cannot be ruled out); this is the open risk of the RAM claim.
+
+## Results on the fixed build (emulator evidence)
+
+Build `fix5` (see "Delivered" for its SHA-256). Pristine identity: the
+pre-fix source (tip 3a1dbe4) rebuilds to `cec5f7b3...8059`, the build
+under test; 1.10's bytes are untouched (`release/`, `patches/` unchanged).
+
+### Margins of the three windows (itrace, exact accounting)
+
+Update woken at the given frame; busy = vblank interrupt entry to the
+update's `STZ $12`; left = clocks before the next vblank interrupt.
+
+| window | build | ORIGINAL | APOCALYPSE | SMS | GB DMG | NES-A | NES-B |
+|---|---|---|---|---|---|---|---|
+| 3-2 damage (1032) | pre-fix | 352,104 / +6,894 | 352,482 / +6,510 | 372,927 / overrun | 372,705 / overrun | 372,681 / overrun | (as NES-A) |
+| 3-2 damage (1032) | fix | 352,104 / +6,894 | same | same | same | same | same |
+| 3-2 frame 1104 | pre-fix | 353,232 / +5,772 | - | 393,168 / overrun | - | - | - |
+| 3-2 frame 1104 | fix | 353,232 / +5,772 | same | same | same | same | same |
+| 4-1 stage clear (2488) | pre-fix | 237,561 / +121,434 | 260,052 / +98,952 | 260,046 / +98,952 | - | 237,561 / +121,434 | - |
+| 4-1 stage clear (2488) | fix | 237,561 / +121,434 | same | same | same | same | same |
+
+"same": every number (busy, left, main-loop clocks, vblank-handler clocks)
+equal to ORIGINAL's to the master clock. (The 1104 window holds the input
+change at 1103; `itrace` replays the stored input frame by frame, so the
+spurious overrun of the first worker's margin tool does not apply.)
+
+### Stage loads (`loadtime`, all 22 Level Select entries, mode set and settled before the load)
+
+ORIGINAL's sound-command margin to the next vblank: 38,118 clocks (3-1) to
+298,329 (5-1); first update 339,483 to 347,493 before the next vblank.
+
+| build | worst delay of the sound command / first update vs ORIGINAL | loads where either lands in another vblank |
+|---|---|---|
+| pre-fix | APOCALYPSE 5,220, SMS 5,133, GB DMG 5,043, NES-A 7,392, NES-B 7,386 clocks | none |
+| fix | 0 in every mode and stage (both events at ORIGINAL's master clock) | none |
+
+(Pre-fix, settled modes in a Level Select load did not flip; the 3-2 menu
+route did, by the preview's re-uploads and the NES colour lookups.)
+
+### NES loaders (`research/tools/palette-lag/nes_cycles.py`)
+
+992 calls of `$F1C0` (sprite palettes 0-159) and `$F211` (sets 0-21 in
+stages 1-1, 3-1, 3-2, 4-1), master state 0 and 1, NES-A and NES-B, from one
+saved state with interrupts off: every call takes exactly Original's
+clocks (pre-fix: +138 to +702); the RAM palette, backup and queue equal
+the pre-fix build's in every case; Original's calls are unchanged in clocks
+and results. (Zero page `$29` differs in the 3-2 variant case: the variant
+data moved address in bank `$45`; the colours are equal.)
