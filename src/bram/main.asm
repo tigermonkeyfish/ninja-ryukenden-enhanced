@@ -36,7 +36,8 @@ OPTIONS = $2100
 SAVE_STATUS = $2105         ; bottom of the stack page, after $2100-$2104
 LANGUAGE = $3227            ; native: 0 Japanese, 1 English, 2 Chinese
 DEFAULT_LANGUAGE = 1
-NATIVE_INIT = $fcbe         ; what the reset code called before the patch
+NATIVE_INIT = $fcbe
+PALETTE_BOOT = $5b00        ; src/palette, bank $46 (= CODE_BANK): jsr $4B00, then WAITR         ; what the reset code called before the patch
 
 CODE_BANK = $46
 BRAM_BANK = $f7
@@ -88,7 +89,7 @@ boot_settings:
  pha
  lda #CODE_BANK
  tam #2
- jsr boot_load
+ jsr PALETTE_BOOT           ; src/palette: boot_load ($4B00), then its RAM wait
  pla
  tam #2
  jmp NATIVE_INIT

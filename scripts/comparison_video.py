@@ -203,6 +203,11 @@ def start_point(game, rom, seed, enhanced=False):
     game.call('load_state_file', {'file_path': str(retargeted)})
     if enhanced:
         game.write(0x100, b'\x00\x00')   # in the original, the stack page's floor
+        # The reset's palette wait (src/palette WAITR, $37C0, since 1.11-dev
+        # palette-lag) as it leaves it for the default settings: the native
+        # $FD67-$FD6F in RAM; the bytes are unused in the original and in
+        # builds before it.
+        game.write(0x17c0, bytes.fromhex('6412a512c90190fa60'))
 
 
 def start_stage(game, stage):

@@ -31,6 +31,11 @@ EMULATOR = Path('/workspace/build/toolchain/geargrafx/platforms/linux/geargrafx'
 ORIGINAL = Path('/workspace/DO_NOT_COMMIT_ROMS/Ninja Ryukenden (J).pce')
 ROMS = Path('/workspace/roms')
 ROM_111 = ROMS / 'Ninja Ryukenden - Enhanced v1.11-dev (apocalypse, reset 2).pce'
+# PALETTE_LAG_ROM: test another 1.11-dev build in the six menu variants and
+# 'v1.11-nomenu'; PALETTE_LAG_TRACES: where its traces go (default traces/).
+import os
+if os.environ.get('PALETTE_LAG_ROM'):
+    ROM_111 = Path(os.environ['PALETTE_LAG_ROM'])
 ROM_110 = ROMS / 'Ninja Ryukenden - Enhanced v1.10.pce'
 SHA_111 = 'cec5f7b3d1fddc224ad8da921b20e6b0eec55295d59f001a714c209a33bb8059'
 OUT = Path('/workspace/build/palette-lag')
@@ -97,15 +102,22 @@ def record(runname, variant, upto=None, outdir=None, extra=None):
                 'health': ram[0xead], 'cam': int.from_bytes(ram[0x20f:0x211], 'little'),
                 'master': ram[0x240], 'boss': ram[0x1035], 'state': ram[0xeab],
                 'opt': ram[0x100]})
+            if changed or n == 0:
+                trace[-1]['vce_words'] = vce.hex()     # the whole VCE when it changed
     return trace
 
 
+TRACES = Path(os.environ.get('PALETTE_LAG_TRACES', OUT / 'traces'))
+
+
 def trace_path(runname, variant):
-    return OUT / 'traces' / f'{runname}.{variant.replace(" ", "")}.json'
+    if variant in ('orig-rom', 'v1.10') and not (TRACES / f'{runname}.{variant}.json').exists():
+        return OUT / 'traces' / f'{runname}.{variant}.json'      # the shared baseline
+    return TRACES / f'{runname}.{variant.replace(" ", "")}.json'
 
 
 def survey(runs, variants):
-    (OUT / 'traces').mkdir(parents=True, exist_ok=True)
+    TRACES.mkdir(parents=True, exist_ok=True)
     for run in runs:
         for variant in variants:
             path = trace_path(run, variant)

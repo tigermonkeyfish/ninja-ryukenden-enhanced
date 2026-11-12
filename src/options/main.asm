@@ -123,8 +123,10 @@ RYU_STATE = $2eab           ; native: Ryu's state, 10 from his death on
 RYU_DEAD = 10
 RYU_HEALTH = $2ead
 QUEUE_COUNT = $2260         ; native palette upload queue: entries
-QUEUE_ALL = $f394           ; native: queue colours 0-511, under the lock
-WAIT_VBLANK = $fd67
+QUEUE_ALL = $f394
+PALETTE_CONFIGURE = $5b03   ; src/palette (bank $46): after a change of $2100 bits 3-5           ; native: queue colours 0-511, under the lock
+WAIT_VBLANK = $37c0         ; src/palette's WAITR: the native wait ($FD67) in RAM, with the
+                            ; mapped modes' idle worker (since palette-lag)
 SOUND_FLAGS = $387e         ; sound driver (bank $38, run by the vblank interrupt at
                             ; $FD16): bit 6 music, bit 7 effect channels played
 SET_WRITE = $fc34           ; native: VRAM write address = X:A, register 2
@@ -419,7 +421,8 @@ palette_flagged:
  ora <SCRATCH
  sta OPTIONS
  plp
- jmp QUEUE_ALL
+ jsr QUEUE_ALL
+ jmp PALETTE_CONFIGURE      ; src/palette: WAITR and LIVE for the new mode
 palette_kept:
  rts
 
