@@ -13,7 +13,7 @@ the cartridge slot with the EverDrive in it. **Part 1 is the test that
 matters.**
 
 Build: `Ninja Ryukenden - Enhanced v1.11-dev (apocalypse, reset).pce`
-(SHA-256 `SHA_PLACEHOLDER`; the saved-settings code `src/bram` is byte for byte
+(SHA-256 `558fc5d2…c672`; the saved-settings code `src/bram` is byte for byte
 that of the `all palettes, dark lift 2, settings save` build `f3114ade…a0a0`,
 which this one replaces; only the menu changed:
 [v111-reset.md](v111-reset.md)). In the game, press **Select** during play.

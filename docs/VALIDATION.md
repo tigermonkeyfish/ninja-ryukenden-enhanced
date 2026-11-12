@@ -126,6 +126,9 @@ together (branch `v111-final`) is shown to be the byte union of the two
 builds those records were made on, and has its own interaction checks
 (a mode loaded from backup RAM played to a stage end among them) in
 [validation/v111-final.md](validation/v111-final.md).
+Its successor `v111-reset` (APOCALYPSE, the PALETTE order, the reset row
+and the plain status line; only the menu module changed) has its record in
+[validation/v111-reset.md](validation/v111-reset.md).
 
 ```sh
 python3 scripts/check_bram.py --emulator /path/to/geargrafx \

@@ -23,7 +23,7 @@
   [evidence](validation/nes-firewheel.md), emulator only). With it off the
   game plays as 1.10. Code: `src/nes-firewheel` in bank 3's unused tail;
   no fixed-bank bytes.
-- **The build to test on hardware** (1.11-dev, branch `v111-final` =
+- **The build to test on hardware** (since 2026-11-12 the `v111-reset` build below, which is this one with only the menu changed; 1.11-dev, branch `v111-final` =
   `v111` + `dark-lift-fix`, merged with conflicts in two documents only):
   everything below in one ROM, `f3114ade…a0a0`, delivered in
   `/workspace/roms/` as `Ninja Ryukenden - Enhanced v1.11-dev (all
@@ -42,6 +42,27 @@
   ([record](validation/v111-final.md),
   [test list](validation/bram-save-hardware-checklist.md)). Not merged
   into `main`; `v111` and `dark-lift-fix` are both contained in it.
+- **Menu: APOCALYPSE, reset row, status line** (1.11-dev, branch
+  `v111-reset` from `v111-final`; the owner's requests of 2026-11-12):
+  the palette mode HELL is shown as **APOCALYPSE** (menu and guides; the
+  source keeps the name HELL, same value `$18`, same colours: palette data
+  bytes unchanged); the PALETTE row steps ORIGINAL, APOCALYPSE, NES-A,
+  NES-B, SMS, GB DMG (the `$2100` values unchanged, so saved settings
+  load as before); a **RESET OPTIONS** row (`PRESS I`, I or II) sets the
+  draft to the power-on defaults (palette preview at once, STAGE kept; Run
+  applies and saves, Select discards); the save status is a plain line at
+  the window's top (`SETTINGS SAVED`, `BACKUP MEMORY FOUND`, `NO BACKUP
+  MEMORY`, `BACKUP MEMORY FULL`, `BACKUP MEMORY ERROR n`) instead of
+  `SAVE: …` under the controls. Only the `options` module changed (its
+  status texts take the unowned bank `$46` `$4100-$41FF`; the glyphs moved
+  to `$584F-$587E`); `src/bram` is byte for byte `v111-final`'s. Build
+  `558fc5d2…c672` in `/workspace/roms/` as `Ninja Ryukenden - Enhanced v1.11-dev
+  (apocalypse, reset).pce` with a patch for each original and the
+  checklist copy `settings-save-hardware-checklist-apocalypse-reset-build.md`
+  (steps 1.8a-1.8b test the reset row). Emulator only
+  ([record](validation/v111-reset.md)); **waiting for the maintainer's
+  look and hardware test**. The guide's menu screenshots still show the
+  1.10 window.
 - **Palette modes** (1.11-dev, branch `gb-palette`): `$2100` bits 3-4 (bits
   3-5 since the SMS palette, below),
   00 Original (default), 01 NES (reserved, shown as Original), 10 GB DMG
@@ -52,7 +73,7 @@
   native palette 1 after the re-queue there
   ([architecture](ARCHITECTURE.md#palette-modes),
   [evidence](validation/gb-palette.md), emulator only).
-- **HELL palette** (1.11-dev, branch `hell-palette`): bits 3-4 = 11, menu
+- **HELL palette** (shown to the player as APOCALYPSE since `v111-reset`; 1.11-dev, branch `hell-palette`): bits 3-4 = 11, menu
   value `HELL`; the owner's mock-up "Lava" (candidate C,
   `src/palette/hell.json`) applied to background palettes 0-14 only, so Ryu,
   enemies and the HUD keep their colours. Code and table in bank `$43`
@@ -189,8 +210,9 @@
   when there is one (a System Card style file `NR ENHANCE`, 26 bytes with
   its terminator), and the reset loads them; without backup RAM, or when it
   is full, damaged or unformatted and not blank, nothing is written and
-  the game starts with the defaults as before. The popup's last row shows
-  the status (`SAVE: OK`, `READY`, `NONE`, `FULL`, `ERROR n`; `$2105`).
+  the game starts with the defaults as before. The popup's last row showed
+  the status (`SAVE: OK`, `READY`, `NONE`, `FULL`, `ERROR n`; `$2105`;
+  since `v111-reset` a plain line at the top, see above).
   Code: `src/bram` (the old `src/english` folded in), bank `$46`
   `$4B00-$4FFF` and the reset trampoline `$FFE6-$FFF5`. Emulator evidence:
   the image matrix, power cycles and negative controls pass on a test

@@ -690,11 +690,12 @@ restored on cancel: 1 KiB of backup the menu does not have; not done.
 Bank `$46` (1.11-dev): `$4000-$40FF` dispatch, `$4100-$41FF` the menu's
 status texts (`options`, 216 bytes, since the reset-row build), `$4200-$42FF`
 unowned (256 bytes, still free), `$4300-$43FF` cinema
-sprite reset, `$4400-$4AFF` the menu (`options`, used to `$4AD4` before the status texts moved out; see Menu display), `$4B00-$4FFF`
+sprite reset, `$4400-$4AFF` the menu (`options`, 1,677 bytes used to `$4A8C`), `$4B00-$4FFF`
 the saved settings (`bram`, 962 bytes used to `$4EC1`; entries `$4B00`
 reset loader, `$4B03` save),
 `$5000-$53FF` palette code (926 bytes used), `$5400-$57FF` its GB DMG
-table, `$5800-$583F` 6-1 dispatch, `$5840-$58FF` options' renderer gate,
+table, `$5800-$583F` 6-1 dispatch, `$5840-$58FF` options' renderer gate and the
+menu glyphs (to `$587E`),
 `$5900-$59FF` speed (143 bytes used), `$5A00-$5AFF` the palette module's
 `fold_queue` and SMS stubs (163 bytes used), `$5B00-$5FFF` unowned (1,280 bytes;
 the `$FF` tail of speed's old claim `$5900-$5FFF`, never read or executed:
@@ -762,9 +763,10 @@ no longer in the repository.
 Since 1.11-dev the menu is a popup window over the playfield; the HUD rows
 28-30 are never written. Select in gameplay (hook `$FF70`, unchanged open
 conditions `$2E63 = 0`, `$2201 != 0`) calls bank `$46` `$4400`
-(`src/options`, `$4400-$4AD4` of the claimed `$4400-$4AFF` since the reset row, 43 bytes
-spare; the three menu glyphs moved to `$584F-$587E`, after the renderer
-gate in the module's other claim `$5840-$58FF`, to make room). Its layout and option
+(`src/options`, 1,677 bytes, `$4400-$4A8C`, of the claimed `$4400-$4AFF`,
+since the reset-row build; to make room the three menu glyphs moved to
+`$584F-$587E`, after the renderer gate in the module's claim
+`$5840-$58FF`, and the save status texts to `$4100-$41D7`). Its layout and option
 values are `src/options/menu.txt`, generated into `menu-text.inc` by
 `scripts/menu_text.py`.
 
