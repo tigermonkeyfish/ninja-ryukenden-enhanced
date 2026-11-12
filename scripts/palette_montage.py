@@ -31,6 +31,7 @@ ROUTES = ROOT / 'research/palette-video'
 COUNT = 180
 EXTRA = 45                  # last clip's frames under the dissolve into the end card
 SR = 44100
+W, H = pv.W, pv.H
 END = 7.0
 # (name, run file, firewheel, banner, trailer's start frame or explicit window)
 CLIPS = [
@@ -215,10 +216,10 @@ def assemble(args, windows):
             None,
             ('Development build, emulator recordings: hardware testing pending', 0, 30, '0xf2d060', 976),
             ('Gameplay and audio recorded in the Geargrafx emulator from scripted button-input replays', 2, 28, '0xc8c8d4', 1018)]
-    intro = [('NINJA RYUKENDEN ENHANCED', 0, 104, 'white', 300),
-             ('Palette modes', 0, 64, '0xf2d060', 450),
-             ('Six palettes, frame-synchronized, same button input', 2, 40, '0xc8c8d4', 640),
-             (f'Version {version}', 2, 40, '0xf2d060', 720)]
+    intro = [('NINJA RYUKENDEN ENHANCED', 0, 104, 'white', 170),
+             ('Palette Modes', 0, 54, '0xf2d060', 295),
+             ('Six palettes, six panels, one input: frame-synchronized', 2, 40, '0xc8c8d4', 700),
+             (f'Version {version}', 2, 42, '0xf2d060', 770)]
     for kind, links in (('YouTube', 'youtube.com/@TigerMonkeyFish'),
                         ('X', 'youtube.com/@TigerMonkeyFish   ·   tigermonkeyfish.itch.io   ·   ko-fi.com/tigermonkeyfish')):
         lines = [(links, 0, 34, 'white', 934) if c is None else c for c in card]
@@ -262,8 +263,8 @@ def assemble(args, windows):
         a, n = windows[name]
         trims.append(f'[{i + 1}:v]format=gbrp,setsar=1[c{i + 1}]')
     cat = ''.join(f'[c{i}]' for i in range(nclip + 1))
-    graph = (';'.join(trims) + f';{cat}concat=n={nclip + 1}:v=1:a=0[g];'
-             f'[{nclip + 1}:v]scale={W}:{H}:flags=lanczos,format=gbrp,fps=60,trim=duration={END + EXTRA / 60:.4f},setpts=PTS-STARTPTS[e];'
+    graph = (';'.join(trims) + f';{cat}concat=n={nclip + 1}:v=1:a=0,fps=60,settb=1/60,setpts=N[g];'
+             f'[{nclip + 1}:v]scale={W}:{H}:flags=lanczos,format=gbrp,fps=60,trim=duration={END + EXTRA / 60:.4f},setpts=N,settb=1/60[e];'
              f'[g][e]xfade=transition=fade:duration={EXTRA / 60:.4f}:offset={(IN + games) / 60:.4f},'
              'scale=out_color_matrix=bt709:out_range=tv,format=yuv420p[v]')
     (tmp / 'graph.txt').write_text(graph)
@@ -276,16 +277,20 @@ def assemble(args, windows):
     out.mkdir(parents=True, exist_ok=True)
     for kind in ('YouTube', 'X'):
         crf = '14' if kind == 'YouTube' else '16'
-        target = out / f'Ninja Ryukenden Enhanced v{version} - Palettes ({kind}).mp4'
-        if target.exists():
-            target = target.with_name(target.stem + ' (2)' + target.suffix)
+        target = work / f'palettes-{kind}.mp4'          # copied to --out only when complete
         cmd = ['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y'] + [str(tmp / f'end-{kind}.png') if x == '__END__' else x for x in inputs] + src + [
             '-/filter_complex', str(tmp / 'graph.txt'), '-map', '[v]', '-map', f'{nclip + 2}:a', '-af', af,
             '-t', f'{total_t:.4f}', '-c:v', 'libx264', '-preset', 'slow', '-crf', crf, '-profile:v', 'high', '-level', '4.2',
             '-g', '60', '-bf', '2', '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709',
             '-color_range', 'tv', '-r', '60', '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-movflags', '+faststart', str(target)]
         subprocess.run(cmd, check=True)
-        print('wrote', target, flush=True)
+        final = out / f'Ninja Ryukenden Enhanced v{version} - Palettes ({kind}).mp4'
+        k = 2
+        while final.exists():                          # never overwrite what is there
+            final = out / f'Ninja Ryukenden Enhanced v{version} - Palettes ({kind}) ({k}).mp4'
+            k += 1
+        shutil.copyfile(target, final)
+        print('wrote', final, flush=True)
     (work / 'build.json').write_text(json.dumps({'bounds': bounds, 'intro_frames': IN, 'game_frames': games, 'total_s': total_t,
                                                  'clips': {n: windows[n] for n in names}}, indent=1))
 

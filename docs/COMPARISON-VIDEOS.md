@@ -180,3 +180,33 @@ depends on the game's timing: if a later build changed load or lag timing,
 `make` would report the divergence instead of writing a video, and the run
 would need a new search. The route bot plays like a bot (hesitations, a few
 hits), and each video starts at the stage's first gameplay frame.
+
+## Palette montage (1.11-dev)
+
+`scripts/palette_montage.py` (with `scripts/palette_video.py`) renders a
+six-panel video: Original, Apocalypse, SMS, NES-A, NES-B and GB DMG playing
+one stored run, frame-synchronized. Each panel is a fresh session that loads
+the same start state and sets the palette (and the NES Firewheel row) through
+the in-game menu (Select, rows, Run), as a player does; every mode presses
+the same number of buttons so the menu takes the same frames. Pictures
+start at the stage's first update, so the popup is never on screen. Phases:
+`pick` (damage-free windows from the Original panel's trace), `record` (six
+sessions, a sync check of the sprite table, Ryu's bytes, the timer, camera,
+area, lives, health, effects and state on every frame, then a lossless clip)
+and `assemble` (intro card, clips, end card, levelled audio, YouTube and X
+files). Audio needs the private audio-capture build of Geargrafx
+(`NG_AUDIO_DUMP`, see profile/video-tools); `windows.json` holds the chosen
+windows (`research/palette-video/`).
+
+Finding: in 3-2, from the damage at frame 1032 of the stored run, SMS, NES-A,
+NES-B and GB DMG drift one frame from Original and Apocalypse (sprite table
+first, then Ryu, timer and camera for the rest of the run); every other
+window of the 3-2 run and of the other stages stayed identical in all six
+panels. The montage uses a window that ends before it (3-2 frames 370-549).
+
+`research/palette-video/2-2-firewheel.json` is a 2-2 route that picks up the
+real Fire Wheel (the bird at 2-2 area 1, spawn id 8, item 7): the stored
+input to frame 1098, a mid-air slash that kills the bird, then plain run and
+jump input found with `research/tools/palette-video/beam.py` (NES Firewheel
+on). Replayed with the option off, Ryu is hurt by the last enemy (frame 1437,
+knocked back); with it on he is not (health 13 to the end of the window).
