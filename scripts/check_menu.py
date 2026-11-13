@@ -154,13 +154,13 @@ def allowed(offset, stack_pointer):
 # ($2205-$220C, written before every call), $2284-$2285 and queue entries past the count. A cancelled
 # palette preview leaves them as the restoring upload wrote them.
 PREVIEW_SCRATCH = set(range(0x205, 0x20d)) | {0x284, 0x285} | set(range(0x261, 0x281))
-# Since palette-lag (src/palette, "Palette timing"): the mapped modes' worker
+# Since palette-lag (src/palette, "Palette timing"): BORDER_MAP ($37E2-$37E3) and the mapped modes' worker
 # scratch ($37E4-$37E8: bytes left, override flag, SHADOW offset) and SHADOW
 # ($3C00-$3FFF), the converted colours: both are written before they are
 # read (the worker converts every queued colour before setting FASTOK; the
 # fast upload reads only those), so a cancelled preview may leave them as its
 # conversions wrote them.
-PREVIEW_SCRATCH |= set(range(0x17e4, 0x17e9)) | set(range(0x1c00, 0x2000))
+PREVIEW_SCRATCH |= set(range(0x17e2, 0x17e9)) | set(range(0x1c00, 0x2000))
 
 
 STATE_IN_2104 = True        # main(): False for builds before the SMS palette
