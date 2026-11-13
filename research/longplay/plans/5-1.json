@@ -1,0 +1,292 @@
+{
+ "stage": "5-1",
+ "notes": "No Level Select run. One area, 12 pages (3,072 px), played rightward; beam legs to standing spots read off the ROM map (floor y 155, ledges y 104/72/109/128/40, the hanging blocks), each leg ending standing on the next spot; then right to the stage end.",
+ "legs": [
+  {
+   "name": "p0",
+   "beam": {
+    "waypoints": [],
+    "goal": {
+     "near": [
+      300,
+      155,
+      16,
+      4
+     ],
+     "in_area": 0
+    },
+    "width": 100,
+    "max_frames": 1500,
+    "seconds": 1500,
+    "ywt": 1.0
+   }
+  },
+  {
+   "name": "p1",
+   "beam": {
+    "waypoints": [],
+    "goal": {
+     "near": [
+      700,
+      155,
+      16,
+      4
+     ],
+     "in_area": 0
+    },
+    "width": 100,
+    "max_frames": 1500,
+    "seconds": 1500,
+    "ywt": 1.0
+   }
+  },
+  {
+   "name": "p2",
+   "beam": {
+    "waypoints": [],
+    "goal": {
+     "near": [
+      900,
+      104,
+      16,
+      4
+     ],
+     "in_area": 0
+    },
+    "width": 100,
+    "max_frames": 1500,
+    "seconds": 1500,
+    "ywt": 1.0
+   }
+  },
+  {
+   "name": "p3",
+   "beam": {
+    "waypoints": [],
+    "goal": {
+     "near": [
+      1040,
+      72,
+      16,
+      4
+     ],
+     "in_area": 0
+    },
+    "width": 100,
+    "max_frames": 1500,
+    "seconds": 1500,
+    "ywt": 1.0
+   }
+  },
+  {
+   "name": "p4",
+   "beam": {
+    "waypoints": [],
+    "goal": {
+     "near": [
+      1200,
+      109,
+      16,
+      4
+     ],
+     "in_area": 0
+    },
+    "width": 100,
+    "max_frames": 1500,
+    "seconds": 1500,
+    "ywt": 1.0
+   }
+  },
+  {
+   "name": "p5",
+   "beam": {
+    "waypoints": [],
+    "goal": {
+     "near": [
+      1400,
+      155,
+      16,
+      4
+     ],
+     "in_area": 0
+    },
+    "width": 100,
+    "max_frames": 1500,
+    "seconds": 1500,
+    "ywt": 1.0
+   }
+  },
+  {
+   "name": "p6",
+   "beam": {
+    "waypoints": [],
+    "goal": {
+     "near": [
+      1650,
+      128,
+      16,
+      4
+     ],
+     "in_area": 0
+    },
+    "width": 100,
+    "max_frames": 1500,
+    "seconds": 1500,
+    "ywt": 1.0
+   }
+  },
+  {
+   "name": "p7",
+   "beam": {
+    "waypoints": [],
+    "goal": {
+     "near": [
+      1775,
+      72,
+      16,
+      4
+     ],
+     "in_area": 0
+    },
+    "width": 100,
+    "max_frames": 1500,
+    "seconds": 1500,
+    "ywt": 1.0
+   }
+  },
+  {
+   "name": "p8",
+   "beam": {
+    "waypoints": [],
+    "goal": {
+     "near": [
+      1950,
+      40,
+      16,
+      4
+     ],
+     "in_area": 0
+    },
+    "width": 100,
+    "max_frames": 1500,
+    "seconds": 1500,
+    "ywt": 1.0
+   }
+  },
+  {
+   "name": "p9",
+   "beam": {
+    "waypoints": [],
+    "goal": {
+     "near": [
+      2250,
+      72,
+      16,
+      4
+     ],
+     "in_area": 0
+    },
+    "width": 100,
+    "max_frames": 1500,
+    "seconds": 1500,
+    "ywt": 1.0
+   }
+  },
+  {
+   "name": "p10",
+   "beam": {
+    "waypoints": [],
+    "goal": {
+     "near": [
+      2380,
+      40,
+      16,
+      4
+     ],
+     "in_area": 0
+    },
+    "width": 100,
+    "max_frames": 1500,
+    "seconds": 1500,
+    "ywt": 1.0
+   }
+  },
+  {
+   "name": "p11",
+   "beam": {
+    "waypoints": [],
+    "goal": {
+     "near": [
+      2530,
+      155,
+      16,
+      4
+     ],
+     "in_area": 0
+    },
+    "width": 100,
+    "max_frames": 1500,
+    "seconds": 1500,
+    "ywt": 1.0
+   }
+  },
+  {
+   "name": "p12",
+   "beam": {
+    "waypoints": [],
+    "goal": {
+     "near": [
+      2720,
+      44,
+      16,
+      4
+     ],
+     "in_area": 0
+    },
+    "width": 100,
+    "max_frames": 1500,
+    "seconds": 1500,
+    "ywt": 1.0
+   }
+  },
+  {
+   "name": "p13",
+   "beam": {
+    "waypoints": [],
+    "goal": {
+     "near": [
+      2950,
+      155,
+      16,
+      4
+     ],
+     "in_area": 0
+    },
+    "width": 100,
+    "max_frames": 1500,
+    "seconds": 1500,
+    "ywt": 1.0
+   }
+  },
+  {
+   "name": "end",
+   "beam": {
+    "waypoints": [
+     [
+      3040,
+      155,
+      16,
+      0,
+      40
+     ]
+    ],
+    "goal": {
+     "stage_change": true
+    },
+    "width": 100,
+    "max_frames": 1500,
+    "seconds": 1500
+   }
+  }
+ ]
+}
