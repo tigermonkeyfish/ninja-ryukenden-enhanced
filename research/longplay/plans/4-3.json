@@ -1,0 +1,334 @@
+{
+ "stage": "4-3",
+ "notes": "No Level Select run. Map (stagemap.py) + poke exit scans; beam legs with hand waypoints. Area 0 (one page): a column hangs from the top (x 101-144, to y 122) over a floor with a pit x 169-210; the exit is up the column (door x 100-141, y < 24): jump the pit, walk under it, cling to its left face (the door is only touched from that side), wall-hop up. Area 1 (4 pages): the block x 352-448 (top y 46) is climbed (cling), then floor, a girder (y 110) and platforms (y 76) to the exit door at the top right (x 932-976, y < 74). Area 2 (5 pages): up the entry column, blocks (tops 134, 102), floor, cling and climb onto the hanging block x 579-753 (top y 44), platforms (y 76, 60), floor, then up the left face of the hanging column x 1188-1214 to the exit (poke: x 1192, y < 24 -> area 3).",
+ "legs": [
+  {
+   "name": "a0",
+   "beam": {
+    "waypoints": [
+     [
+      160,
+      156,
+      10,
+      null,
+      4,
+      1
+     ],
+     [
+      70,
+      156,
+      12,
+      null,
+      4,
+      1
+     ],
+     [
+      93,
+      100,
+      10,
+      null,
+      24
+     ],
+     [
+      93,
+      50,
+      10,
+      null,
+      20
+     ],
+     [
+      93,
+      15,
+      12,
+      null,
+      14
+     ]
+    ],
+    "goal": {
+     "area": 1
+    },
+    "width": 80,
+    "max_frames": 1500,
+    "seconds": 1500,
+    "ywt": 1.0
+   }
+  },
+  {
+   "name": "a1-to-platform",
+   "beam": {
+    "waypoints": [
+     [
+      200,
+      154,
+      12,
+      1,
+      4,
+      1
+     ],
+     [
+      330,
+      154,
+      12,
+      1,
+      4,
+      1
+     ],
+     [
+      345,
+      90,
+      10,
+      1,
+      30
+     ],
+     [
+      400,
+      46,
+      20,
+      1,
+      4,
+      1
+     ],
+     [
+      480,
+      154,
+      16,
+      1,
+      4,
+      1
+     ],
+     [
+      600,
+      110,
+      16,
+      1,
+      4,
+      1
+     ],
+     [
+      690,
+      76,
+      20,
+      1,
+      4,
+      1
+     ]
+    ],
+    "goal": {
+     "near": [
+      786,
+      76,
+      12,
+      2
+     ],
+     "in_area": 1
+    },
+    "width": 80,
+    "max_frames": 3000,
+    "seconds": 2400,
+    "ywt": 1.0
+   }
+  },
+  {
+   "name": "a1-exit",
+   "beam": {
+    "waypoints": [
+     [
+      850,
+      76,
+      10,
+      1,
+      4,
+      1
+     ],
+     [
+      945,
+      40,
+      12,
+      1,
+      30
+     ]
+    ],
+    "goal": {
+     "area": 2
+    },
+    "width": 100,
+    "max_frames": 900,
+    "seconds": 2400,
+    "ywt": 1.0
+   }
+  },
+  {
+   "name": "a2-1",
+   "beam": {
+    "waypoints": [
+     [
+      150,
+      120,
+      10,
+      2,
+      30
+     ],
+     [
+      186,
+      78,
+      14,
+      2,
+      4,
+      1
+     ],
+     [
+      304,
+      134,
+      12,
+      2,
+      4,
+      1
+     ]
+    ],
+    "goal": {
+     "near": [
+      368,
+      102,
+      12,
+      3
+     ],
+     "in_area": 2
+    },
+    "width": 100,
+    "max_frames": 1500,
+    "seconds": 1500,
+    "ywt": 1.0
+   }
+  },
+  {
+   "name": "a2-2",
+   "beam": {
+    "waypoints": [
+     [
+      470,
+      154,
+      16,
+      2,
+      4,
+      1
+     ],
+     [
+      560,
+      154,
+      12,
+      2,
+      4,
+      1
+     ],
+     [
+      571,
+      100,
+      10,
+      2,
+      30
+     ]
+    ],
+    "goal": {
+     "near": [
+      640,
+      44,
+      40,
+      3
+     ],
+     "in_area": 2
+    },
+    "width": 100,
+    "max_frames": 1500,
+    "seconds": 1500,
+    "ywt": 1.0
+   }
+  },
+  {
+   "name": "a2-3",
+   "beam": {
+    "waypoints": [
+     [
+      720,
+      44,
+      20,
+      2,
+      4,
+      1
+     ],
+     [
+      818,
+      76,
+      12,
+      2,
+      4,
+      1
+     ],
+     [
+      915,
+      76,
+      20,
+      2,
+      4,
+      1
+     ]
+    ],
+    "goal": {
+     "near": [
+      1040,
+      60,
+      40,
+      3
+     ],
+     "in_area": 2
+    },
+    "width": 100,
+    "max_frames": 1500,
+    "seconds": 1500,
+    "ywt": 1.0
+   }
+  },
+  {
+   "name": "a2-exit",
+   "beam": {
+    "waypoints": [
+     [
+      1150,
+      154,
+      20,
+      2,
+      4,
+      1
+     ],
+     [
+      1180,
+      100,
+      10,
+      2,
+      30
+     ],
+     [
+      1180,
+      50,
+      10,
+      2,
+      20
+     ],
+     [
+      1182,
+      15,
+      12,
+      2,
+      14
+     ]
+    ],
+    "goal": {
+     "area": 3
+    },
+    "width": 100,
+    "max_frames": 1500,
+    "seconds": 1500,
+    "ywt": 1.0
+   }
+  }
+ ]
+}

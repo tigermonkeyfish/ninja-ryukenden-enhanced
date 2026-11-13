@@ -164,6 +164,9 @@ def main():
                     if span:      # the span's last point (the way out), even in the air
                         pts.append([span[-1][2], span[-1][3], 6, span[-1][1], 6])
                     b['waypoints'] = pts + b.get('waypoints', [])
+                if 'near' in b['goal']:     # the goal spot is the last waypoint too
+                    gx, gy, gr, gry = b['goal']['near']
+                    b['waypoints'] = b['waypoints'] + [[gx, gy, gr, b['goal'].get('in_area'), gry]]
                 wps = [tuple(w) for w in b.pop('waypoints')]
                 g = goal_fn(b.pop('goal'), f.info(), boss_seen)
                 bw = b.pop('boss_weight', 0)
