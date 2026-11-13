@@ -260,3 +260,24 @@ Emulator evidence only.
   knock-back; a timing grid from the step x 237, y 104 found the same (wait 4
   frames, jump left 20 frames: the hit lifts Ryu onto y 40, health -1). It is
   a fixed segment leg in the plan (`a2-knockback`), after the beam's route.
+
+### 5-3 to 6-4B (and where 6-4C stands)
+
+- 5-3: area 0's pipe exit needs up held on the pipe (motion state 4, about
+  1 px/frame); area 2's first jump off the entry pipe works only from y 110
+  (80 frames of up), grid-found and fixed; area 5's jump from the column top
+  onto the girder grid-found and fixed. `be01f4b`.
+- 5-4 boss (the 2-3 boss plan): 480 frames. 6-1: the path plan as generated.
+- 6-2 (no run): map + poke exits per area (4 areas leftward/up the hanging
+  columns' left faces, area 4 rightward to the end). `9db8c37`.
+- 6-3: area 0's door column is climbed with up (fixed leg); area 2's post
+  x 965-991 holds an enemy, Ryu gets onto it by a hit in the air as the bot
+  did (grid); a drop from a cling and the exit by hand points. `1ef00b0`.
+- 6-4A (676 frames) and 6-4B (1,105 frames) bosses: the boss plan. `b6d188a`,
+  `6de7ed4`.
+- `research/longplay/fast/rescue.py` turns a stalled leg plus a grid-found
+  move into a fixed leg and a continuing beam leg.
+- 6-4C (final boss, stage byte 21): boss health `$1035` = 16 from the 15th
+  frame; the boss plan stalls with no damage at all; single attack patterns
+  (slash, jump-slash at x 60-210) did no damage either. Ryu has no ninpo
+  (HUD -00). Under investigation.
