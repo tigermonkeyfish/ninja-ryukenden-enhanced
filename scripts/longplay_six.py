@@ -90,7 +90,7 @@ def memory(game):
     return f'RSS python {rss(os.getpid())} MB, geargrafx {rss(game.emu.proc.pid)} MB, MemAvailable {avail} MB'
 
 
-def boot_unmodified(game, rom, entered):
+def boot_unmodified(game, rom, entered, shortcut=False):
     """longplay_lib.boot_to_first_update for the unpatched HuCard: no backup RAM,
     no settings (patch-only addresses $2100/$2105 are not read). Same title
     handling (Run), same stop at 1-1's first main-loop update ($8457)."""
@@ -104,6 +104,14 @@ def boot_unmodified(game, rom, entered):
             previous, since = master, 0
         if master == b'\x01\x01':
             title = True
+        if shortcut and master == b'\x01\x01' and since in (10, 12, 14, 16):
+            # the game's own language switch: hold I + II, tap Select (real input)
+            act = {10: [('I', 'press'), ('II', 'press')], 12: [('select', 'press')],
+                   14: [("select", "release")], 16: [('I', 'release'), ('II', 'release')]}[since]
+            for b, ac in act:
+                game.call('controller_button', {'player': 1, 'button': b, 'action': ac})
+        if shortcut and master == b'\x01\x01' and since == 30:
+            print('language byte after shortcut:', game.read(0x1227, 1)[0], flush=True)
         if master == b'\x01\x01' and since == 180 and not pressed:
             presses.append(frame)
             pressed = True
@@ -118,7 +126,7 @@ def boot_unmodified(game, rom, entered):
             break
     else:
         raise RuntimeError('gameplay not reached')
-    status = {'boot_frames': frame, 'presses': presses}
+    status = {'boot_frames': frame, 'presses': presses, 'language': game.read(0x1227, 1)[0], 'shortcut': shortcut}
     game.call('set_breakpoint', {'address': f'{FIRST_UPDATE_ROM:x}', 'memory_area': 'rom', 'execute': True})
     game.run_to('8457', polls=400000)
     game.call('remove_breakpoint', {'address': f'{FIRST_UPDATE_ROM:x}', 'memory_area': 'rom'})
@@ -135,7 +143,7 @@ def run_mode(a):
     windows = set(json.loads(a.windows.read_text())) if a.windows else set()
     out = a.out
     out.mkdir(parents=True, exist_ok=True)
-    tag = a.mode.replace(' ', '')
+    tag = (a.tag or a.mode).replace(' ', '')
     work = Path(tempfile.mkdtemp(prefix='longplay-six-', dir='/workspace/build/longplay'))
     tmp = work / 'clock.state'
     cnt, mas, m2s, stg, are, bos = (array.array('B') for _ in range(6))
@@ -153,9 +161,10 @@ def run_mode(a):
 
     with Game(EMULATOR, work) as game:
         if a.mode == UNMODIFIED:
-            status = boot_unmodified(game, a.rom, work / 'entered.state')
+            status = boot_unmodified(game, a.rom, work / 'entered.state', a.shortcut)
         else:
-            status = boot_to_first_update(game, a.rom, a.mode, work / 'entered.state')
+            status = boot_to_first_update(game, a.rom, a.mode, work / 'entered.state', a.language)
+            status['language'] = game.read(0x1227, 1)[0]
         entered = pl.master_clock(game, tmp)
         game.frame_end = None
         game.leftover = False
@@ -386,6 +395,9 @@ def main():
     r.add_argument('--file', type=Path, required=True)
     r.add_argument('--rom', type=Path, default=ROM)
     r.add_argument('--out', type=Path, required=True)
+    r.add_argument('--tag', help='output file prefix (default: the mode)')
+    r.add_argument('--shortcut', action='store_true', help='unmodified boot: select English with the title shortcut')
+    r.add_argument('--language', type=int, default=1, help='saved language for patched modes (0 Japanese, 1 English)')
     r.add_argument('--windows', type=Path, help='JSON list of frames to step with breakpoints armed')
     w = sub.add_parser('windows', help='frames to measure with breakpoints, from a plain ORIGINAL run')
     w.add_argument('out', type=Path)

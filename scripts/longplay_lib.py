@@ -18,11 +18,11 @@ MODE_BITS = {'original': 0x00, 'apocalypse': 0x18, 'nes-a': 0x08, 'nes-b': 0x28,
 FIRST_UPDATE_ROM = 0x2457
 
 
-def boot_to_first_update(game, rom, mode, entered):
+def boot_to_first_update(game, rom, mode, entered, language=1):
     """Power on in `mode` (settings loaded from backup RAM) and stop at 1-1's first
     update; leaves the machine on a freshly reloaded state saved at `entered`.
     Returns status (opt byte, save status, boot frames)."""
-    bram = bi.image([bi.settings_entry(options=MODE_BITS[mode])])
+    bram = bi.image([bi.settings_entry(options=MODE_BITS[mode], language=language)])
     game.power_on(rom, bram)
     previous, since, presses, pressed, title = None, 0, [200], False, False
     for frame in range(1, 20000):
