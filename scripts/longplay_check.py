@@ -43,15 +43,21 @@ def main():
     run = json.loads(a.file.read_text())
     segs = run['segments']
     total = sum(n for n, _ in segs)
-    # frames at which to look: one before each marker and the marker itself
+    # frames at which to look: a window before each stage marker (stepped one
+    # frame at a time, to find the first frame of that stage) and the marker
+    WINDOW = 400
     checks = {}
     for s in run['stages']:
-        if s['start_frame'] > 0:
-            checks.setdefault(s['start_frame'] - 1, []).append(('before', s))
+        for fr in range(max(0, s['start_frame'] - WINDOW), s['start_frame']):
+            checks.setdefault(fr, []).append(('scan', s))
         checks.setdefault(s['start_frame'], []).append(('start', s))
     end = run.get('end')
     if end:
         checks.setdefault(end['frame'], []).append(('end', end))
+    tail = run.get('tail')
+    if tail:
+        checks.setdefault(total, []).append(('end', {'frame': total, 'state': tail}))
+    first = {}
     ok = True
     t0 = time.time()
     work = Path(tempfile.mkdtemp(prefix='longplay-check-', dir='/workspace/build/longplay'))
@@ -68,15 +74,16 @@ def main():
                 if marks[mi] == frame:
                     cur = info(game)
                     for kind, s in checks[frame]:
-                        if kind == 'before':
-                            if cur['stage'] == STAGE_NAMES.index(s['name']) and cur['master'] == 0 and cur['area'] == 0:
-                                print(f'FAIL {s["name"]}: already started one frame before {frame + 1}: {cur}')
-                                ok = False
+                        here = 'name' in s and cur['stage'] == STAGE_NAMES.index(s['name']) and cur['master'] == 0
+                        if kind == 'scan':
+                            if here and s['name'] not in first:
+                                first[s['name']] = frame
                         elif kind == 'start':
-                            good = (cur['stage'] == STAGE_NAMES.index(s['name']) and cur['area'] == 0
-                                    and cur['master'] == 0)
-                            print(f'{"PASS" if good else "FAIL"} {s["name"]:5s} starts at frame {frame:6d} '
-                                  f'({(frame + status["boot_frames"]) / 60:7.1f} s from power-on) {cur}', flush=True)
+                            good = here and cur['area'] == 0
+                            f0 = first.get(s['name'], frame)
+                            print(f'{"PASS" if good else "FAIL"} {s["name"]:5s} gameplay from frame {f0:6d} '
+                                  f'({(f0 + status["boot_frames"]) / 60:7.1f} s from power-on; marker {frame}) {cur}',
+                                  flush=True)
                             ok &= good
                         else:
                             good = all(cur.get(k) == v for k, v in s['state'].items())

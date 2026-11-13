@@ -163,6 +163,7 @@ def main():
     stage_frames = sum(n for n, _ in segs)
     full['segments'] = full['segments'] + segs + [[idle, []]]
     full['frames'] = sum(n for n, _ in full['segments'])
+    full['tail'] = {'stage': i['stage'], 'area': 0, 'master': 0}
     full['stages'].append({'name': stage, 'start_frame': total0, 'finished': True,
                            'end_frame': total0 + stage_frames, 'idle_after': idle,
                            'health_end': end['health'], 'lives_end': end['lives']})
