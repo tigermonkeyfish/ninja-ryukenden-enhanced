@@ -1417,6 +1417,17 @@ worker:
  ; again, to be uploaded unmapped (what the dispatcher's cinema_requeue
  ; does in the vblank, here in the idle time, so the cinema's vblanks all
  ; go through RENT's MN form at the native cost).
+ ; Not while the game holds the lock (cinema-lock): its vblanks upload
+ ; nothing, and the game may reset the queue before it unlocks (the 4-4
+ ; clear's act 5 scene does), losing the 512 colours with bit 7 already
+ ; clear. Locked, everything stays as it is: bit 7 set, LIVE 0 and RENT
+ ; as it was (MS, gate shut by the stz above, or MN never: MN is entered
+ ; with bit 7 clear only). The first unlocked vblank with colours queued
+ ; then re-queues in the dispatcher (vblank_plain), or this worker does at
+ ; its next unlocked run, whichever comes first.
+ lda PALETTE_LOCK
+ bne worker_cinema_done
+worker_requeue:
  jsr QUEUE_ALL
  lda PALETTE_STATE
  and #$ff - MAPPED_STATE
