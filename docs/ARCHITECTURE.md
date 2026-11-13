@@ -165,10 +165,30 @@ the uploads made 5-3 area 2 and 2-2 area 0 miss vblank.
   edge column.
 - Updates with no map change only upload (no 23-row walk). The shared speed
   bridge divides by 8 with three shifts (it ran a 16-step loop each update).
-- Loads: `init_background` draws the whole backdrop while loading, except in
-  6-1 (1.07-dev): there the round opens on the native picture, which
-  Enhanced's matches, and the first gameplay update draws (it fits in one
-  frame).
+- Loads: until 1.11-dev load-exact, `init_background` drew the whole backdrop
+  while loading (2-2, 5-2, 5-3, 5-4), which made the 2-2 and 5-4 loads one
+  frame longer than the original's (and wrote 2-2's palettes 13/14 to the
+  VCE in the black load frames: a three-frame flash the original does not
+  have). Since load-exact the load draws nothing: at the load
+  (`init_background`, `$2257 = $FF`) the renderer only sets the entrance
+  anchor (speed bridge, `$2258 = $FF`), puts 2-2's merged palettes into the
+  RAM palette (the load's fade, `$F436` -> `$F614`, copies it to the backup
+  `$2686` and fades in from there) and marks `$2258 = $FD`. The drawing runs
+  in two pieces in the stage entry's short updates while every colour is
+  black: the entry counts its 58 updates down in `$2E63` from `$3A` (set
+  at bank 1 `$82D0`); the first update is the fade's first step (level 0,
+  black), the next six are short (313k-338k clocks free), and the fade's
+  second step (level 1, the first non-black colours) is the eighth. Piece 1
+  (`$2258 = $FD`, `$2E63 = $38`): the fixed and phase tile uploads, then
+  `$2258 = $FC`; piece 2 (`$FC`, `$37`): the tile map and the real cache.
+  `deferred_draw` calls the renderer while `$2258` is `$FD`/`$FC`; the
+  renderer decides by `$2E63` (0 = outside an entry: everything at once, a
+  fallback not expected to run). Measured
+  ([record](validation/load-exact.md)): every load at the original's vblank
+  count, the first visible frame and the frames after it pixel-identical to
+  the draw-at-load build. 6-1 (1.07-dev) is unchanged: the round opens on
+  the native picture, which Enhanced's matches, and the first gameplay
+  update draws (it fits in one frame).
 - Area changes (1.08-dev): the native transition calls `$80AB` in its fourth
   frame and the native picture takes about 0.8 of that frame, so an Enhanced
   draw there (0.8 frame in 2-2) pushed the rest of the transition a frame
@@ -222,9 +242,10 @@ files to allocate free space.
 | `$2247` | Next master-script cursor; must match selected stage |
 | `$2248` | Pending progression state; cleared on selection |
 | `$2251–$2256` | Native background geometry; preserve across deaths |
-| `$2257–$225A` | Enhanced renderer cache; `$2258 = FF` invalidates it |
+| `$2257–$225A` | Enhanced renderer cache; `$2258 = FF` invalidates it. `$2258` also marks pending draws: `$FE` an area change's (next main-loop frame), `$FD`/`$FC` a stage load's two pieces (load-exact; 2-2, 5-2, castle only). `$2257 = $FF` with `$2258 = $FF` = the stage load's renderer call (`init_background`); at an area change the native `$80AB` leaves the MPR5 bank it saved there |
 | `$2E4B–$2E4C` | Render-time camera, modulo 512; can lag the later camera sample |
 | `$2E5F / $2E60` | Visible stage / subarea |
+| `$2E63` | Native countdown of a scripted sequence's updates (`$83F3`: non-zero runs `[$2033]` and decrements); a stage load sets `$3A` (58-update entry with the fade-in), an area change `$0A`. Read only by Enhanced: the Select hook's menu gate, the stage-load draw pieces (load-exact) |
 | `$2EAD / $2EAE / $2EAF` | Health / hurt timer / lives |
 | `$2ED0–$2ED5` | Score digits, least significant first (decimal 0-9 each) |
 | `$2EAB` | Ryu's state; 9 while hurt (knockback) |
@@ -264,8 +285,8 @@ guard checks.
 | `$FE40 / $FE46` | Early wrapper / preserved-scratch renderer entry |
 | `$FEE0` | Development cinema sprite reset wrapper (bank 04 `$802D` hook) |
 | `$FF2C` | Area change (bank 1 `$85B4`): native init, marks the Enhanced draw pending (`$2258 = $FE`) |
-| `$FF35` | Stage load (bank 1 `$82CD`): native init, cache invalidation, entrance draw |
-| `$FF42` | Pending area-change draw, called every main-loop frame by the Select hook |
+| `$FF35` | Stage load (bank 1 `$82CD`): native init, cache invalidation (`$2257`/`$2258` = `$FF`), the renderer's load call (anchor, 2-2 palettes, `$2258 = $FD`; load-exact) |
+| `$FF42` | Pending draws, called every main-loop frame by the Select hook: `$2258 = $FE` (area change: `$FF`, draw now), `$FD`/`$FC` (a stage load's pieces: the renderer, which picks its updates by `$2E63`); a camera high byte costs what it did before load-exact (`cmp #$fc` / `bcc` = 1.10's `cmp #$fe` / `bne`) |
 | `$FF70` | Gameplay Select hook |
 | `$FFB0` | Banked renderer lookup |
 | `$FFD0–$FFE5` | Shared speed bridge |
