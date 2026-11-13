@@ -68,6 +68,20 @@
   ([record](validation/v111-reset.md)); **waiting for the maintainer's
   look and hardware test**. The guide's menu screenshots still show the
   1.10 window.
+- **Palette timing** (1.11-dev, branch `palette-lag` from `v111-reset`; the
+  owner: "I do not want palette changes impacting speedrunners"): the mapped
+  modes convert colours in the main loop's idle time (RAM wait `WAITR`,
+  worker, `SHADOW` `$3C00-$3FFF`) and upload them at Original's cycles; NES-A/B
+  loads take Original's cycles exactly (padded lookups, fast unpack); the
+  menu's Run restart is as Original's. Every mode equals Original and 1.10
+  in the 11 stored runs (one cinema-entry sample in 6-3 aside), all 22 stage
+  loads and a power-on with saved settings; residuals (a few clocks of
+  wait-loop phase, a fallback upload when an update queues too much too
+  late, the cinema-entry re-upload) in the
+  [record](validation/palette-lag.md). Build `4147a8b1...a8849` in
+  `/workspace/roms/` as `... (apocalypse, reset 2, palette timing).pce`.
+  Emulator only; RAM claim audited on the stored runs, boot and Level Select
+  only.
 - **Palette modes** (1.11-dev, branch `gb-palette`): `$2100` bits 3-4 (bits
   3-5 since the SMS palette, below),
   00 Original (default), 01 NES (reserved, shown as Original), 10 GB DMG
