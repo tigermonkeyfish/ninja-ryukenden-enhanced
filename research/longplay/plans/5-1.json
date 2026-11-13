@@ -1,6 +1,6 @@
 {
  "stage": "5-1",
- "notes": "No Level Select run. One area, 12 pages (3,072 px), played rightward; beam legs to standing spots read off the ROM map (floor y 155, ledges y 104/72/109/128/40, the hanging blocks), each leg ending standing on the next spot; then right to the stage end. p1: the block x 480-608 (y 76-144) leaves no room under it; over it by the floating block x 416-448 (cling, climb onto its top y 72). The same over the blocks at x 1504-1600 (by the floating block x 1440-1472, top y 40) and x 2768-2896 (by the blocks x 2576-2608 and 2640-2672 and the pillar x 2706-2734).",
+ "notes": "No Level Select run. One area, 12 pages (3,072 px), played rightward; beam legs to standing spots read off the ROM map (floor y 155, ledges y 104/72/109/128/40, the hanging blocks), each leg ending standing on the next spot; then right to the stage end. p1: the block x 480-608 (y 76-144) leaves no room under it; over it by the floating block x 416-448 (cling, climb onto its top y 72). The same over the blocks at x 1504-1600 (by the floating block x 1440-1472, top y 40) and x 2768-2896 (by the blocks x 2576-2608 and 2640-2672 and the pillar x 2706-2734). The ledge x 2210-2303 (top y 72) is out of jump reach from the floor (55 px max): Ryu goes to the step x 2338-2366 (top y 104), back left up onto the ledge, then right onto the block x 2338-2430 (top y 40).",
  "legs": [
   {
    "name": "p0",
@@ -222,19 +222,38 @@
    }
   },
   {
-   "name": "p9",
+   "name": "p9a",
    "beam": {
     "waypoints": [],
     "goal": {
      "near": [
-      2250,
-      72,
-      16,
+      2352,
+      104,
+      14,
       4
      ],
      "in_area": 0
     },
-    "width": 100,
+    "width": 120,
+    "max_frames": 1500,
+    "seconds": 1500,
+    "ywt": 1.0
+   }
+  },
+  {
+   "name": "p9b",
+   "beam": {
+    "waypoints": [],
+    "goal": {
+     "near": [
+      2280,
+      72,
+      24,
+      4
+     ],
+     "in_area": 0
+    },
+    "width": 120,
     "max_frames": 1500,
     "seconds": 1500,
     "ywt": 1.0
@@ -246,10 +265,10 @@
     "waypoints": [],
     "goal": {
      "near": [
-      2380,
-      40,
-      16,
-      4
+      2390,
+      43,
+      30,
+      6
      ],
      "in_area": 0
     },
@@ -262,7 +281,16 @@
   {
    "name": "p11",
    "beam": {
-    "waypoints": [],
+    "waypoints": [
+     [
+      2420,
+      46,
+      12,
+      0,
+      6,
+      1
+     ]
+    ],
     "goal": {
      "near": [
       2530,

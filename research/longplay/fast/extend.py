@@ -44,7 +44,7 @@ def goal_fn(g, i0, boss_seen):
             x, y, r, ry = g['near']
             yy = i['y'] - 256 if i['y'] >= 224 else i['y']
             if abs(i['x'] - x) <= r and abs(yy - y) <= ry and i['area'] == g.get('in_area', i['area']) \
-                    and i['state'] in (0, 1, 5):
+                    and (i['state'] in (0, 1, 5) or (i['state'] in (2, 6, 8) and i['vy'] == 0)):
                 return True
         if g.get('boss_dead') and (boss_seen[0] or seen) and i['boss'] == 0:
             return True
