@@ -461,11 +461,15 @@ initialize_far:
  cmp #$ff
  beq load_palette
 draw_all:
+ ; The merged palettes go into the RAM palette only. The native area
+ ; transition keeps every VCE colour black until its last dark frame, which
+ ; is this one: it queues all 512 colours ($F394) here and the vblank
+ ; uploads them from the RAM palette, merged palettes included, for the
+ ; original's first visible frame. Writing them to the VCE at once
+ ; (palette_now, until start-pos) lit the backdrop's palette 13/14 rows in
+ ; that black frame (2-2 area 2: two lines; start-pos).
  jsr initialize
  jsr palette_ram
- ldx #208
- ldy #32
- jsr $febe
  jmp cache
 load_palette:
  ; The stage load: the merged palettes into the RAM palette only. The load's
@@ -511,9 +515,9 @@ initialize:
  jsr $6000
  rts
 palette_ram:
- ; The merged palettes 13 and 14 into the RAM palette (src/palette,
- ; palette_now at $FEBE then writes them to the VCE in the active palette
- ; mode's colours for an area change). The NES
+ ; The merged palettes 13 and 14 into the RAM palette; the native uploads
+ ; (the load's fade, the area transition's full re-queue) take them to the
+ ; VCE in the active palette mode's colours. The NES
  ; palette modes ($2100 bits 3-4 = 01, src/nes-palette) have their own
  ; versions, NES-A's and NES-B's (nes-enhanced.inc).
  clx
