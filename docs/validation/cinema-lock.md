@@ -206,7 +206,7 @@ frame (126,001 frames, 126,477 vblanks with the boot):
   `RENT` stays MS for that scene; the VCE equals the unforced run's in
   every compared frame (0 mismatching, 0 unmatched). Every point forced
   inside the new instructions (65,923/65,924: the whole 13-instruction run;
-  65,926 and the ten others: the not-taken `lda`/`bne`) left `RENT` a whole
+  65,926 and 5,748: the not-taken `lda`/`bne`) left `RENT` a whole
   form and the colours right.
 - The dispatcher path, separately (`cl_disp.py`, GB DMG): at 65,926 a
   vblank forced 1, 5 and 12 instructions before the worker's entry (queue
