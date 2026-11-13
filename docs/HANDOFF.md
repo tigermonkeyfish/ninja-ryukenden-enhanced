@@ -80,6 +80,16 @@
   late, the cinema-entry re-upload) in the
   [record](validation/palette-lag.md). Build `4147a8b1...a8849` in
   `/workspace/roms/` as `... (apocalypse, reset 2, palette timing).pce`.
+  Review ([findings](validation/palette-lag-review.md)) closed in build
+  `abfe6fb8...12f1`, `... (apocalypse, reset 2, palette timing 2).pce`:
+  F1 an NES value goes live in the menu preview from every mode (from GB
+  DMG, APOCALYPSE or SMS the screen shows Original's colours while it is
+  highlighted), so Run's restart is Original's for all 36 opened/chosen
+  pairs (before: six mapped -> NES pairs lost 3-2 frames 1033 and 1104);
+  F2 `FASTOK` can no longer read 1 after a fallback; F3 (GB DMG black
+  around stage clears) left, no spare cycles; F4 `busy` removed,
+  `step_recording` fixed (the emulator's pending frame count after a
+  breakpoint). Emulator only; waiting for the owner's hardware test.
   Emulator only; RAM claim audited on the stored runs, boot and Level Select
   only.
 - **Palette modes** (1.11-dev, branch `gb-palette`): `$2100` bits 3-4 (bits

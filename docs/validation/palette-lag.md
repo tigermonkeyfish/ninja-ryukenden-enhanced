@@ -478,7 +478,7 @@ clock.
 | build | pairs equal to ORIGINAL -> ORIGINAL in every measure | pairs that differ |
 |---|---|---|
 | fix8 (reviewed) | 30 of 36 | GB DMG, SMS, APOCALYPSE -> NES-A and -> NES-B (6): first update +6,369 clk, sound RAM differs from frame 0 on, lag frames 1033 and 1104, counter/Ryu differ in 167 frames from 1033, interrupt entries moved in 907 frames (max 9,246 clk) |
-| fix9 | **36 of 36**: first update +0 clk, sound RAM equal in all 1,200 frames, no lag frame, counter/Ryu/stage equal, interrupt entry clocks equal in all 1,200 frames (no wait-loop phase difference on this route either) | none |
+| fix9, fix10 | **36 of 36** (each build): first update +0 clk, sound RAM equal in all 1,200 frames, no lag frame, counter/Ryu/stage equal, interrupt entry clocks equal in all 1,200 frames (no wait-loop phase difference on this route either) | none |
 
 The review named three of the six failing pairs (GB DMG -> NES-A, SMS ->
 NES-B, APOCALYPSE -> NES-A); the matrix shows the other three fail the
@@ -492,7 +492,7 @@ clocks before the vblank, as in the review), saved there; per trial the
 entry cut to N colours, run on to the main loop's return from the wait
 (`$E064`), instruction trace of the way:
 
-| N colours | fix8 | fix9 |
+| N colours | fix8 | fix9, fix10 (identical) |
 |---|---|---|
 | 195-204 | fast upload (37 cycles), `FASTOK` 0, queue 0 | the same |
 | 205, 206, 207 | fallback, then the worker's `sta`: **`FASTOK` = 1** with queue 1 (first colour 54, `$2104` = `$E0`) | fallback (`FASTOK` `$80`), then the worker's `inc`: **`$81`**, queue 1 |
@@ -507,7 +507,7 @@ and the next vblank's `dec` leaves it non-zero (no fast upload).
 CPU cycles from `palette_entry` to its `rts` or to the upload it jumps to,
 every vblank of 2-2 frames 785-800 (the area change), instruction traces:
 
-| path | fix8 | fix9 |
+| path | fix8 | fix9, fix10 (identical) |
 |---|---|---|
 | locked | 13 | 13 |
 | plain (ORIGINAL, NES-A) | 37 | 37 |
@@ -519,17 +519,16 @@ every vblank of 2-2 frames 785-800 (the area change), instruction traces:
 
 3-2 frames 1031-1033 and 1101-1104, 4-1 frames 2485-2489 (the busiest 3-2
 updates and the stage-clear transition), every CPU instruction and
-interrupt, fix9 against fix8, all six menu modes: **every line at the same
-master clock** in all 18 traces (83,409-167,332 lines each; interrupt
-entries 9-15, none moved). In the mapped modes the empty path's filler
-reads `lda #$80` / `sta` / `sax` where it read `stz` / `sax` / `nop`, at the
-same clocks around it. So the earlier results of these windows against
-ORIGINAL carry over unchanged.
+interrupt, against fix8, all six menu modes: fix10 has **every line at the
+same master clock and the same instruction** in all 18 traces
+(83,409-167,332 lines each; interrupt entries 9-15, none moved); fix9 the
+same clocks, with its empty-path filler reordered at equal length. So the
+earlier results of these windows against ORIGINAL carry over unchanged.
 
-### Regression (fix9)
+### Regression (fix10; fix9 gave the same where it was run)
 
 - **Survey** (`survey` + `report`, 11 runs x 9 variants, traces in
-  `/workspace/build/palette-lag/f9/traces`): the report is identical to
+  `/workspace/build/palette-lag/f10/traces`): the report is identical to
   fix8's line for line (every mode equal to ORIGINAL and 1.10 in all 11
   runs; the one 6-3 cinema-entry sample at 5138 as before). Every field of
   every frame of all 77 traces (counter, `$12`, SAT/VCE hashes, Ryu, timer,
@@ -551,8 +550,62 @@ ORIGINAL carry over unchanged.
   mode (NES-A/B at ORIGINAL's clocks; APOCALYPSE 7 at other clocks, max 54
   clk; SMS 6, max 18; GB DMG 6, max 18); smallest margin of a sound command
   to the next vblank 145,875 clocks. fix8 rerun with the same tool: hits and
-  traces identical to fix9's in all six modes. (fix8's recorded e2e, made
+  traces identical to fix10's (and fix9's) in all six modes. (fix8's recorded e2e, made
   with the old `step_recording`, counted 56 commands and 478 boot frames:
   inferred, the frame-step hazard ran unrecorded frames there; its
   mode-to-mode comparison was still like with like, and its conclusions
   hold with the corrected tool.)
+
+### Checks (fix10)
+
+`python3 -m unittest discover -s tests` (54 pass), `audit_public.py`
+(pass), `check_boot.py` (pass), `check_menu.py --only options --only reset`
+(68 of 68: the 64 before and the 4 new NES-preview cases), `check_menu.py
+--only select` (23 of 23), `check_bram.py --only cycle` (17 of 17, PASS;
+baseline `cec5f7b3...8059`). fix9 failed 9 cancel cases of the options /
+reset part on `FASTOK` (`$80` against 0, see F2), which led to fix10.
+Pristine identity: `cc4d77f` rebuilds to `4147a8b1...a8849`;
+`project.py apply` reproduces 1.10 (`3d5c05df...bbf6`); `patches/`,
+`release/` and `VERSION` (1.11-dev) untouched. Not run: `check_menu.py`
+`runs` / `sweep` parts and the `--preview` runs, `check_bram.py --only
+matrix` (no `src/bram` change), the lock-modelling emulator, `events`,
+`margin`, the stored routes' videos, audio, real hardware. The menu's
+`1.11-dev` text is checked by `check_menu.py` (window text), not by eye.
+
+### Remaining risk (unchanged by this follow-up unless said)
+
+- F3 (cosmetic, GB DMG): darkest shade / true black around stage clears.
+- The fallback meeting two consecutive near-limit updates in a mapped mode
+  (boss kills, the ending): not measured.
+- RAM claim: the ending and the bosses other than 5-4's not watched.
+- The pair matrix covers one route (1-1 then 3-2) and 1,200 frames; the
+  menu's other routes are covered by the Run-path argument (Run never
+  changes the mode now), not by measurement.
+- Emulator only.
+
+### Delivered (fix10, source `palette-lag`)
+
+In `/workspace/roms/` (new names; nothing there was changed):
+
+| File | SHA-256 |
+| --- | --- |
+| `Ninja Ryukenden - Enhanced v1.11-dev (apocalypse, reset 2, palette timing 2).pce` | `abfe6fb887f0c19846cd3d5d500168573b838e15f146e09e80695c0fcc5b12f1` |
+| `ninja-ryukenden-enhanced-v1.11-dev-apocalypse-reset-2-palette-timing-2.bps` (headered original) | `310b82056f6299730d719af183cf623156213cb39b4519928e3196e073f6746c` |
+| `ninja-ryukenden-enhanced-v1.11-dev-apocalypse-reset-2-palette-timing-2-headerless.bps` | `bc5796ee0af8e4498504dd0f740b69e81643e5cfcdf69edcd6dc596183d06407` |
+
+Both patches applied with `scripts/bps.py apply` to their originals give
+the ROM above; the build from either original is the same ROM.
+
+### Rerunning
+
+```sh
+export LD_LIBRARY_PATH=/workspace/build/toolchain/sdl3/lib
+R=<fix10 rom>
+python3 scripts/palette_lag.py pairs --rom $R --out <dir>          # 36 pairs (ORIGINAL -> ORIGINAL first)
+python3 scripts/palette_lag.py fastok --rom $R --lengths $(seq 195 215)
+PALETTE_LAG_ROM=$R python3 scripts/palette_lag.py dispatch 2-2 785 16 --variants original 'gb dmg' apocalypse sms nes-a
+PALETTE_LAG_ROM=$R python3 scripts/palette_lag.py itrace 3-2 sms 1031 3 a.gz   # then research/tools/palette-lag/clockcmp.py OLD.gz a.gz
+PALETTE_LAG_ROM=$R PALETTE_LAG_TRACES=<dir> python3 scripts/palette_lag.py survey   # then report
+python3 scripts/palette_lag.py loadtime --rom $R
+python3 scripts/palette_lag.py e2e --rom $R --out <dir>
+```
