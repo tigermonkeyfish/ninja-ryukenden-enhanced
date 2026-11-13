@@ -150,7 +150,10 @@ ORIGINAL, GB DMG, APOCALYPSE and SMS change at once while the window is open, so
 you can look at the choice before you accept it; **Select** (cancel) puts
 the old colours back. NES colours are other palette data that the stage
 loads, so they appear when **Run** restarts the stage: while NES-A or NES-B
-is highlighted the colours on screen stay as they are. (With the window
+is highlighted the screen shows the game's own colours as they are in
+memory (ORIGINAL's colours; no change if the window was opened in ORIGINAL,
+NES-A or NES-B). This way Run never has a colour mode left to switch, and
+the restart takes exactly the time it takes in ORIGINAL. (With the window
 opened in an NES mode, the other values preview from the NES colours; Run
 reloads the stage in the real colours of the mode chosen.) Story scenes,
 the title and the ending always keep the original colours.

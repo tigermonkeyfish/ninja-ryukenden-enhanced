@@ -143,7 +143,8 @@ TMP = $26
 ; Palette timing (1.11-dev, branch palette-lag; "Palette timing" below).
 WAITR = $37c0               ; RAM: the main loop's vblank wait ($37C0-$37DD)
 LIVE = $37e0                ; RAM: $10 = mapped gameplay seen by the worker, else 0
-FASTOK = $37e1              ; RAM: 1 = every queued colour is in SHADOW
+FASTOK = $37e1              ; RAM: 1 = every queued colour is in SHADOW (0: not yet;
+                            ; $80/$81: the fallback ran since the worker began)
 BORDER_MAP = $37e2          ; RAM, 2 bytes: the border colour as the mode shows it
 W_LEFT = $37e4              ; RAM, 2 bytes: the worker's bytes left in an entry
 W_OVR = $37e6               ; RAM: nonzero = HELL's override applies (stage)
@@ -247,15 +248,20 @@ vblank_fallback:
  ; The worker has not converted the queue (it did not run, or the vblank
  ; came first). An empty queue costs what the native upload's does (46
  ; cycles to its rts); otherwise the mapped upload below, as before.
+ ; FASTOK = $80 (palette-lag review F2): a worker this vblank interrupted
+ ; after its last check of $12 ends with inc FASTOK, which then gives $81,
+ ; never 1, so the next vblank cannot take the fast upload for colours the
+ ; worker did not convert (the next worker run starts from 0).
  lda QUEUE_COUNT            ; 5
  bne fallback_work          ; 2
- stz FASTOK                 ; 5
- sax                        ; 3
- nop                        ; 2: 46 cycles
+ lda #$80                   ; 2
+ sta FASTOK                 ; 5
+ sax                        ; 3: 46 cycles (X, A: scratch, as the native upload leaves them)
 entry_return:
  rts
 fallback_work:
- stz FASTOK
+ lda #$80
+ sta FASTOK
  lda OPTIONS
  and #DISPATCH_BITS
  cmp #PALETTE_GB
@@ -1201,7 +1207,8 @@ fast_return:
  ; The worker: from WAITR (main loop, interrupts on, MPR2 = this bank) when
  ; the queue holds work, after the update. Sets LIVE (0 in a cinema, $10 in
  ; gameplay) and, when it converts every queued colour before the vblank
- ; comes ($12 is checked before each colour), FASTOK = 1. X and Y are kept;
+ ; comes ($12 is checked before each colour), FASTOK = 1 (inc from the 0
+ ; it starts with; a vblank's fallback in between leaves it at $81). X and Y are kept;
  ; the zero page it borrows and MPR3 are put back. Exit latency when the
  ; vblank comes in the middle: the colour under way, then the restores.
 worker:
@@ -1460,8 +1467,9 @@ worker_border_raw:
  lda BORDER+1
  sta BORDER_MAP+1
 worker_done:
- lda #1
- sta FASTOK
+ ; One instruction (palette-lag review F2): 0 -> 1 when no vblank came
+ ; since the worker's stz; after a fallback ($80) it gives $81.
+ inc FASTOK
 worker_abort:
  pla
  tam #3

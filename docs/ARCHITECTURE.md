@@ -211,7 +211,7 @@ files to allocate free space.
 | `$2286-$2685` / `$2686-$2A85` | RAM palette (512 words, the source of every upload) / its backup (`$F718` copies to it, `$F720` back; fades compute `$2286` from it) |
 | `$2102–$2103` | Entrance anchor |
 | `$37C0-$37DD` | `WAITR` (1.11-dev palette-lag): the main loop's vblank wait in RAM (bank 0 `$E061` and the menu call it instead of `$FD67`). Original, NES-A, NES-B: `$FD67-$FD6F` byte for byte; GB DMG, HELL, SMS: the same wait with the palette worker (`src/palette`, "Palette timing"). Written by the reset (`src/bram` trampoline -> bank `$46` `$5B00`) and by configure after a mode change; the harness writes the plain bytes after loading a state made from the original game |
-| `$37E0-$37E9` | Palette timing (palette-lag): `LIVE` `$37E0` ($10 = mapped gameplay seen by the worker), `FASTOK` `$37E1` (1 = every queued colour is converted), `BORDER_MAP` `$37E2/3`, worker scratch `$37E4-$37E8`, NES `FU_COUNT` `$37E9`. Zero after the RAM clear |
+| `$37E0-$37E9` | Palette timing (palette-lag): `LIVE` `$37E0` ($10 = mapped gameplay seen by the worker), `FASTOK` `$37E1` (1 = every queued colour is converted; the worker sets it with one `inc` from 0, a fallback upload stores `$80`, so a vblank between the worker's last `$12` check and its end leaves `$81`, never 1: palette-lag review F2), `BORDER_MAP` `$37E2/3`, worker scratch `$37E4-$37E8`, NES `FU_COUNT` `$37E9`. Zero after the RAM clear |
 | `$3C00-$3FFF` | `SHADOW` (palette-lag): the mapped modes' converted colours, laid out as `$2286`; the fast upload reads the queued ranges from here |
 | `$2104` | The palette module's state (1.11-dev SMS; before it `$2100` bits 5-7): bit 5 a left-over palette entry is queued, bit 6 the main loop was busy at the last vblank with palette work, bit 7 the VCE holds mapped colours (GB DMG, HELL or SMS); bits 0-4 zero. Not a setting: never saved; zero at reset (the RAM clear `$E023`), and clearing it costs at most one needless full re-upload |
 | `$2105` | Save status (1.11-dev, `src/bram` ST_ values 0-8: what the reset found in backup RAM, then what the last Run's save came to); the menu shows it. Not a setting; zero (NONE) from the RAM clear until the loader sets it |
@@ -705,15 +705,17 @@ cycles longer than a frame, so after the menu it lands elsewhere in the
 frame and moves the main loop by its own length; once in the sweep's 727
 openings a frame end inside the 1-1 → 1-2 load saw one VRAM word apart
 (`check_menu.py` lists such frames; `--strict` fails them).
-NES colours need that reload, so they show after Run: while NES-A or NES-B
-is highlighted in a menu opened in a mapped mode, the live bits stay as the
-menu found them (`$2100` on the menu's stack), and Run sets the draft's mode
-through the same `set_palette` (bit 7 with it). Opened in an unmapped mode
-(Original, NES-A, NES-B), the NES value goes live in the preview (palette-lag:
-nothing changes on screen, unmapped to unmapped needs no re-upload), so Run
-finds nothing to change and its stage restart takes the cycles Original's
-does; `set_palette` queues all colours only when the old or new mode is a
-mapped one. Opened in an NES mode, the
+NES colours need that reload, so they show after Run. An NES value goes
+live in the preview like every other value, whatever mode the menu opened
+in (palette-lag review F1: before, a menu opened in a mapped mode kept that
+mode live while NES-A/NES-B was highlighted, and Run's `set_palette` then
+queued and reconfigured at the restart, +6,369 clocks that moved 3-2's
+music command across a vblank). So Run's `set_palette` always finds the
+mode unchanged and its stage restart takes Original's cycles for every
+(opened, chosen) pair; while NES-x is highlighted the screen shows the RAM
+palette unmapped (from Original or NES: no change; from GB DMG, APOCALYPSE
+or SMS: the original colours until Run). `set_palette` queues all colours
+only when the old or new mode is a mapped one. Opened in an NES mode, the
 RAM palette holds NES colours, so ORIGINAL previews them unmapped and the
 mapped modes map them; Run reloads the stage in the chosen mode's own data.
 A live NES preview would need the RAM palette rewritten with NES data and

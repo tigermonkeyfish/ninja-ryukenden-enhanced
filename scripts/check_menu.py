@@ -56,7 +56,10 @@ options Each option row changed and accepted with Run, from 1-1: $2100 and
         ones), each accepted with Run, show each mapped mode's table and
         each NES mode's colours exactly (after an NES mode, the original
         colours back in the RAM palette) and end with the same VCE as a
-        stage start that never left Original. Cancel after changing
+        stage start that never left Original. An NES value highlighted in
+        a menu opened in GB DMG, SMS or APOCALYPSE is live ($2100, the VCE
+        equal to the RAM palette, $2104 bit 7 clear) and Run gives its NES
+        colours exactly (palette-lag review F1). Cancel after changing
         everything (from Original with NES-A, NES-B, GB DMG, APOCALYPSE or SMS
         highlighted, from GB DMG, APOCALYPSE, SMS, NES-A and NES-B previewing
         other values) leaves the options and $3227 unchanged and is
@@ -933,12 +936,48 @@ def check_options(emulator, candidate, seed, output, original=None):
                          and all(ok for _, ok in on_the_way) and len(on_the_way) == len(steps) - 1,
                          'modes_exact': on_the_way}
         print(name, results[name], flush=True)
+    # An NES value highlighted in a menu opened in a mapped mode goes live
+    # (palette-lag review F1): while it is highlighted $2100 holds the NES
+    # bits and the VCE shows the RAM palette unmapped (as an NES mode does);
+    # Run then finds the mode unchanged and gives the NES colours exactly.
+    for opened, chosen in (('gb dmg', 'nes-a'), ('sms', 'nes-b'), ('apocalypse', 'nes-a'), ('apocalypse', 'nes-b')):
+        name = f'nes preview from {opened}: {chosen} live while highlighted'
+        with Game(emulator, work) as game:
+            to_level(game, candidate, seed)
+            menu_to(game, 4, P('original', opened, 'right'))
+            press(game, 'select', after=6)
+            for _ in range(4):
+                press(game, 'down')
+            for button in P(opened, chosen, 'right'):
+                press(game, button)
+            game.step(10)
+            ram = game.read(0, 0x2000)
+            vce = game.read(0, 1024, area=8)
+            bits = MODE[chosen]
+            entry = {'live_options': f'{ram[0x100]:#04x}',
+                     'live_is_nes': ram[0x100] & 0xb8 == bits,
+                     'vce_unmapped': vce[:512] == ram[0x286:0x486] and ram[0x104] & 0x80 == 0}
+            game.press({'run'})
+            game.step(2)
+            game.press(set())
+            if not stop_at(game, FIRST_UPDATE, 600):
+                raise RuntimeError('stage did not restart')
+            game.step(90)
+            ram = game.read(0, 0x2000)
+            entry['after_run'] = f'{ram[0x100]:#04x}'
+            entry['mode_exact'] = ram[0x100] & 0x3f == bits and mode_ok(game, ram, bits, nes)
+            entry['ok'] = entry['live_is_nes'] and entry['vce_unmapped'] and entry['mode_exact']
+            results[name] = entry
+            print(name, entry, flush=True)
     # Cancel after changing everything: nothing changes. Long comparisons
     # (LONG frames, the stage timer included) show whether the palette
     # module's state a cancelled preview may leave has any effect. The
-    # PALETTE row is stepped by `steps` from the opening mode: an NES value
-    # on the way keeps the colours; opened in an NES mode, the RAM palette
-    # holds NES colours, which ORIGINAL shows unmapped and the mapped modes map.
+    # PALETTE row is stepped by `steps` from the opening mode: every value
+    # on the way goes live, an NES value showing the RAM palette unmapped
+    # (palette-lag review F1; from a mapped opening mode the cancel then
+    # returns from an unmapped live mode); opened in an NES mode, the RAM
+    # palette holds NES colours, which ORIGINAL shows unmapped and the mapped
+    # modes map.
     def everything(steps):
         return [R, 'down', R, 'down', R, 'down', R, 'down'] + steps + ['down', R]
     for name, first, actions in (
@@ -1257,8 +1296,8 @@ def main():
     if 'runs' in parts:
         actions = None
         if args.preview:
-            # PALETTE stepped four times: APOCALYPSE, NES-A and NES-B (colours
-            # kept), then SMS.
+            # PALETTE stepped four times: APOCALYPSE, NES-A and NES-B (live,
+            # the RAM palette unmapped), then SMS.
             actions = ['down', 'right', 'down', 'right', 'down', 'right', 'down', 'right', 'right', 'right', 'right',
                        'down', 'right', 'down']
         if args.shots:

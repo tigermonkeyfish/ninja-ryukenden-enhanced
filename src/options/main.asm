@@ -102,12 +102,8 @@ menu_glyphs_end:
 MENU_ENTRY = $4400          ; the hook's jsr target (src/selector-hook)
 OPTION_BITS = $3f           ; draft bits copied to $2100 on Run
 PALETTE_BITS = $38          ; previewed live while the menu is open
-PALETTE_FAMILY = $18        ; the upload family (src/palette): $08 NES-A and NES-B
-PALETTE_NES = $08           ; reloads palette data (src/nes-palette): shown after Run
 PALETTE_SMS = $38
 SMS_FLAG = $80              ; $2100 bit 7: set exactly with SMS (src/palette)
-OPENED_OPTIONS = $2103      ; ,X after tsx in preview_palette: $2100 as the menu opened
-                            ; (menu_open pushed it; above it preview_palette's return)
 LANGUAGE = $3227            ; native: 0 Japanese, 1 English, 2 Chinese
 BOX_TOP = 7                 ; BAT row of the window's top row
 BOX_LEFT = 3                ; screen column of its left edge
@@ -299,10 +295,9 @@ choose:
  cmp #$ff
  beq cancelled
  ; Run: the draft's options, and its language. The palette mode first,
- ; through set_palette: an NES value was not previewed when the menu
- ; opened in a mapped mode (the live mode is still that one; from an
- ; unmapped mode it went live in the preview and nothing changes here), and
- ; set_palette writes bit 7 with it.
+ ; through set_palette: every value went live in the preview (palette-lag
+ ; review F1), so it finds the mode unchanged and returns at once, as in
+ ; Original; kept so that Run applies the draft whatever the preview did.
  lda DRAFT
  and #PALETTE_BITS
  jsr set_palette
@@ -380,32 +375,18 @@ selection_return:
  ; The live palette mode follows the draft's, so the choice shows at once;
  ; cancel puts the old mode back. NES colours (NES-A, NES-B) are not a
  ; mapping of the RAM palette but other palette data, loaded with the stage
- ; (src/nes-palette): they show after Run, which restarts the stage. While
- ; an NES value is highlighted, the colours on screen do not change: opened
- ; in a mapped mode the live mode stays the one the menu opened in; opened in
- ; an unmapped one the NES value goes live (palette-lag: unmapped to
- ; unmapped shows the RAM palette as it is). (Opened in an NES mode, the RAM
- ; palette holds NES colours: ORIGINAL shows them unmapped, the mapped modes
- ; map them.)
+ ; (src/nes-palette): they show after Run, which restarts the stage. An NES
+ ; value goes live in the preview too, whatever mode the menu opened in
+ ; (palette timing, palette-lag review F1), so Run never has a palette mode
+ ; left to change and its stage restart takes the cycles Original's Run
+ ; takes, for every mode opened and chosen. While it is highlighted the
+ ; screen shows the RAM palette unmapped: from Original or NES nothing
+ ; changes; from GB DMG, APOCALYPSE or SMS the original colours show until
+ ; Run (or until a mapped value is highlighted again). (Opened in an NES
+ ; mode, the RAM palette holds NES colours: ORIGINAL shows them unmapped,
+ ; the mapped modes map them.)
 preview_palette:
  lda DRAFT
- and #PALETTE_FAMILY
- cmp #PALETTE_NES
- bne preview_draft
- tsx
- lda OPENED_OPTIONS,x       ; $2100 as the menu found it (pushed in menu_open)
- ; Palette timing (palette-lag): opened in an unmapped mode (Original,
- ; NES-A, NES-B: bit 4 clear) the NES value goes live now, which changes
- ; nothing on screen (unmapped to unmapped: no re-upload) and leaves Run
- ; nothing to change, so Run's restart takes Original's cycles. Opened in a
- ; mapped mode the live mode stays (as before).
- and #$10
- beq preview_draft
- lda OPENED_OPTIONS,x
- bra preview_masked
-preview_draft:
- lda DRAFT
-preview_masked:
  and #PALETTE_BITS
  ; A = palette bits: make them the live mode. When they change, all 512
  ; colours are queued (native $F394, under the palette lock) and src/palette

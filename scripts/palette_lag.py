@@ -15,6 +15,9 @@ A lag frame is a frame step in which the update counter did not advance.
   palette_lag.py record RUN VARIANT   one session -> OUT/traces/RUN.VARIANT.json
   palette_lag.py survey               every run x variant (resumes)
   palette_lag.py report               tables from the stored traces
+  palette_lag.py pairs                two menus (mode1 into 1-1, then 3-2 in mode2), all 36 pairs
+  palette_lag.py fastok               review F2: FASTOK after a vblank inside the worker's last colours
+  palette_lag.py dispatch RUN START N  the vblank palette dispatch paths and their cycles
 """
 import argparse
 import hashlib
@@ -25,7 +28,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import palette_video as pv                                              # noqa: E402
-from comparison_video import Game, start_point, start_stage, make_seed, STAGE_NAMES, NEXT_SEQUENCE  # noqa: E402
+from comparison_video import Game, start_point, start_stage, make_seed, STAGE_NAMES, NEXT_SEQUENCE, StepError  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 EMULATOR = Path('/workspace/build/toolchain/geargrafx/platforms/linux/geargrafx')
@@ -318,21 +321,106 @@ def load_timing(rom, stage, bits, vce_log=None):
     return events
 
 
-def step_recording(game, hits, tmp, frame):
-    """One frame step; every stop at an armed breakpoint inside it is
-    recorded (frame, PC, master clock) and stepped over, then the step goes
-    on to the frame's end."""
-    while True:
-        if game.step(1) is not None:
-            return
+def resume_step(game):
+    """Finish a frame step that a breakpoint interrupted.
+
+    Frame-step hazard (palette-lag review F4; Geargrafx 78fc3d7,
+    platforms/shared/desktop/emu.cpp): a sync debug_step_frame adds its
+    frames to a pending count that only a completed frame decrements; a
+    breakpoint stop leaves the count at 1, so the next step(1) asks for 2:
+    it reports after the first frame end and the emulator runs a second
+    frame on its own, with the same input, before the next request is
+    served. Only debug_pause during an active frame step clears the count.
+    So the step is sent together with a debug_pause (one write): the step
+    runs to the frame end (or the next breakpoint), the pause is served
+    there and clears the count, and one more instruction runs (the pause
+    leaves a single-instruction step). Returns the step's result like
+    Game.step (None: another breakpoint stopped it)."""
+    emu = game.emu
+    emu.counter += 2
+    step_id, pause_id = emu.counter - 1, emu.counter
+    emu.proc.stdin.write(json.dumps({'jsonrpc': '2.0', 'id': step_id, 'method': 'tools/call', 'params': {
+        'name': 'debug_step_frame', 'arguments': {'frames': 1, 'mode': 'sync'}}}) + '\n'
+        + json.dumps({'jsonrpc': '2.0', 'id': pause_id, 'method': 'tools/call', 'params': {
+            'name': 'debug_pause', 'arguments': {}}}) + '\n')
+    emu.proc.stdin.flush()
+    replies = {}
+    while len(replies) < 2:
+        message = emu.messages.get(timeout=60)
+        if message is None:
+            raise RuntimeError('emulator exited')
+        if message.get('id') in (step_id, pause_id):
+            replies[message['id']] = message
+    step = replies[step_id]
+    if 'error' in step:
+        raise RuntimeError(step['error'])
+    result = step['result']
+    if result.get('isError'):
+        if 'interrupted' in json.dumps(result):
+            return None
+        raise RuntimeError(result)
+    texts = [item['text'] for item in result.get('content', []) if item['type'] == 'text']
+    return json.loads(texts[0]) if texts else result
+
+
+def step_with_stops(game, tmp, frame, on_stop):
+    """One frame step with execution breakpoints armed. At each stop
+    on_stop(pc, clock) is called (it may return True to leave the machine
+    there, mid-frame), the breakpoint is stepped over and the frame goes on
+    (resume_step). Every step with a stop is checked by master clock to end
+    in the frame it began in (the harness's frame ends are the multiples of
+    FRAME_CLOCKS, phase 0): StepError otherwise. `game.frame_end` carries the
+    boundary from step to step; set it to None after anything else moves
+    the machine (run_to, a state load). Returns True if on_stop kept the
+    machine at a stop (the emulator's pending count is then 1: the next
+    step_with_stops resumes with resume_step)."""
+    if getattr(game, 'frame_end', None) is None:
+        game.frame_end = (master_clock(game, tmp) // FRAME_CLOCKS + 1) * FRAME_CLOCKS
+    boundary, stopped = game.frame_end, False
+    # A stop left the emulator's pending frame count at 1: resume_step.
+    result = resume_step(game) if getattr(game, 'leftover', False) else game.step(1)
+    game.leftover = False
+    while result is None:
+        stopped = game.leftover = True
         pc = game.call('debug_get_status')['pc']
-        hits.append((frame, pc, master_clock(game, tmp)))
-        area = {'4006': MUSIC_ENTRY}.get(pc)
-        if area is None:
-            raise RuntimeError(f'unexpected stop at {pc}')
-        game.call('remove_breakpoint', {'address': f'{area:x}', 'memory_area': 'rom'})
+        clock = master_clock(game, tmp)
+        if clock >= boundary + FRAME_CLOCKS // 2:
+            raise StepError(f'frame {frame}: a stop at {clock}, past the frame end {boundary}')
+        if on_stop(pc, clock):
+            game.frame_end = None
+            return True
+        area = game.stop_areas[pc]
+        game.call('remove_breakpoint', {'address': f'{area[1]:x}', 'memory_area': area[0]})
         game.call('debug_step_into')
-        game.call('set_breakpoint', {'address': f'{area:x}', 'memory_area': 'rom', 'execute': True})
+        game.call('set_breakpoint', {'address': f'{area[1]:x}', 'memory_area': area[0], 'execute': True})
+        if master_clock(game, tmp) >= boundary:
+            break               # the frame end came in the stepped-over instruction (count still 1)
+        result = resume_step(game)
+        if result is not None:
+            game.leftover = False
+    if stopped:
+        end = master_clock(game, tmp)
+        if not boundary <= end < boundary + FRAME_CLOCKS // 2:
+            raise StepError(f'frame {frame}: a step with a breakpoint stop ended at {end}, '
+                            f'the frame end is {boundary}')
+        game.frame_end = (end // FRAME_CLOCKS + 1) * FRAME_CLOCKS
+    else:
+        game.frame_end = boundary + FRAME_CLOCKS
+    return False
+
+
+def step_recording(game, hits, tmp, frame):
+    """One frame step; every stop at the sound-command breakpoint
+    ($38:$4006) inside it is recorded (frame, PC, master clock) and stepped
+    over, then the step goes on to the frame's end (step_with_stops)."""
+    game.stop_areas = {'4006': ('rom', MUSIC_ENTRY)}
+
+    def record_hit(pc, clock):
+        if pc not in game.stop_areas:
+            raise RuntimeError(f'unexpected stop at {pc}')
+        hits.append((frame, pc, clock))
+        return False
+    step_with_stops(game, tmp, frame, record_hit)
 
 
 def e2e(mode, runname, rom, out):
@@ -396,6 +484,7 @@ def e2e(mode, runname, rom, out):
         game.call('save_state_file', {'file_path': str(entered)})
         game.call('load_state_file', {'file_path': str(entered)})
         game.held = set()
+        game.frame_end = None       # run_to stopped mid-frame: step_recording finds the next end
         prev_vce = None
         for n, buttons in enumerate(inputs):
             game.press(set(buttons))
@@ -409,77 +498,6 @@ def e2e(mode, runname, rom, out):
                           'master': ram[0x240]})
     out.write_text(json.dumps({'status': status, 'hits': hits, 'trace': trace}))
     return status, hits, trace
-
-
-def busy_run(runname, variant, out):
-    """Per update, from a whole replay: the master clock of every vblank
-    interrupt's entry (cpu.irqs trace, IRQ1 at the vblank phase) and of
-    every wait's STZ $12 ($37C0 in RAM since palette-lag, else $FD67; a
-    breakpoint, recorded and stepped over), stepping frame by frame with the
-    stored input. Busy = STZ - the vblank interrupt that woke the update;
-    left = the next vblank interrupt - STZ; -1: another vblank came first."""
-    run = load_run(runname)
-    rom, enhanced, mode = VARIANTS[variant]
-    inputs = []
-    for count, buttons in run['segments']:
-        inputs += [frozenset(buttons)] * count
-    inputs += [frozenset()] * TAIL
-    log = OUT / 'work' / f'busy-{runname}-{variant.replace(" ", "")}'
-    tmp = log / 'clock.state'
-    points = [('rom', 0x1d67, 'FD67'), ('cpu_addr', 0x37c0, '37C0')]
-    events = []
-    with Game(EMULATOR, log) as game:
-        start_point(game, rom, seed_state(), enhanced)
-        if mode is None:
-            start_stage(game, run['stage'])
-        else:
-            pv.enter_stage(game, run['stage'], mode, 0)
-        for area, addr, _ in points:
-            game.call('set_breakpoint', {'address': f'{addr:x}', 'memory_area': area, 'execute': True})
-        game.call('set_trace_log', {'enabled': True, 'output': 'memory', 'memory_size': '100K', 'filters': ['cpu.irqs']})
-        pos = game.call('get_trace_log', {'count': 1})['total_logged']
-        for n, buttons in enumerate(inputs):
-            game.press(set(buttons))
-            while True:
-                stopped = game.step(1) is None
-                end = game.call('get_trace_log', {'count': 1})['total_logged']
-                while pos < end:
-                    chunk = game.call('get_trace_log', {'start': pos, 'count': min(1000, end - pos)})
-                    for line in chunk['lines']:
-                        m = re.match(r'@(\d+).*IRQ\s+IRQ1', line)
-                        if m and abs((int(m.group(1)) - VBLANK_PHASE + 2000) % FRAME_CLOCKS - 2000) < 2000:
-                            events.append((n, 'VBL', int(m.group(1)), None))
-                    pos += len(chunk['lines'])
-                if not stopped:
-                    break
-                pc = game.call('debug_get_status')['pc']
-                point = next(p for p in points if p[2] == pc)
-                events.append((n, pc, master_clock(game, tmp), game.read(0, 1)[0]))
-                game.call('remove_breakpoint', {'address': f'{point[1]:x}', 'memory_area': point[0]})
-                game.call('debug_step_into')
-                game.call('set_breakpoint', {'address': f'{point[1]:x}', 'memory_area': point[0], 'execute': True})
-    Path(out).write_text(json.dumps(events))
-    return events
-
-
-def busy_rows(events):
-    """[(counter after the update, busy, left)] from busy_run's events."""
-    rows, wake, extra = [], None, 0
-    events = sorted(events, key=lambda e: e[2])
-    incs = [e[2] for e in events if e[1] == 'VBL']
-    for frame, pc, clock, counter in events:
-        if pc == 'VBL':
-            if wake is None:
-                wake = clock
-            else:
-                extra += 1          # another vblank before this update ended
-            continue
-        if wake is not None:
-            nxt = next((c for c in incs if c > clock), None)
-            left = None if nxt is None else nxt - clock
-            rows.append((frame, counter, clock - wake, -1 if extra else left))
-        wake, extra = None, 0
-    return rows
 
 
 def event_run(runname, variant, out):
@@ -527,6 +545,251 @@ def event_run(runname, variant, out):
             frames.append(ev)
     Path(out).write_text(json.dumps(frames))
     return frames
+
+
+SOUND_RAM = [(0x080, 0x090), (0x1800, 0x1c00)]     # the sound driver's zero page and RAM ($2080-$208F, $3800-$3BFF)
+PAIR_MODES = ['original', 'apocalypse', 'nes-a', 'nes-b', 'sms', 'gb dmg']
+
+
+def drain_irqs(game, pos):
+    """Master clocks of the interrupt entries logged since `pos` (cpu.irqs
+    trace); returns (clocks, new pos)."""
+    end = game.call('get_trace_log', {'count': 1})['total_logged']
+    clocks = []
+    while pos < end:
+        chunk = game.call('get_trace_log', {'start': pos, 'count': min(1000, end - pos)})
+        lines = chunk.get('lines') or []
+        if chunk.get('overrun') or not lines:
+            raise RuntimeError(f'irq trace lost at {pos}')
+        for line in lines:
+            m = re.match(r'@(\d+)', line)
+            if m:
+                clocks.append(int(m.group(1)))
+        pos += len(lines)
+    return clocks, pos
+
+
+def pair_run(mode1, mode2, runname, frames, rom, out):
+    """Two menu sessions, the route of palette-lag review F1: menu 1 (opened
+    in 1-1 in Original, as enter_stage does) Runs into 1-1 in `mode1`; 30
+    frames later menu 2, opened in that mode, chooses `runname`'s stage and
+    `mode2` with Right presses from mode1, padded to five on the reset row
+    (every pair presses the same buttons, the same number of times), and
+    Runs. At the stage's first update ($8457) its master clock; then the
+    run's stored input for `frames` frame steps, per frame the update
+    counter, Ryu, the sound driver's RAM (hash) and the interrupt entries'
+    master clocks."""
+    from check_menu import press, stop_at, FIRST_UPDATE, palette_presses
+    run = load_run(runname)
+    inputs = []
+    for count, buttons in run['segments']:
+        inputs += [frozenset(buttons)] * count
+    inputs += [frozenset()] * max(0, frames - len(inputs))
+    log = OUT / 'work' / f'pair-{mode1.replace(" ", "")}-{mode2.replace(" ", "")}'
+    tmp = log / 'clock.state'
+    trace = []
+    with Game(EMULATOR, log) as game:
+        start_point(game, rom, seed_state(), True)
+        pv.enter_stage(game, 0, mode1, 0)
+        opt1 = game.read(0x100, 1)[0]
+        game.step(30)
+        press(game, 'select', after=6)
+        for _ in range(run['stage']):
+            press(game, 'right')                    # STAGE row, from 1-1
+        for _ in range(4):
+            press(game, 'down')                     # to PALETTE
+        way = palette_presses(mode1, mode2, 'right')
+        for b in way:
+            press(game, b)
+        press(game, 'down')
+        press(game, 'down')                         # the reset row: Left/Right do nothing
+        for _ in range(5 - len(way)):
+            press(game, 'right')
+        game.press({'run'})
+        game.step(2)
+        game.press(set())
+        if not stop_at(game, FIRST_UPDATE, 600):
+            raise RuntimeError('stage did not restart')
+        first = master_clock(game, tmp)
+        entered = log / 'entered.state'
+        game.call('save_state_file', {'file_path': str(entered)})
+        game.call('load_state_file', {'file_path': str(entered)})
+        game.held = set()
+        status = {'first_update': first, 'opt1': opt1, 'opt2': game.read(0x100, 1)[0],
+                  'stage': game.read(0xe5f, 1)[0]}
+        game.call('set_trace_log', {'enabled': True, 'output': 'memory', 'memory_size': '100K',
+                                    'filters': ['cpu.irqs']})
+        pos = game.call('get_trace_log', {'count': 1})['total_logged']
+        for n in range(frames):
+            game.press(set(inputs[n]))
+            game.checked_step(1)
+            irqs, pos = drain_irqs(game, pos)
+            ram = game.read(0, 0x2000)
+            snd = hashlib.sha1(b''.join(ram[a:b] for a, b in SOUND_RAM)).hexdigest()[:12]
+            trace.append({'f': n, 'c': ram[0], 'ryu': ram[0xe9e:0xeb8].hex(), 'snd': snd,
+                          'stage': ram[0xe5f], 'master': ram[0x240], 'irq': irqs})
+        game.call('set_trace_log', {'enabled': False})
+    out.write_text(json.dumps({'status': status, 'trace': trace}))
+    return status, trace
+
+
+def pair_compare(ref, cur):
+    """One matrix cell against ORIGINAL -> ORIGINAL."""
+    rs, rt = ref
+    cs, ct = cur
+    d = deltas(ct)
+    lag = [i for i in range(1, len(ct)) if d[i] == 0]
+    snd = [t['f'] for a, t in zip(rt, ct) if a['snd'] != t['snd']]
+    game = [t['f'] for a, t in zip(rt, ct) if (a['c'], a['ryu'], a['stage'], a['master']) != (t['c'], t['ryu'], t['stage'], t['master'])]
+    shifted, worst = 0, 0
+    for a, t in zip(rt, ct):
+        if a['irq'] != t['irq']:
+            shifted += 1
+            worst = max([worst] + ([abs(x - y) for x, y in zip(a['irq'], t['irq'])]
+                                   if len(a['irq']) == len(t['irq']) else [FRAME_CLOCKS]))
+    return {'first_update': cs['first_update'] - rs['first_update'], 'opt2': cs['opt2'],
+            'snd_frames': len(snd), 'snd_first': snd[0] if snd else None,
+            'game_frames': len(game), 'game_first': game[0] if game else None,
+            'lag': lag, 'irq_frames': shifted, 'irq_max': worst}
+
+
+def dispatch_paths(lines):
+    """From instruction-trace lines (itrace format): every vblank call of
+    src/palette's palette_entry (bank $46 $5000, carry clear: palette_now's
+    calls take the bcs) with its path and the CPU cycles from palette_entry
+    to where the path leaves the dispatch: its rts (locked, empty) or the
+    first instruction of the upload it jumps to (plain: the native $F3B5;
+    fast: fast_upload; fallback: the mapped upload; -requeue: QUEUE_ALL was
+    called on the way). Returns [(frame, path, cycles)]."""
+    out, cur = [], None
+    for ln in lines:
+        m = re.match(r'(\d+) @(\d+)\s+(?:\+\d+\s+)?([0-9A-F]{2}):([0-9A-F]{4})\s.*?\s([A-Z]{3})\b(.*)$', ln)
+        if not m:
+            continue
+        frame, clock, bank, pc, op, rest = int(m[1]), int(m[2]), m[3], m[4], m[5], m[6]
+        if cur is not None:
+            if cur['n'] == 1 and pc != '5002':
+                cur = None                      # bcs taken: palette_now
+            elif cur['jumped']:
+                path = 'plain' if pc == 'F3B5' else ('fast' if cur['dec'] and not cur['queue'] else 'fallback')
+                out.append((cur['frame'], path + ('-requeue' if cur['requeue'] else ''), (clock - cur['clock']) // 3))
+                cur = None
+            elif cur['depth']:
+                cur['depth'] += {'JSR': 1, 'RTS': -1}.get(op, 0)
+            elif op == 'RTS':
+                path = 'empty' if cur['queue'] else ('locked' if not cur['live'] else 'other')
+                out.append((cur['frame'], path, (clock - cur['clock']) // 3))
+                cur = None
+            else:
+                cur['live'] |= op == 'LDA' and '$37E0' in rest
+                cur['dec'] |= op == 'DEC' and '$37E1' in rest
+                cur['queue'] |= op == 'LDA' and '$2260' in rest
+                if op == 'JSR':
+                    cur['requeue'], cur['depth'] = True, 1
+                cur['jumped'] = op == 'JMP'
+            if cur is not None:
+                cur['n'] += 1
+        if cur is None and bank == '46' and pc == '5000' and op == 'BCS':
+            cur = {'frame': frame, 'clock': clock, 'live': False, 'dec': False, 'queue': False,
+                   'requeue': False, 'jumped': False, 'depth': 0, 'n': 1}
+    return out
+
+def worker_rom_offset(rom):
+    """ROM offset of src/palette's worker (bank $46), from the jsr in
+    WAITR's mapped template (wait_mapped) in the build."""
+    data = Path(rom).read_bytes()
+    data = data[len(data) % 0x2000:]
+    bank = data[0x46 * 0x2000:0x47 * 0x2000]
+    at = bank.find(bytes.fromhex('6412' '93ff6022' 'd007' 'a512c90190fa60' '4304' '48' 'a946' '5304' '20'))
+    if at < 0:
+        raise RuntimeError('no WAITR template in bank $46')
+    addr = bank[at + 23] | bank[at + 24] << 8
+    return 0x46 * 0x2000 + (addr & 0x1fff)
+
+
+def fastok_probe(rom, lengths, runname='2-2', mode='gb dmg', first=785, last=800, out=None, late=100000):
+    """Palette-lag review F2's reproduction: `runname` in `mode` through the
+    menu, replayed (step_recording, a breakpoint on the worker) to the first
+    worker call in frames first..last whose queue holds 256 colours or more
+    and that starts less than `late` master clocks before the vblank (2-2's
+    area change near frame 792: 512 colours queued about 43k clocks before
+    it), saved there. Per trial: that state,
+    the queue cut to one entry of N colours from its first colour (only the
+    length varies), run on (instruction trace) to the main loop's return
+    from the wait ($E064). Returns per N: FASTOK, the queue count and
+    $2104 there, and the vblank dispatch paths taken on the way."""
+    run = load_run(runname)
+    inputs = []
+    for count, buttons in run['segments']:
+        inputs += [frozenset(buttons)] * count
+    log = OUT / 'work' / f'fastok-{mode.replace(" ", "")}'
+    tmp = log / 'clock.state'
+    worker = worker_rom_offset(rom)
+    rows = []
+    with Game(EMULATOR, log) as game:
+        start_point(game, rom, seed_state(), True)
+        pv.enter_stage(game, run['stage'], mode, 0)
+        for n in range(first):
+            game.press(set(inputs[n]))
+            game.checked_step(1)
+        game.call('set_breakpoint', {'address': f'{worker:x}', 'memory_area': 'rom', 'execute': True})
+        game.stop_areas = {f'{0x4000 | (worker & 0x1fff):04X}': ('rom', worker)}
+        game.frame_end, found = None, None
+        for n in range(first, last):
+            game.press(set(inputs[n]))
+
+            def at_worker(pc, clock, n=n):
+                nonlocal found
+                if pc not in game.stop_areas:
+                    raise RuntimeError(f'unexpected stop at {pc}')
+                ram = game.read(0, 0x300)
+                count = ram[0x260]
+                colours = sum(ram[0x261 + i] | ram[0x269 + i] << 8 for i in range(count)) // 2
+                before = ((clock - VBLANK_PHASE) // FRAME_CLOCKS + 1) * FRAME_CLOCKS + VBLANK_PHASE - clock
+                print(f'worker call: frame {n}, {colours} colours in {count} entries, {before} clk before the vblank', flush=True)
+                if colours >= 256 and before < late:
+                    found = (n, clock, count, colours)
+                    return True
+                return False
+            if step_with_stops(game, tmp, n, at_worker):
+                break
+        if not found:
+            raise RuntimeError('no large worker call')
+        game.call('remove_breakpoint', {'address': f'{worker:x}', 'memory_area': 'rom'})
+        frame, clock, count, colours = found
+        vblank = ((clock - VBLANK_PHASE) // FRAME_CLOCKS + 1) * FRAME_CLOCKS + VBLANK_PHASE
+        base = log / 'worker.state'
+        game.call('save_state_file', {'file_path': str(base)})
+        ram = game.read(0, 0x300)
+        queue = [(ram[0x271 + i] | ram[0x279 + i] << 8, (ram[0x261 + i] | ram[0x269 + i] << 8) // 2) for i in range(count)]
+        head = {'frame': frame, 'clock_before_vblank': vblank - clock, 'queue': queue}
+        game.call('set_breakpoint', {'address': '64', 'memory_area': 'rom', 'execute': True})
+        for length in lengths:
+            game.call('load_state_file', {'file_path': str(base)})
+            game.write(0x260, bytes([1]))
+            game.write(0x261, bytes([(2 * length) & 0xff]))
+            game.write(0x269, bytes([(2 * length) >> 8]))
+            game.call('set_trace_log', {'enabled': True, 'output': 'memory', 'memory_size': '1M',
+                                        'filters': ['cpu.instructions']})
+            pos = game.call('get_trace_log', {'count': 1})['total_logged']
+            pc = game.run_to(None, polls=400000)
+            end = game.call('get_trace_log', {'count': 1})['total_logged']
+            lines = []
+            while pos < end:
+                chunk = game.call('get_trace_log', {'start': pos, 'count': min(1000, end - pos)})
+                if chunk.get('overrun'):
+                    raise RuntimeError('trace ring overrun')
+                lines += [f'0 {ln}' for ln in chunk['lines']]
+                pos += len(chunk['lines'])
+            game.call('set_trace_log', {'enabled': False})
+            ram = game.read(0, 0x2000)
+            rows.append({'colours': length, 'stop': pc, 'fastok': ram[0x17e1], 'queue_count': ram[0x260],
+                         'first_colour': ram[0x271] | ram[0x279] << 8, 'state_2104': ram[0x104],
+                         'paths': [(path, cyc) for _, path, cyc in dispatch_paths(lines)],
+                         'fastok_writes': [m[1] for m in (re.search(r'\s(STZ|STA|INC|DEC) \$37E1\s', ln) for ln in lines) if m]})
+    if out:
+        Path(out).write_text(json.dumps({'head': head, 'rows': rows}))
+    return head, rows
 
 
 def configure(game, rom):
@@ -632,10 +895,6 @@ def main():
     ev.add_argument('run')
     ev.add_argument('--variants', nargs='*')
     ev.add_argument('--out', default=str(OUT / 'events'))
-    bz = sub.add_parser('busy')
-    bz.add_argument('run')
-    bz.add_argument('--variants', nargs='*')
-    bz.add_argument('--out', default=str(OUT / 'busy'))
     ee = sub.add_parser('e2e')
     ee.add_argument('--modes', nargs='*')
     ee.add_argument('--run', default='1-1')
@@ -645,6 +904,21 @@ def main():
     lt.add_argument('--stages', nargs='*', type=int)
     lt.add_argument('--modes', nargs='*')
     lt.add_argument('--rom', default=str(ROM_111))
+    pr = sub.add_parser('pairs')
+    pr.add_argument('--pairs', nargs='*', help='mode1:mode2 (default: all 36)')
+    pr.add_argument('--run', default='3-2')
+    pr.add_argument('--frames', type=int, default=1200)
+    pr.add_argument('--rom', default=str(ROM_111))
+    pr.add_argument('--out', default=str(OUT / 'pairs'))
+    fo = sub.add_parser('fastok')
+    fo.add_argument('--rom', default=str(ROM_111))
+    fo.add_argument('--lengths', nargs='*', type=int, default=list(range(198, 213)))
+    fo.add_argument('--out')
+    dp = sub.add_parser('dispatch')
+    dp.add_argument('run')
+    dp.add_argument('start', type=int)
+    dp.add_argument('frames', type=int)
+    dp.add_argument('--variants', nargs='*')
     sub.add_parser('report')
     args = parser.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
@@ -687,23 +961,6 @@ def main():
                         worst, where = d, n
             print(f"{args.run} {v:10s} frames {len(fr)}: frames whose interrupt/pad-read/VCE-write clocks differ from ORIGINAL: {diff}; "
                   f"largest interrupt/pad-read shift {worst} clk (frame {where})", flush=True)
-    elif args.command == 'busy':
-        folder = Path(args.out)
-        folder.mkdir(parents=True, exist_ok=True)
-        rows = {}
-        for v in args.variants or ['original', 'apocalypse', 'sms', 'gb dmg', 'nes-a', 'nes-b']:
-            rows[v] = busy_rows(busy_run(args.run, v, folder / f'{args.run}.{v.replace(" ", "")}.json'))
-        ref = rows.get('original')
-        for v, r in rows.items():
-            if v == 'original' or ref is None:
-                continue
-            d = [(b[0], b[2] - a[2]) for a, b in zip(ref, r) if a[1] == b[1]]
-            nonzero = [x for x in d if x[1]]
-            worst = max(d, key=lambda x: x[1], default=(None, 0))
-            print(f"{args.run} {v:10s} updates {len(r)} (ORIGINAL {len(ref)}); added busy: nonzero {len(nonzero)}, "
-                  f"max {worst[1]} clk at frame {worst[0]}, min {min((x[1] for x in d), default=0)}; "
-                  f"overruns {sum(1 for x in r if x[3] is not None and x[3] < 0)} (ORIGINAL "
-                  f"{sum(1 for x in ref if x[3] is not None and x[3] < 0)}); min left {min((x[3] for x in r if x[3] is not None), default=None)}", flush=True)
     elif args.command == 'e2e':
         folder = Path(args.out)
         folder.mkdir(parents=True, exist_ok=True)
@@ -735,6 +992,46 @@ def main():
                     vb, into = divmod(clock - VBLANK_PHASE, FRAME_CLOCKS)
                     cells.append(f"{kind[0]} vblank {vb} +{into}" + ('' if r is None else f" ({clock - r:+d})"))
                 print(f'stage {stage:2d} {mode:10s} ' + ' '.join(cells), flush=True)
+    elif args.command == 'pairs':
+        folder = Path(args.out)
+        folder.mkdir(parents=True, exist_ok=True)
+        pairs = [tuple(x.split(':')) for x in args.pairs] if args.pairs else \
+            [(a, b) for a in PAIR_MODES for b in PAIR_MODES]
+        pairs = [('original', 'original')] + [x for x in pairs if x != ('original', 'original')]
+        ref = None
+        for mode1, mode2 in pairs:
+            path = folder / f'{args.run}.{mode1.replace(" ", "")}.{mode2.replace(" ", "")}.json'
+            if path.exists():
+                data = json.loads(path.read_text())
+                res = (data['status'], data['trace'])
+            else:
+                res = pair_run(mode1, mode2, args.run, args.frames, Path(args.rom), path)
+            if ref is None:
+                ref = res
+            r = pair_compare(ref, res)
+            print(f"{mode1:10s} -> {mode2:10s} $2100={r['opt2']:02x} first update {r['first_update']:+d} clk; "
+                  f"sound RAM differs in {r['snd_frames']} frames (first {r['snd_first']}); "
+                  f"counter/Ryu/stage differ in {r['game_frames']} (first {r['game_first']}); "
+                  f"lag frames {r['lag'][:8]}; irq clocks differ in {r['irq_frames']} frames, max {r['irq_max']} clk", flush=True)
+    elif args.command == 'fastok':
+        head, rows = fastok_probe(Path(args.rom), args.lengths, out=args.out)
+        print(f"worker call at frame {head['frame']}, {head['clock_before_vblank']} clk before the vblank, queue {head['queue']}")
+        for r in rows:
+            print(f"{r['colours']:4d} colours: stop {r['stop']} FASTOK {r['fastok']:02x} queue {r['queue_count']} "
+                  f"first colour {r['first_colour']} $2104 {r['state_2104']:02x} FASTOK writes {r['fastok_writes']} "
+                  f"vblank paths {r['paths']}", flush=True)
+    elif args.command == 'dispatch':
+        import collections
+        import gzip
+        for v in args.variants or ['original', 'gb dmg']:
+            tmp = OUT / 'work' / f'dispatch-{v.replace(" ", "")}.gz'
+            tmp.parent.mkdir(parents=True, exist_ok=True)
+            itrace(args.run, v, args.start, args.frames, tmp)
+            with gzip.open(tmp, 'rt') as fh:
+                paths = dispatch_paths(fh)
+            tmp.unlink()
+            print(f"{args.run} {v:10s} frames {args.start}-{args.start + args.frames - 1}: "
+                  f"{dict(collections.Counter((p, c) for _, p, c in paths))}", flush=True)
     elif args.command == 'report':
         print(report([p.stem for p in RUN_FILES], list(VARIANTS)))
     elif args.command == 'survey':
