@@ -246,3 +246,17 @@ Emulator evidence only.
 - 5-1 (one area, 12 pages): legs to standing spots read off the map; the
   blocks that hang to 11-16 px above the floor (x 480-608, 1504-1600,
   2768-2896) are passed over, by the floating blocks before them.
+
+### 5-1 and 5-2
+
+- 5-1 (no run): 16 legs to standing spots off the map; blocks hanging to
+  11-16 px above the floor are passed over; the ledge x 2210-2303 (top 72)
+  is reached from the step x 2338-2366 (top 104), then the block top y 40.
+  Goals now accept a slash pose only when Ryu's feet are on a map platform
+  top (a slash at a jump's apex also reads vertical speed 0). Committed
+  `26b9b10`.
+- 5-2 area 2: the ledge x 194-255 (top y 40) is 64 px above the y 104 level,
+  more than a jump (58 px). The Level Select bot got up by an enemy's
+  knock-back; a timing grid from the step x 237, y 104 found the same (wait 4
+  frames, jump left 20 frames: the hit lifts Ryu onto y 40, health -1). It is
+  a fixed segment leg in the plan (`a2-knockback`), after the beam's route.

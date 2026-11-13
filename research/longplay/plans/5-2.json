@@ -1,6 +1,6 @@
 {
  "stage": "5-2",
- "notes": "The Level Select comparison run (research/comparison-runs/5-2.json) is the guide: its path, recorded on the original through Level Select (research/longplay/fast/runpath.py, research/longplay/paths/5-2.json), gives beam waypoints (standing/walking/clinging points about every 40 frames), one leg per area, long areas in chunks of about 500 path frames.",
+ "notes": "The Level Select comparison run (research/comparison-runs/5-2.json) is the guide: its path, recorded on the original through Level Select (research/longplay/fast/runpath.py, research/longplay/paths/5-2.json), gives beam waypoints (standing/walking/clinging points about every 40 frames), one leg per area, long areas in chunks of about 500 path frames. Area 0 chunk 1: hand waypoint on the block x 308-368 (top y 72), from which a running jump reaches the ledge x 194-255 (top y 40). Area 2: the ledge x 194-255 (top y 40) is 64 px above the y 104 level, beyond a jump (58 px); the Level Select bot got there by an enemy's knock-back, and the beam is pointed at the same spot (hand waypoint). The knock-back onto the ledge was found by a timing grid (wait 4 frames on the y 104 step at x 237, jump left 20 frames; an enemy's hit lifts Ryu onto y 40, health -1) and is a fixed segment in the plan (with the beam's route before it).",
  "legs": [
   {
    "name": "a0-0-0",
@@ -8,12 +8,22 @@
     "follow": {
      "path": "research/longplay/paths/5-2.json",
      "from_frame": 1,
-     "to_frame": 544
+     "to_frame": 544,
+     "add_points": [
+      [
+       300,
+       330,
+       72,
+       14,
+       3,
+       1
+      ]
+     ]
     },
     "goal": {
      "area": 1
     },
-    "width": 60,
+    "width": 120,
     "max_frames": 1632,
     "seconds": 1632
    }
@@ -35,19 +45,264 @@
    }
   },
   {
-   "name": "a2-2-0",
+   "name": "a2-knockback",
+   "segments": [
+    [
+     4,
+     []
+    ],
+    [
+     2,
+     [
+      "I",
+      "left"
+     ]
+    ],
+    [
+     10,
+     [
+      "right"
+     ]
+    ],
+    [
+     2,
+     [
+      "I",
+      "left"
+     ]
+    ],
+    [
+     10,
+     [
+      "right"
+     ]
+    ],
+    [
+     4,
+     [
+      "I",
+      "left"
+     ]
+    ],
+    [
+     4,
+     [
+      "left"
+     ]
+    ],
+    [
+     4,
+     [
+      "II"
+     ]
+    ],
+    [
+     8,
+     [
+      "left"
+     ]
+    ],
+    [
+     4,
+     [
+      "I",
+      "left"
+     ]
+    ],
+    [
+     16,
+     [
+      "left"
+     ]
+    ],
+    [
+     4,
+     [
+      "I",
+      "right"
+     ]
+    ],
+    [
+     4,
+     [
+      "left"
+     ]
+    ],
+    [
+     4,
+     [
+      "II"
+     ]
+    ],
+    [
+     152,
+     [
+      "left"
+     ]
+    ],
+    [
+     4,
+     [
+      "I",
+      "right"
+     ]
+    ],
+    [
+     8,
+     [
+      "left"
+     ]
+    ],
+    [
+     4,
+     [
+      "II",
+      "left"
+     ]
+    ],
+    [
+     4,
+     [
+      "left"
+     ]
+    ],
+    [
+     4,
+     [
+      "I"
+     ]
+    ],
+    [
+     8,
+     []
+    ],
+    [
+     4,
+     [
+      "II",
+      "right"
+     ]
+    ],
+    [
+     4,
+     [
+      "I",
+      "left"
+     ]
+    ],
+    [
+     4,
+     [
+      "II",
+      "right"
+     ]
+    ],
+    [
+     4,
+     []
+    ],
+    [
+     24,
+     [
+      "left"
+     ]
+    ],
+    [
+     4,
+     [
+      "II",
+      "right"
+     ]
+    ],
+    [
+     12,
+     []
+    ],
+    [
+     12,
+     [
+      "left"
+     ]
+    ],
+    [
+     4,
+     [
+      "I",
+      "left"
+     ]
+    ],
+    [
+     8,
+     [
+      "left"
+     ]
+    ],
+    [
+     4,
+     []
+    ],
+    [
+     4,
+     [
+      "II",
+      "left"
+     ]
+    ],
+    [
+     20,
+     [
+      "left"
+     ]
+    ],
+    [
+     8,
+     []
+    ],
+    [
+     4,
+     [
+      "right"
+     ]
+    ],
+    [
+     5,
+     [
+      "left"
+     ]
+    ],
+    [
+     4,
+     []
+    ],
+    [
+     20,
+     [
+      "I",
+      "left"
+     ]
+    ],
+    [
+     27,
+     [
+      "left"
+     ]
+    ]
+   ]
+  },
+  {
+   "name": "a2-rest",
    "beam": {
     "follow": {
      "path": "research/longplay/paths/5-2.json",
-     "from_frame": 1200,
+     "from_frame": 1585,
      "to_frame": 1816
     },
     "goal": {
      "area": 3
     },
-    "width": 60,
-    "max_frames": 1851,
-    "seconds": 1851
+    "width": 100,
+    "max_frames": 900,
+    "seconds": 900
    }
   },
   {
