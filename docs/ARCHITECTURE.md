@@ -706,9 +706,14 @@ frame and moves the main loop by its own length; once in the sweep's 727
 openings a frame end inside the 1-1 → 1-2 load saw one VRAM word apart
 (`check_menu.py` lists such frames; `--strict` fails them).
 NES colours need that reload, so they show after Run: while NES-A or NES-B
-is highlighted in a menu opened in another mode, the live bits stay as the
+is highlighted in a menu opened in a mapped mode, the live bits stay as the
 menu found them (`$2100` on the menu's stack), and Run sets the draft's mode
-through the same `set_palette` (bit 7 with it). Opened in an NES mode, the
+through the same `set_palette` (bit 7 with it). Opened in an unmapped mode
+(Original, NES-A, NES-B), the NES value goes live in the preview (palette-lag:
+nothing changes on screen, unmapped to unmapped needs no re-upload), so Run
+finds nothing to change and its stage restart takes the cycles Original's
+does; `set_palette` queues all colours only when the old or new mode is a
+mapped one. Opened in an NES mode, the
 RAM palette holds NES colours, so ORIGINAL previews them unmapped and the
 mapped modes map them; Run reloads the stage in the chosen mode's own data.
 A live NES preview would need the RAM palette rewritten with NES data and

@@ -299,8 +299,10 @@ choose:
  cmp #$ff
  beq cancelled
  ; Run: the draft's options, and its language. The palette mode first,
- ; through set_palette: an NES value was not previewed (the live mode is
- ; still the one the menu opened in), and set_palette writes bit 7 with it.
+ ; through set_palette: an NES value was not previewed when the menu
+ ; opened in a mapped mode (the live mode is still that one; from an
+ ; unmapped mode it went live in the preview and nothing changes here), and
+ ; set_palette writes bit 7 with it.
  lda DRAFT
  and #PALETTE_BITS
  jsr set_palette
@@ -379,8 +381,10 @@ selection_return:
  ; cancel puts the old mode back. NES colours (NES-A, NES-B) are not a
  ; mapping of the RAM palette but other palette data, loaded with the stage
  ; (src/nes-palette): they show after Run, which restarts the stage. While
- ; an NES value is highlighted, the live mode is the one the menu opened in,
- ; so the colours on screen do not change. (Opened in an NES mode, the RAM
+ ; an NES value is highlighted, the colours on screen do not change: opened
+ ; in a mapped mode the live mode stays the one the menu opened in; opened in
+ ; an unmapped one the NES value goes live (palette-lag: unmapped to
+ ; unmapped shows the RAM palette as it is). (Opened in an NES mode, the RAM
  ; palette holds NES colours: ORIGINAL shows them unmapped, the mapped modes
  ; map them.)
 preview_palette:
