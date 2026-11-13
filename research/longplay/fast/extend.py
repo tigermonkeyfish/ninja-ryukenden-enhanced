@@ -35,12 +35,12 @@ CACHE = Path('/workspace/build/longplay/states')
 
 
 def goal_fn(g, i0, boss_seen):
-    def goal(i):
+    def goal(i, seen=False):
         if g.get('stage_change') and (i['stage'] != i0['stage'] or i['master'] != 0):
             return True
         if 'area' in g and i['area'] == g['area'] and i['stage'] == i0['stage']:
             return True
-        if g.get('boss_dead') and boss_seen[0] and i['boss'] == 0:
+        if g.get('boss_dead') and (boss_seen[0] or seen) and i['boss'] == 0:
             return True
         if 'x>=' in g or 'x<=' in g:
             ok = True
@@ -134,8 +134,10 @@ def main():
                 wps = [tuple(w) for w in b.pop('waypoints')]
                 g = goal_fn(b.pop('goal'), f.info(), boss_seen)
                 bw = b.pop('boss_weight', 0)
+                chase = b.pop('chase', 0)     # pull toward the boss's x ($2F1C, 2-3)
                 if bw:
-                    b['prefer'] = lambda i, bw=bw: -bw * i['boss'] if i['boss'] else 0
+                    b['prefer'] = lambda i, bw=bw, c=chase: (-bw * i['boss'] - c * abs(i['x'] - i['bx'])
+                                                             if i['boss'] and i['bx'] else 0)
                 acts = b.pop('actions', None)
                 if acts:
                     b['actions'] = [sum(BITS[k] for k in x) if isinstance(x, list) else x for x in acts]

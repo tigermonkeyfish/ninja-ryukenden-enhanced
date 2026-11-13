@@ -1,0 +1,38 @@
+{
+ "stage": "3-2",
+ "notes": "The Level Select comparison run (research/comparison-runs/3-2.json) is the guide: its path, recorded on the original through Level Select (research/longplay/fast/runpath.py, research/longplay/paths/3-2.json), gives beam waypoints (grounded/clinging points about every 40 frames), one leg per area.",
+ "legs": [
+  {
+   "name": "a0",
+   "beam": {
+    "follow": {
+     "path": "research/longplay/paths/3-2.json",
+     "from_frame": 1,
+     "to_frame": 3068
+    },
+    "goal": {
+     "area": 1
+    },
+    "width": 60,
+    "max_frames": 6136,
+    "seconds": 3068
+   }
+  },
+  {
+   "name": "a1",
+   "beam": {
+    "follow": {
+     "path": "research/longplay/paths/3-2.json",
+     "from_frame": 3069,
+     "to_frame": 3136
+    },
+    "goal": {
+     "stage_change": true
+    },
+    "width": 60,
+    "max_frames": 600,
+    "seconds": 600
+   }
+  }
+ ]
+}

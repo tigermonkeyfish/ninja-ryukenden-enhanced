@@ -84,7 +84,7 @@ class Fast:
         return {'x': r[X] | r[X + 1] << 8, 'y': r[Y], 'area': r[AREA], 'stage': r[STAGE],
                 'lives': r[LIVES], 'health': r[HEALTH], 'cam': r[0x20f] | r[0x210] << 8,
                 'pages': r[0x237], 'master': r[0x240], 'm2': r[0x241], 'boss': r[0x1035],
-                'state': r[0xeaa]}
+                'state': r[0xeaa], 'bx': r[0xf1c]}
 
     def screenshot(self, path):
         """Render the next frame's picture: call step(1, render=True) first."""

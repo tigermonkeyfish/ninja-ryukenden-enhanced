@@ -88,11 +88,12 @@ class Pool:
 
 
 class Node:
-    __slots__ = ('ref', 'parent', 'mask', 'frames', 'info', 'wp', 'score', 'depth', 'key')
+    __slots__ = ('ref', 'parent', 'mask', 'frames', 'info', 'wp', 'score', 'depth', 'key', 'seen')
 
     def __init__(self, ref, parent, mask, frames, info, wp, score, depth, key=()):
         self.ref, self.parent, self.mask, self.frames = ref, parent, mask, frames
         self.info, self.wp, self.score, self.depth, self.key = info, wp, score, depth, key
+        self.seen = info.get('boss', 0) > 0 or (parent is not None and parent.seen)
 
     def segments(self):
         out, n = [], self
@@ -129,6 +130,8 @@ def search(pool, state, waypoints, goal, width=60, chunk=4, max_frames=3000, act
            lost=None, hp_weight=40, log=print, seconds=600, ywt=0.3, levels=3, prefer=None, stall_frames=600):
     """Return (node, reason). goal(info) -> True ends the leg. `prefer(info)` adds to the score."""
     W = len(pool.conns)
+    import inspect
+    goal_args = len(inspect.signature(goal).parameters)
     pool.conns[0].send(('put', state))
     ref = (0, pool.conns[0].recv())
     f = Fast()
@@ -187,7 +190,7 @@ def search(pool, state, waypoints, goal, width=60, chunk=4, max_frames=3000, act
                     wp += 1
                 fr = sum(n for n, _ in a) if isinstance(a, tuple) else chunk
                 node = Node((w, nid), parent, a, fr, i, wp, score(i, wp), depth)
-                if goal(i) and goal_node is None:
+                if goal_node is None and (goal(i, node.seen) if goal_args == 2 else goal(i)):
                     goal_node = node
                 k = (wp, i['area'], i['x'] // 3, yv(i['y']) // 3) + kb
                 if k not in cand or cand[k].score < node.score:
@@ -227,7 +230,7 @@ def search(pool, state, waypoints, goal, width=60, chunk=4, max_frames=3000, act
         if depth % 25 == 0:
             b = beam[0]
             log(f'depth {depth} wp {b.wp} area {b.info["area"]} x {b.info["x"]} y {b.info["y"]} hp {b.info["health"]} '
-                f'cands {len(cand)} t={time.time() - t0:.0f}s')
+                f'boss {b.info["boss"]} cands {len(cand)} t={time.time() - t0:.0f}s')
         if time.time() - t0 > seconds:
             return best, 'time'
     return best, 'frames'
