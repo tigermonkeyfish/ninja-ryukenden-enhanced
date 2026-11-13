@@ -29,20 +29,25 @@ skip, double or misplace a draw, show it on a lit frame, or add a frame:
 - Picture (verified): in ORIGINAL every frame from each of the 15 changed
   loads and area changes through the frame before the camera first moves is
   pixel-identical to the unmodified ROM, the black frames included; the same
-  after 15 deaths, 4 Game Over -> Continue and from the first black frame of
-  7 Level Select entries on.
+  from the respawn or reload on after 15 deaths and 4 Game Over -> Continue.
+  The first lit frames of 7 Level Select entries equal the natural loads'
+  below the HUD. Japanese and Chinese give the same results.
 
-What the owner should know before he looks at a screen (none of it is new
-in this build; F1 and F3 are the same in palette timing 3):
+What the owner should know before he looks at a screen (both are older
+than this build and the same in palette timing 3):
 
 - **F1**: in APOCALYPSE, SMS and GB DMG the first visible frame after some
   5-3 area changes shows the foreground black for one frame (the backdrop is
   complete). He will see it in APOCALYPSE at every 5-3 area change.
-- **F5**: in the same three modes 2-2's second area change still writes two
+- **F5**: in the same three modes 2-2's area changes still write two
   palettes to the video chip in the middle of the last black frame.
 
-Two record corrections (F4) and one small undocumented cost (F2) should go
-into the records before a merge; nothing has to be fixed before the test.
+Two menu gates each fail one opening on this ROM: one next to 2-2's first
+area change, the same on palette timing 3 (F3), and one in 4-1 with SMOOTH
+PARALLAX OFF, new, a single note written a frame late after the menu (F2).
+Neither touches game timing or the picture in play. The record corrections
+(F4) and the small undocumented cost (F2) should go into the records before
+a merge; nothing has to be fixed before the test.
 
 ## Findings, most severe first
 
@@ -182,9 +187,18 @@ into the records before a merge; nothing has to be fixed before the test.
   known effect of VCE access during the picture; this emulator does not
   draw it). 1.10 did this in every mode, so the build is no worse than what
   the owner has seen.
-- A cheap fix was not found: moving the write after the draw would take it
-  below the rows that use those palettes (the draw ends at about line 205)
-  but keeps a mid-frame write; removing it needs F1's fix.
+- A cheap fix for the dash exists (verified in a scratch build only, not
+  gated, `src/` untouched): in `draw_all`, for the mapped modes, draw first
+  and write the two palettes afterwards (`jsr cache` / `ldx #208` / `ldy
+  #32` / `jmp $febe`; 3 bytes more in bank `$56`). On the playthrough to
+  14,700 in SMS, GB DMG and APOCALYPSE: the dash is gone (0 pixels at
+  14,672), the first visible frames 14,033 and 14,673 and every other window
+  frame are the build's pixel for pixel, the game fields and every update's
+  vblank count are unchanged, the draw updates keep 41,500-47,500 clocks
+  (87-126 fewer than the build). The write still lands inside the picture
+  (after the draw, below the rows that use those palettes), so what a
+  console shows of the write itself is not settled by it; taking the write
+  out altogether needs F1's fix. Not tried there: respawns, Level Select.
 
 ### F6 (note, verified): Level Select loads show the old picture's colours for the load's 13-17 frames
 
@@ -294,7 +308,8 @@ No, in every path found (verified where marked).
   refuses while `$2E63` counts), a cancelled preview puts the old bits back
   before it returns, and Run restarts the stage.
 - The mapped modes' black-frame dash: one line of 24-32 pixels (F4), equal
-  to palette timing 3's. Record it as a known deviation (F5).
+  to palette timing 3's. A three-byte change removes it in a scratch build
+  (F5); until that is gated, record it as a known deviation.
 
 ### 4. cinema-lock
 
@@ -370,7 +385,8 @@ No, in every path found (verified where marked).
 | `check_bram.py --only timing` | PASS |
 | Japanese (saved language 0; the unmodified ROM as it powers on), `full-load.json` to 84,500, ORIGINAL | game fields equal in every frame; every picture of 13,200-13,386 (the 2-2 load, fade and start window), 14,029-14,033 and 14,669-14,673 identical to the unmodified ROM's; the recording leaves the route at 65,933 in both |
 | Chinese (saved language 2; the unmodified ROM with `$3227` = 2 written at 1-1's first update), to 84,500, ORIGINAL | the same result as Japanese, frame for frame |
-| SMOOTH PARALLAX OFF | TO BE FILLED |
+| SMOOTH PARALLAX OFF (saved options `$01`), ORIGINAL, to 84,500, every picture of 2-2 and 5-2 to 5-4 hashed | game fields and all 83,807 updates equal to the unmodified ROM's; the four loads and the frames from each area change to 8 frames past the first visible one identical, except the exit frames 14,028 and 80,884 (the `exit-frames` record's playfield drop) and three frames after 2-2's camera moves; 833 of 14,702 pictures differ in all (2-2 724, 5-2 17, 5-3 92, 5-4 0): single frames where the native backdrop is redrawn a tile over, 19-42 pixels in the three looked at. Palette timing 3 with OFF gives the same picture as this build in every frame of 2-2 (0 of 3,401 differ), so this is the older cost of the wrapper before the native redraw, not these changes |
+| Japanese and Chinese through the 5-2 and 5-3 loads and 5-2's area changes (from 73,200, 4,200 frames) and through 5-3's end, the story scene and the 5-4 load (from 81,000, 3,500 frames): the language byte written in a saved state of both ROMs, the recording replayed | game fields equal to the unmodified ROM's in every frame, the loads and area changes on the same frames (5-4's at 82,897 in both languages); APOCALYPSE's fields equal ORIGINAL's |
 | Deaths, Continue, Level Select | question 1 |
 | cinema-lock forced vblanks | TO BE FILLED |
 
@@ -467,8 +483,7 @@ stage, area, palette mode and what was pressed.
   test-only emulator); `palette_lag.py` pairs / loadtime / e2e / fastok,
   `check_boot.py`, `check_menu.py` select / options / reset (the combined
   record's results taken as read).
-- The scratch variant of F5's idea is an experiment, not a proposal that
-  was gated.
+- The scratch variant of F5 beyond frame 14,700 and with any gate.
 
 ## Probes
 
