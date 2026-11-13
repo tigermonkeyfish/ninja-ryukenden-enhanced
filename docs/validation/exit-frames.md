@@ -24,8 +24,10 @@ Two unrelated things were mixed in the `start-align` notes:
    amount (2-2 a1 10,077-10,465 px, 4-1 a1 1,158-1,917, 5-2 a2 4,668, 5-3 a1
    796-832, a2 586-600, a3 337-356, a4 3,922-3,927, 6-3 a1 4,295-4,364;
    2-2 a2 9,096-9,244), with every scanline's latched BXR and BG Y offset
-   equal on both ROMs. With SMOOTH PARALLAX OFF (options bit 0) none of these
-   frames differs at any of the 26 area changes. This is the Enhanced
+   equal on both ROMs (the 3 others had no backdrop difference at that
+   point). With SMOOTH PARALLAX OFF (options bit 0) no frame of the windows
+   EV-6..EV+2 of the 26 area changes differs except the four drops of
+   finding 2 (the 40-frame windows were not repeated with OFF). This is the Enhanced
    backdrop sitting where its own parallax put it, against the native
    screen-locked one: the design of smooth parallax, not an exit effect.
    It is out of scope here (see "Not covered").
