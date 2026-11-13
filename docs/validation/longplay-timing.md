@@ -1,4 +1,4 @@
-# Full-playthrough timing recording (in progress)
+# Full-playthrough timing recording
 
 Emulator evidence only (headless Geargrafx). Goal: one power-on-to-ending input
 recording, replayed in the six palette modes, each with its mode already stored
@@ -8,6 +8,16 @@ headline is the plain replay with identical per-frame input. A re-aligned replay
 is only a labelled secondary diagnostic, and only if a divergence occurs.
 
 ## State of the recording
+
+**Complete (2026-11-13):** `research/longplay/full.json` runs from 1-1's first
+update to the finished THE END screen: 126,003 frames (+480 boot frames =
+126,483 from power-on, 35 min 08 s at 60 Hz), 22 stage markers, no death, no
+Continue (lives 2 throughout). Cold-start check `scripts/longplay_check.py
+--mode original`: PASS for every stage start and the end (headless, one
+session, 186 s). Table and per-stage method: section "Complete recording" at
+the end. The paragraphs below are the history of how it was built.
+
+### Earlier state (act 1, before the map work)
 
 `research/longplay/full.json` (ROM under test: v1.11-dev apocalypse, reset 2,
 palette timing 2, ORIGINAL stored in backup RAM) reaches **the first update of
@@ -281,3 +291,81 @@ Emulator evidence only.
   frame; the boss plan stalls with no damage at all; single attack patterns
   (slash, jump-slash at x 60-210) did no damage either. Ryu has no ninpo
   (HUD -00). Under investigation.
+
+
+## Complete recording (2026-11-13)
+
+Emulator evidence only (headless Geargrafx for the check, the in-process core
+for the searches; both give identical RAM after the same input).
+
+Command (one fresh session, power-on with the mode's backup-RAM image, the whole
+file as one input list, no re-syncing):
+
+    LD_LIBRARY_PATH=/workspace/build/toolchain/sdl3/lib \
+      python3 scripts/longplay_check.py --mode original
+
+Result in ORIGINAL: RESULT PASS; first gameplay frame of each stage (frames
+from 1-1's first update; + 480 boot frames from power-on):
+
+| Stage | Starts | Made by | Health at end |
+|---|---|---|---|
+| 1-1 | 0 | stored comparison run (verbatim) | 9 |
+| 1-2 | 2,832 | old bot, boss scoring | 1 |
+| 2-1 | 10,136 | old bot prefix + map waypoints (beam) | 15 |
+| 2-2 | 13,241 | Level Select run's path as waypoints (beam), climb leg | 14 |
+| 2-3 | 16,533 | boss beam (health `$1035`, pull to `$2F1C`) | 9 |
+| 3-1 | 27,777 | path waypoints | 16 |
+| 3-2 | 31,401 | path waypoints, wall hops | 16 |
+| 3-3 | 34,853 | boss beam | 15 |
+| 4-1 | 53,288 | path waypoints | 13 |
+| 4-2 | 57,121 | path waypoints + hand points (ledge tops) | 11 |
+| 4-3 | 60,358 | map + poke exits, hand waypoints (no run) | 10 |
+| 4-4 | 64,423 | boss beam | 9 |
+| 5-1 | 70,013 | map, hand waypoints (no run) | 14 |
+| 5-2 | 73,264 | path waypoints + grid-found knock-back leg | 13 |
+| 5-3 | 77,206 | path waypoints + grid-found pipe/girder legs | 13 |
+| 5-4 | 82,882 | boss beam | 11 |
+| 6-1 | 86,508 | path waypoints | 15 |
+| 6-2 | 88,446 | map + poke exits, hand waypoints (no run) | 12 |
+| 6-3 | 93,810 | path waypoints + climb, post (hit) and drop legs | 15 |
+| 6-4A | 102,302 | boss beam | 12 |
+| 6-4B | 106,468 | boss beam | 12 |
+| 6-4C | 111,229 | boss beam on the head counter, then the stump | 14 |
+| end | 126,003 | THE END screen fully faded in (flags `$2240/$2241` = 1,14) | |
+
+The markers in `full.json` (`start_frame`) are where each stage segment was
+appended; the check reports both (they differ by 0-4 frames where a stage's
+first gameplay frame came inside the previous stage's last input segment).
+
+- **6-4C (final boss):** owner's hint confirmed: the health bar (`$3035`)
+  does not move at first; the head must be hit until it falls off. Its hit
+  counter is `$303C` (RAM offset `$103C`, 16 down to 0; found by watching
+  `$1030-$104F` while jump-slashing at x 130); only then do stump hits lower
+  `$3035`. The beam scores the head counter, then the boss health (1,108
+  frames). Static ROM scan: bank 2 `$A228` `DEC $3035`, bank 2 `$B321`
+  `DEC $303C,X`.
+- **Ending:** the boss death and cinema start at idle frame 877 (flags 1,13),
+  the THE END screen's flags (1,14) at 11,849, its picture stops changing at
+  13,665 (rendered-frame hashes); the file ends with 13,666 idle frames. About
+  430 frames later the game moves on by itself (a black-and-white screen with
+  staff names); the recording stops before that.
+- **Six-mode replays:** not run by this work (the coordinator reports the
+  six-palette checks through act 4 matched); the same command takes
+  `--mode apocalypse|nes-a|nes-b|sms|"gb dmg"`.
+
+### What the stages needed (reusable)
+
+- Collision rectangles from ROM (bank 7 `$62F2` tables, `stagemap.py`); type
+  00 tops hold Ryu only when he lands on them from above; 02 sides are
+  clinging walls; door rectangles (13) are touched only from some sides (poke
+  scans with `exitscan.py` find the exits).
+- Motion state `$2EAA` (0 stand, 1 walk, 2 crouch, 3 air, 4 climbing a pipe
+  with up held, 5 clinging, 6 slash, 8 crouch slash, 9 hurt), vertical speed
+  `$2EA7`; jump height 58 px, running jump about 80 px across; wall hop
+  (I + away 2 frames, toward 10) climbs about 20 px.
+- Several places can only be passed the way the Level Select bot did, by an
+  enemy's knock-back (5-2 area 2, 6-3 area 2): grid searches over
+  wait/jump timings found them (`rescue.py` turns such a move into a fixed leg).
+- Beam settings that mattered: airborne nodes keep their takeoff score,
+  falling nodes are dropped when no platform is within reach (map), a third of
+  the beam stays on the ground, standing waypoints require Ryu to stand.
