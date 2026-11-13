@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'load'))
 import lx                                                              # noqa: E402
 from pe import W, inputs                                                # noqa: E402
 
-EVENTS = [2846, 10151, 11343, 12421, 12546, 13256, 14030, 14671, 16547, 27793, 31416, 34867, 53302, 55309,
+EVENTS = [1, 2846, 10151, 11343, 12421, 12546, 13256, 14030, 14671, 16547, 27793, 31416, 34867, 53302, 55309,
           55429, 57134, 60369, 60708, 61795, 63544, 64436, 70025, 73278, 74531, 75459, 76157, 77219, 77972,
           78669, 79287, 80296, 80630, 80887, 82897, 86521, 88458, 90754, 91716, 91820, 92931, 93822, 94460,
           94579, 96625, 102317, 106481, 111242]
@@ -28,10 +28,12 @@ def main():
     t = W(rom, None if mode == 'unmod-en' else mode)
     bf, st = lx.boot(t, mode)
     print('boot frames', bf, 'language', t.r(0x3227)[0], flush=True)
-    wins = {e: (e - PRE, e + POST) for e in EVENTS}
+    import os
+    only = [int(x) for x in os.environ.get('ONLY', '').split()] or EVENTS
+    wins = {e: (e - PRE, e + POST) for e in only}
     last = max(w[1] for w in wins.values())
-    data = {e: {} for e in EVENTS}
-    meta = {e: [] for e in EVENTS}
+    data = {e: {} for e in only}
+    meta = {e: [] for e in only}
     t0 = time.time()
     for f in range(1, last + 1):
         act = [e for e, (a, b) in wins.items() if a <= f <= b]
