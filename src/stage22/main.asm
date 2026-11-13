@@ -48,8 +48,8 @@ low_half:
  ; Only $2257-$225A (old renderer's bank saves and cursor) may be reused.
  stz <$2d
  lda $2258
- cmp #$ff
- beq phase_changed
+ cmp #$fc                   ; $FF, or a stage load's pending draw ($FD, $FC)
+ bcs phase_changed
  lda $2259
  and #7
  cmp <$27
@@ -66,8 +66,8 @@ same_phase:
  lda <$25
  sta <$2f
  lda $2258
- cmp #$ff
- beq initialize
+ cmp #$fc
+ bcs init_select
  lda <$25
  sec
  sbc $225a
@@ -122,50 +122,9 @@ new_right:
 new_left:
  inc <$30
  bra cache
-initialize:
- lda #101
- tam #3
- jsr $6000
- ; The merged palettes 13 and 14 go into the RAM palette and to the VCE at
- ; once, as the display shows the new backdrop in this frame (src/palette,
- ; palette_now at $FEBE, in the active palette mode's colours). The NES
- ; palette modes ($2100 bits 3-4 = 01, src/nes-palette) have their own
- ; versions, NES-A's and NES-B's (nes-enhanced.inc).
- clx
- lda $2100
- and #$18
- cmp #$08
- beq nes_palette
-palette_loop:
- lda palette13,x
- sta $2426,x
- lda palette14,x
- sta $2446,x
- inx
- cpx #32
- bne palette_loop
- bra palette_written
-nes_palette:
- ; NES-B ($2100 bit 5 set) has its own versions (the re-lit data), copied
- ; out of line (nes_b_palette_loop) to keep this block short.
- lda $2100
- and #$20
- bne nes_palette_b          ; (NES-A: 2, then the jmp: 6; see nes_palette_a)
- jmp nes_palette_a
-nes_palette_b:
- jmp nes_b_palette_peeled   ; (NES-B: 4 + 4; see nes_b_palette_peeled)
-nes_palette_loop:
- lda palette13_nes,x
- sta $2426,x
- lda palette14_nes,x
- sta $2446,x
- inx
- cpx #32
- bne nes_palette_loop
-palette_written:
- ldx #208
- ldy #32
- jsr $febe
+init_select:
+ ; (out of line: initialize_far, with the palette copy)
+ jmp initialize_far
 cache:
  lda $2e4b
  sta $2257
@@ -489,6 +448,106 @@ set_ports:
  lda <$2a
  adc #$ff
  sta <$2a
+ rts
+initialize_far:
+ ; $2258: $FF draws at once: an area change's draw ($2257 holds the bank the
+ ; native $80AB saved there) or the gameplay fallback. A stage load
+ ; (init_background: $2257 = $FF) only writes the palettes here and leaves
+ ; the drawing to the entry's black frames (load_piece; load-exact).
+ lda $2258
+ cmp #$ff
+ bne load_piece
+ lda $2257
+ cmp #$ff
+ beq load_palette
+draw_all:
+ jsr initialize
+ jsr palette_ram
+ ldx #208
+ ldy #32
+ jsr $febe
+ jmp cache
+load_palette:
+ ; The stage load: the merged palettes into the RAM palette only. The load's
+ ; fade ($F436) copies the RAM palette to its backup and fades in from it,
+ ; so the VCE gets them with the first fade step that shows anything (the
+ ; original shows black until then; a VCE write here showed them early).
+ jsr palette_ram
+ lda #$fd
+ sta $2258
+ rts
+load_piece:
+ ; A stage load's draw in two pieces, in the entry's short updates while
+ ; every colour is black: $2E63 counts the entry's updates down from $3A
+ ; ($82D0); $FD at $38 uploads the tiles (fixed and phase), $FC at $37
+ ; writes the tile map and the real cache. Outside the entry ($2E63 = 0;
+ ; not expected) everything is drawn at once.
+ ldx $2e63
+ beq draw_rest
+ cmp #$fd
+ bne piece_two
+ cpx #$38
+ bne piece_wait
+ jsr initialize
+ stz <$30
+ jsr cache
+ lda #$fc
+ sta $2258
+piece_wait:
+ rts
+piece_two:
+ cpx #$37
+ bne piece_wait
+ stz <$2d
+ jmp cache
+draw_rest:
+ jsr initialize
+ jmp cache
+; The fixed tile upload (scripts/rev5_texture.py writes this bank and
+; address: it matches the label and the three lines below).
+initialize:
+ lda #101
+ tam #3
+ jsr $6000
+ rts
+palette_ram:
+ ; The merged palettes 13 and 14 into the RAM palette (src/palette,
+ ; palette_now at $FEBE then writes them to the VCE in the active palette
+ ; mode's colours for an area change). The NES
+ ; palette modes ($2100 bits 3-4 = 01, src/nes-palette) have their own
+ ; versions, NES-A's and NES-B's (nes-enhanced.inc).
+ clx
+ lda $2100
+ and #$18
+ cmp #$08
+ beq nes_palette
+palette_loop:
+ lda palette13,x
+ sta $2426,x
+ lda palette14,x
+ sta $2446,x
+ inx
+ cpx #32
+ bne palette_loop
+ bra palette_written
+nes_palette:
+ ; NES-B ($2100 bit 5 set) has its own versions (the re-lit data), copied
+ ; out of line (nes_b_palette_loop) to keep this block short.
+ lda $2100
+ and #$20
+ bne nes_palette_b          ; (NES-A: 2, then the jmp: 6; see nes_palette_a)
+ jmp nes_palette_a
+nes_palette_b:
+ jmp nes_b_palette_peeled   ; (NES-B: 4 + 4; see nes_b_palette_peeled)
+nes_palette_loop:
+ lda palette13_nes,x
+ sta $2426,x
+ lda palette14_nes,x
+ sta $2446,x
+ inx
+ cpx #32
+ bne nes_palette_loop
+palette_written:
  rts
 nes_palette_a:
  ; Palette timing (palette-lag): NES-A reaches here 9 cycles after

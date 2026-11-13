@@ -180,6 +180,9 @@ area_background:
 init_background:
  ; Stage load (bank 1 $82CD). Neither caller reads A or the flags $80AB
  ; returns: the load path loads A next, the area path calls $85B7.
+ ; $2257 = $FF tells the renderers a load from an area change (where the
+ ; native $80AB leaves the bank it saved there): at a load they draw nothing
+ ; yet and mark $2258 = $FD (load-exact; deferred_draw).
  jsr $80ab
  lda #$ff
  sta $2257
@@ -188,8 +191,14 @@ init_background:
 deferred_draw:
  ; Main loop, every frame (selector hook). $FE, an impossible camera high
  ; byte, marks an area change's pending draw; the renderers initialize on $FF.
+ ; $FD / $FC: a stage load's draw, which the renderer (2-2, 5-2, the castle)
+ ; left for the entry's black frames (load-exact): the renderer runs and
+ ; picks its updates itself. A camera high byte (0/1) costs what it did.
  lda $2258
+ cmp #$fc
+ bcc draw_done
  cmp #$fe
+ bcc draw
  bne draw_done
  inc a
  sta $2258
@@ -211,3 +220,6 @@ draw:
 draw_done:
  rts
 init_hook_end:
+ .if (init_hook_end > $ff70)
+ .fail
+ .endif
