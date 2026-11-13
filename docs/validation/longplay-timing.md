@@ -178,3 +178,20 @@ Emulator evidence only.
   the small platform x 320-368 (top y 85) first. Leg a3 under search.
 - Beam waypoints are [x, y, r(, area, ry)]; a floor gate needs a loose ry
   (girders above a floor change y by 19 px).
+
+### Stages that have a Level Select comparison run
+
+- The stored runs do **not** replay from the played-in start: 2-2's run dies in
+  area 0 at every start offset 0-12 frames (`research/longplay/fast/tryrun.py`).
+- Instead `research/longplay/fast/runpath.py STAGE` replays the run on the
+  original through Level Select (headless, about 12 s) and records Ryu's
+  path (frame, area, x, y, health, stage, `$2EAA`), committed in
+  `research/longplay/paths/`. `plan_from_path.py STAGE` writes a plan with one
+  beam leg per area whose waypoints are the path's grounded/clinging points
+  about every 40 frames plus the area's last point (the way out). Points in the
+  8 frames after an area change are skipped (stale coordinates).
+- Ryu's y byte wraps above the top of the screen (a climb reads 250s); the
+  beam treats y >= 224 as negative.
+- Wall climbs need dense waypoints (every 12 frames, air points kept, r 12):
+  2-2's area 2 climb up the right-hand door wall (x 1982, y 102 -> 18) is its
+  own leg ("a2-climb", 296 frames).
