@@ -773,6 +773,34 @@ re-queue, not just the frame the colour was written.
 **Confidence/limits:** emulator, all 11 stored runs; the RAM-palette design is
 Ninja's.
 
+## A colour written at once showed through the transition's black frame
+
+**Observed:** a survey reported Ninja's 2-2 area starts 8 px off the
+original. The first visible frames were identical; the 8 px came on the
+next frame, the camera's first step, where the original's screen-locked
+backdrop jumps a tile (its BAT redraw follows the camera a frame before the
+scroll register does). The same check found a real difference one frame
+earlier: two lines of the backdrop in the transition's last black frame.
+
+**Finding/fix:** the area-change draw wrote its merged palettes to the VCE
+at once while the native transition keeps every colour black until it
+re-queues all 512 colours in that frame; rows the draw had already written
+lit up as the raster passed them. Writing the RAM palette only lets the
+native upload bring them on the original's first visible frame. In the
+palette modes that convert colours in an idle-time worker the same change
+left the rows black for a frame (the worker cannot convert 512 colours
+after the draw), so those modes keep the immediate write.
+
+**Reusable lesson:** define "the start" by the camera: compare from the
+first black frame through the frame before the camera first moves, and
+report the first moving frame separately. Look at the black frames too. A
+VCE write is visible from the line it lands on; let the game's own upload
+deliver colours whenever it uploads them in time. After a palette change,
+test every palette mode, not only the one the reference exists for.
+
+**Confidence/limits:** emulator (Geargrafx `78fc3d7`), one recording, 48
+events, 2-2 respawns and Level Select ([validation](../validation/start-pos.md)).
+
 ## Mapping colours in the vblank upload costs the main loop its slack
 
 **Observed:** the GB DMG mode maps each queued colour through a table in the

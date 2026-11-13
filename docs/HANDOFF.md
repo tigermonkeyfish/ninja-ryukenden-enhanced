@@ -92,6 +92,21 @@
   breakpoint). Emulator only; waiting for the owner's hardware test.
   Emulator only; RAM claim audited on the stored runs, boot and Level Select
   only.
+- **Start position** (1.11-dev, branch `start-pos` from `start-align`; the
+  owner: "The goal is for all of the background position starts to match
+  the unmodified rom"): the 8 px at 2-2 areas 1 and 2 is the original's
+  backdrop jumping a tile on the camera's first step (the frame after the
+  first visible one); the starts themselves were identical. Fixed the one
+  real start difference: two backdrop lines in 2-2 area 2's last black
+  transition frame (2-2's area-change draw wrote palettes 13/14 to the VCE
+  at once; Original and NES now leave them to the native full upload;
+  mapped modes unchanged). All 48 surveyed loads and area changes: every
+  frame from the black through the frame before the camera first moves
+  identical to the unmodified ROM (6-1's omitted star apart). Build
+  `888a8730...d1f9` in `/workspace/roms/` as `... (apocalypse, reset 2,
+  palette timing 3, original load timing, 2-2 start).pce` with both patches.
+  Emulator only ([record](validation/start-pos.md)); waiting for review and
+  the owner's hardware test.
 - **Load timing exact** (1.11-dev, branch `load-exact` from
   `palette-exact`; the owner: "stage start should appear like the
   original ... all stages and all substage/middle phases ... perfectly

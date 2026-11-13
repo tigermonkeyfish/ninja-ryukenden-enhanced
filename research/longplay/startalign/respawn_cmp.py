@@ -23,6 +23,8 @@ def lum(p):
 
 
 for fa in sorted(A_DIR.glob('*.npz')):
+    if not (B_DIR / fa.name).exists():
+        continue
     A, B = np.load(fa), np.load(B_DIR / fa.name)
     ma, mb, ia, ib = A['meta'], B['meta'], A['imgs'], B['imgs']
     ram_eq = bool((ma == mb).all())
