@@ -28,3 +28,34 @@ load timing, 2-2 start, cinema lock"), against the unmodified HuCard.
   `$862C` (1); only `$83FF` decrements it.
 
 (Findings, answers, verdict and checklist follow when the probes are done.)
+
+## Checkpoint 2 (interim results; the final text replaces this section)
+
+Own probes (scratch `/workspace/build/align-combined-review/`, a private copy
+of the in-process core with a render flag; `full-load.json` from power-on,
+126,001 frames, one input list):
+
+- ORIGINAL, NES-A against the unmodified ROM: update counter, master flags,
+  stage, area, camera, lives, health, Ryu's state and `$2E63` identical in
+  every frame; every one of the 124,958 updates on the same frame with the
+  same number of vblanks (own count from the `$E06C` / `$FCEC` hits). SMS,
+  GB DMG, APOCALYPSE: the same except the one update whose start is sampled a
+  frame later at 97,646 (it still ends 322,809 clocks before its vblank).
+- `$2258` markers: `$FD` only with `$2E63` `$3A`-`$38`, `$FC` only with `$37`,
+  at the four changed loads; never pending on a frame where the menu could
+  open (60,096 such frames per run).
+- ORIGINAL pictures against the unmodified ROM, the 15 changed-stage events
+  (windows of 16 / 34 frames): identical from the event through the frame
+  before the camera first moves, the black frames included.
+- Deaths (15: every 2-2 and 5-2 area, six 5-3 areas, 5-4), Game Over ->
+  Continue (4) and Level Select (7) branches: game fields equal to the
+  unmodified ROM's, pictures identical from the respawn / reload on, the two
+  load pieces at `$38` / `$37` in single-colour frames, no fallback draw.
+- Found so far: (a) mapped modes show the first visible frame of some 5-3
+  area changes with foreground palettes still black for one frame (SMS, GB
+  DMG: areas 4 and 6; APOCALYPSE: all six) - being compared with palette
+  timing 3; (b) `check_menu.py --only sweep` at step 1 fails one opening
+  (stored 2-2 run, frame 788, the frame before the first area change) -
+  being compared with palette timing 3.
+- Gates on the combined ROM so far: `check_menu.py --only runs --preview`
+  pass; `check_bram.py` matrix (211 images) PASS, cut PASS, timing rc 0.
