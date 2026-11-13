@@ -190,7 +190,24 @@ frame (126,001 frames, 126,477 vblanks with the boot):
   forced before the worker, the dispatcher's `plain_requeue`), in GB DMG,
   SMS and APOCALYPSE; each run on 200 frames and compared with the unforced
   run (VCE where the RAM palette agrees, `RENT`'s form, `brk`). Results:
-  FUZZ_TABLE
+
+  | Frame (worker run) | Worker instructions | Forced calls, GB DMG / SMS / APOCALYPSE | Returned, no `brk` | Flagged |
+  | --- | --- | --- | --- | --- |
+  | 5,748 (cinema start, re-queue) | 51 (palette-exact: 49) | 69 / 69 / 69 | all | 6 / 6 / 6, form only |
+  | 10,153 (gameplay start, `rent_ms`) | 8,979 / 8,982 / 13,680 | 443 / 443 / 532 | all | 0 |
+  | 65,923 (locked: the new branch) | 13 | 31 / 31 / 31 | all | 0 |
+  | 65,924 (locked) | 13 | 31 / 31 / 31 | all | 0 |
+  | 65,926 (unlocked: re-queue, `rent_mn`) | 51 | 69 / 69 / 69 | all | 0 |
+
+  2,018 forced calls in all. The 18 flagged points are the review's
+  residual, the same 6 per mode as in its run on palette-exact: a vblank
+  forced 7 to 12 instructions before the worker's entry at 5,748 re-queues
+  in the dispatcher, the queue is then empty, the worker is not called and
+  `RENT` stays MS for that scene; the VCE equals the unforced run's in
+  every compared frame (0 mismatching, 0 unmatched). Every point forced
+  inside the new instructions (65,923/65,924: the whole 13-instruction run;
+  65,926 and the ten others: the not-taken `lda`/`bne`) left `RENT` a whole
+  form and the colours right.
 - The dispatcher path, separately (`cl_disp.py`, GB DMG): at 65,926 a
   vblank forced 1, 5 and 12 instructions before the worker's entry (queue
   1, lock 0, `$2104` `$C0`, `RENT` MS, `FASTOK` 0, `LIVE` 0): the handler
