@@ -1,6 +1,6 @@
 {
  "stage": "4-2",
- "notes": "The Level Select comparison run (research/comparison-runs/4-2.json) is the guide: its path, recorded on the original through Level Select (research/longplay/fast/runpath.py, research/longplay/paths/4-2.json), gives beam waypoints (standing/walking/clinging points about every 40 frames), one leg per area, long areas in chunks of about 500 path frames.",
+ "notes": "The Level Select comparison run (research/comparison-runs/4-2.json) is the guide: its path, recorded on the original through Level Select (research/longplay/fast/runpath.py, research/longplay/paths/4-2.json), gives beam waypoints (standing/walking/clinging points about every 40 frames), one leg per area, long areas in chunks of about 500 path frames. 4-2 chunk 2: hand waypoint on top of the block x 1024-1097 (top y 71; it only holds Ryu landing from above). 4-2 chunk 3: the girder x 1330-1359 the bot used is skipped; Ryu jumps from the floor straight onto the ledge x 1280-1535 (top y 71) (hand waypoints).",
  "legs": [
   {
    "name": "a0-0-0",
@@ -30,7 +30,16 @@
     "follow": {
      "path": "research/longplay/paths/4-2.json",
      "from_frame": 488,
-     "to_frame": 1000
+     "to_frame": 1000,
+     "add_points": [
+      [
+       800,
+       1060,
+       71,
+       20,
+       3
+      ]
+     ]
     },
     "goal": {
      "near": [
@@ -52,7 +61,31 @@
     "follow": {
      "path": "research/longplay/paths/4-2.json",
      "from_frame": 1000,
-     "to_frame": 1536
+     "to_frame": 1536,
+     "skip_frames": [
+      [
+       1001,
+       1100
+      ]
+     ],
+     "add_points": [
+      [
+       1010,
+       1300,
+       71,
+       16,
+       4,
+       1
+      ],
+      [
+       1090,
+       1419,
+       71,
+       16,
+       4,
+       1
+      ]
+     ]
     },
     "goal": {
      "near": [
@@ -85,9 +118,10 @@
      ],
      "in_area": 0
     },
-    "width": 60,
+    "width": 120,
     "max_frames": 1635,
-    "seconds": 1635
+    "seconds": 1635,
+    "stall_frames": 1200
    }
   },
   {
@@ -101,9 +135,10 @@
     "goal": {
      "area": 1
     },
-    "width": 60,
+    "width": 120,
     "max_frames": 1467,
-    "seconds": 1467
+    "seconds": 1467,
+    "stall_frames": 1200
    }
   },
   {
@@ -117,9 +152,10 @@
     "goal": {
      "stage_change": true
     },
-    "width": 60,
+    "width": 120,
     "max_frames": 900,
-    "seconds": 900
+    "seconds": 900,
+    "stall_frames": 1200
    }
   }
  ]

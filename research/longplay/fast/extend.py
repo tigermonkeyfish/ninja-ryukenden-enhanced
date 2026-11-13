@@ -124,18 +124,42 @@ def main():
                 if 'follow' in b:
                     fl = b.pop('follow')
                     path = json.loads((ROOT / fl['path']).read_text())['path']
+                    import stagemap
+                    rects = {a: ar['rects'] for a, ar in enumerate(stagemap.decode(
+                        stagemap.load(), stagemap.NAMES.index(stage)))}
                     lo, hi = fl.get('from_frame', 0), fl.get('to_frame', 10 ** 9)
-                    pts, last = [], None
+                    pts, last, pfr = [], None, []
                     for fr, area, x, y, hp, stg, *mo in path:
-                        if not lo <= fr <= hi:
+                        if not lo <= fr <= hi or any(a <= fr <= b for a, b in fl.get('skip_frames', [])):
                             continue
                         if any(q[0] < fr <= q[0] + 8 or q[0] == fr for q in path if q[1] != area and q[0] < fr and fr - q[0] <= 8):
                             continue          # stale coordinates right after an area change
                         if mo and mo[0] in (3, 6, 8, 9) and fl.get('skip_air', True):
-                            continue          # air, slash and hurt positions make poor waypoints
-                        if last is None or fr - last[0] >= fl.get('every', 40) or area != last[1]:
-                            pts.append([x, y, fl.get('r', 16), area, fl.get('ry', 24)])
+                            # air, slash and hurt positions make poor waypoints, except
+                            # where the bot touched a platform top in a hop (it did not
+                            # stand, but the beam must land there)
+                            tops = [r for r in rects.get(area, []) if r[0] in (0, 1)
+                                    and r[1] <= x <= r[3] and r[2] - 1 <= y <= r[2] + 2]
+                            if not tops or (last and fr - last[0] < 16):
+                                continue
+                            pts.append([x, tops[0][2], fl.get('r', 16), area, 4, 1])
+                            pfr.append(fr)
                             last = (fr, area)
+                            continue
+                        if last is None or fr - last[0] >= fl.get('every', 40) or area != last[1]:
+                            if mo and mo[0] in (0, 1, 2) and fl.get('skip_air', True):
+                                # standing points: Ryu must stand there (a jump apex
+                                # 6 px under a ledge is not on it)
+                                pts.append([x, y, fl.get('r', 16), area, fl.get('ry_ground', 8), 1])
+                            else:
+                                pts.append([x, y, fl.get('r', 16), area, fl.get('ry', 24)])
+                            pfr.append(fr)
+                            last = (fr, area)
+                    # hand waypoints [frame, x, y, r, ry] slotted in by path frame
+                    for fr_, x_, y_, r_, ry_, *g_ in fl.get('add_points', []):
+                        k = sum(1 for q in pfr if q <= fr_)
+                        pts.insert(k, [x_, y_, r_, pts[0][3] if pts else None, ry_] + g_)
+                        pfr.insert(k, fr_)
                     span = [r for r in path if lo <= r[0] <= hi]
                     if span:      # the span's last point (the way out), even in the air
                         pts.append([span[-1][2], span[-1][3], 6, span[-1][1], 6])

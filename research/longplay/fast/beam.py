@@ -49,7 +49,11 @@ def _worker(conn, key_bytes):
             out = []
             for pid in ids:
                 st = store[pid]
+                f.load(st)
+                clinging = f.ram[0xeaa] == 5
                 for a in actions:
+                    if isinstance(a, tuple) and not clinging:
+                        continue      # wall hops only from a wall
                     f.load(st)
                     if isinstance(a, tuple):
                         for n, m in a:
@@ -126,6 +130,8 @@ def near(info, wp):
     if len(wp) > 3 and wp[3] is not None and info['area'] != wp[3]:
         return False
     ry = wp[4] if len(wp) > 4 else r
+    if len(wp) > 5 and wp[5] and airborne(info):
+        return False          # a landing waypoint: Ryu must be standing there
     return abs(info['x'] - x) <= r and abs(yv(info['y']) - y) <= ry
 
 

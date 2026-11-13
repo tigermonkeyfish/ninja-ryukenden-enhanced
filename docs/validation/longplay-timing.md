@@ -214,3 +214,20 @@ Emulator evidence only.
   after it (boss death + act 2 cinema) is 10,535 frames.
 - `plan_from_path.py` cuts long areas into ~500-frame chunks ending on a
   grounded path point (goal `near`), so a solved chunk is cached.
+
+### 4-1 and 4-2 (in progress at this note)
+
+- 4-1: four plan chunks plus three area legs, solved without hand points;
+  ends in the cinema; committed (`a50ecb9`), cold check PASS.
+- 4-2: the y 71 ledges (type 00) only hold Ryu landing on them from above; a
+  jump from the y 135 floor peaks at y 77 under them. Path waypoints now
+  require Ryu standing (motion state 0/1/2, y within 8) and the bot's hop
+  landings on platform tops (found from the ROM rectangles) are added as
+  standing waypoints. Chunk 2 needed a hand point on the block x 1024-1097
+  (top y 71); chunk 3 skips the bot's girder (x 1330-1359) and lands on the
+  ledge x 1280-1535 directly from the floor (hand points). Chunk 4 (x 2041 ->
+  2785, a bridge, the cliff at x ~2200 with a flying enemy at its top) is
+  under search with a wider beam (120).
+- New plan options: `add_points` [frame, x, y, r, ry(, standing)] and
+  `skip_frames` [[a, b]] in a `follow` leg; wall hops are tried only while
+  clinging.
