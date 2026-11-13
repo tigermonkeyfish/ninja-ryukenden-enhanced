@@ -140,7 +140,7 @@ class Search:
                 if end['stage'] != cur['stage'] or end['area'] > cur['area'] or mid['area'] > cur['area'] \
                         or end['master'] != 0:
                     score = 1e6
-                elif self.boss:
+                elif self.boss and cur['boss'] > 0:
                     score = 200 * (cur['boss'] - end['boss'])
                 else:
                     score = (cur['x'] - end['x']) if fwd == 'left' else (end['x'] - cur['x'])

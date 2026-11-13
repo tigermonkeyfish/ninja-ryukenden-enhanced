@@ -55,3 +55,14 @@ def boot_to_first_update(game, rom, mode, entered):
     game.call('load_state_file', {'file_path': str(entered)})
     game.held = set()
     return status
+
+
+def play_segments(game, segments, chunk=500):
+    """Replay [frames, [buttons]] segments one frame step request at a time
+    (the emulator caps a step at 1000 frames), checking every step."""
+    for count, buttons in segments:
+        game.press(set(buttons))
+        while count > 0:
+            n = min(count, chunk)
+            game.checked_step(n)
+            count -= n

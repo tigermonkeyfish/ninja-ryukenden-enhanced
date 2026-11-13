@@ -18,10 +18,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import comparison_route as cr                                            # noqa: E402
-from longplay_lib import EMULATOR, ROM, boot_to_first_update, Game        # noqa: E402
+from longplay_lib import EMULATOR, ROM, boot_to_first_update, Game, play_segments        # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 FULL = ROOT / 'research/longplay/full.json'
+
+
+def cur_boss_seen(stack, new):
+    return any(e[3]['boss'] > 0 for e in stack)
 
 
 def load_full():
@@ -59,7 +63,7 @@ def main():
             boot_to_first_update(game, ROM, 'original', states / 'entered.state')
             search = cr.Search(game, states, boss)
             base = [[n, sorted(b)] for n, b in full['segments']]
-            search.play(base)
+            play_segments(game, base)
             total0 = sum(n for n, _ in base)
             extra = []
             if args.extra:
@@ -69,7 +73,7 @@ def main():
                         break
                     extra.append([n, sorted(b)])
                     got += n
-                search.play(extra)
+                play_segments(game, extra)
             print(f'replayed {total0} + {sum(n for n, _ in extra)} frames in {time.time() - t0:.0f}s', search.info(), flush=True)
             prefix = extra
             start = search.info()
@@ -95,7 +99,7 @@ def main():
                 frames2 = frames + sum(n for n, _ in segs)
                 new = search.info()
                 if new['stage'] != stage_byte or new['master'] != 0 or frames2 >= args.frames \
-                        or (boss and new['boss'] == 0):
+                        or (boss and new['boss'] == 0 and cur_boss_seen(stack, new)):
                     finished = new
                     break
                 dirs.setdefault(new['area'], cr.entry_direction(new, boss))
@@ -125,7 +129,7 @@ def main():
                           f'health {new["health"]} lives {new["lives"]} boss {new["boss"]} nodes {nodes} t={time.time() - t0:.0f}s', flush=True)
             log = cr.route(prefix, stack, dirs)
             done = finished is not None and (finished['stage'] != stage_byte or finished['master'] != 0
-                                             or bool(boss and finished['boss'] == 0))
+                                             or bool(boss and finished['boss'] == 0 and cur_boss_seen(stack, finished)))
             print('done: finished' if done else 'done: NOT finished', sum(n for n, _ in log), finished or '', 'nodes', nodes, flush=True)
             if not done and not args.commit_partial:
                 Path(f'/workspace/build/longplay/{args.stage}.partial.json').write_text(json.dumps({'segments': log}))
@@ -134,15 +138,16 @@ def main():
             # settle: idle until gameplay of the next stage is ready
             seen, idle = [], 0
             if done:
-                for i in range(1, 1500):
+                for i in range(1, 16000):
                     game.press(set())
                     game.checked_step(1)
-                    r = game.read(0, 0x300)
+                    r = game.read(0, 0x1000)
                     s = (r[0x240], r[0x241], r[0xe5f], r[0xe60])
                     if not seen or seen[-1][1] != s:
                         seen.append((i, s))
+                        seen = seen[-12:]
                     idle = i
-                    if i > 5 and r[0x240] == 0 and r[0xe5f] != stage_byte and r[0xe60] == 0 and i > 20:
+                    if r[0x240] == 0 and r[0xe5f] != stage_byte and r[0xe60] == 0:
                         break
                 print('transition', seen, 'idle', idle, flush=True)
             out = args.out or FULL
