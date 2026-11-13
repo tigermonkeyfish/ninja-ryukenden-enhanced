@@ -51,10 +51,11 @@ Two unrelated things were mixed in the `start-align` notes:
      bytes, the renderer lookup, and with SMOOTH PARALLAX ON the renderer
      itself) runs before the rest of the gameplay update, so every native
      action after it (the exit test `$84AB`, the transition `$8490`,
-     `$840A`, the two transfers) happens R clocks later. R was 0.7 to 2.3
-     lines in 2-2, 4-1, 5-2, 6-2, 6-3 and 15-17 lines in 5-3, and 94 lines at
-     5-3 a6 (the castle renderer's full redraw, 69.5 lines in RAM block
-     transfer routines). So the build's split is late where the original's
+     `$840A`, the two transfers) happens R later. R was 1.3-1.4 lines in
+     2-1, 4-3, 6-2 (no Enhanced renderer: the wrapper alone), 1.6-2.5 in
+     2-2, 4-1, 5-2, 6-3, 16.0 in 5-3, and 93.7 at 5-3 a6 (the castle
+     renderer's full redraw, 69.5 lines of it in RAM block-transfer
+     routines). So the build's split is late where the original's
      is not (5-3 a5, 1-2 lines), on time where the original's is late (5-3 a6,
      6-3 a1, 6-3 a3) and late by a different amount (2-2 a1: 5 lines against
      3).
@@ -68,7 +69,7 @@ Two unrelated things were mixed in the `start-align` notes:
    changes (ON): 14,028, 80,627, 80,884, 94,458, 96,623. With SMOOTH PARALLAX
    OFF four remain (14,028 4 lines late, 80,884 on time, 94,458 5 lines late,
    96,623 6 lines late, against 3, 5, 4, 4): the wrapper alone already
-   shifts the native work by about 1.3-2 lines.
+   shifts the native work by 1.2-1.4 lines.
 
 Introduced by: the gameplay-loop hook at bank 1 `$8457` (`jsr $FE40`, the
 Enhanced renderer before the native update). Its bytes are the same in
@@ -83,10 +84,10 @@ not take interrupts until they finish, and the VDC latches a BYR written
 after a line's latch point on the next line, so a console would show the
 same kind of one-frame drop of the playfield. Whether a given exit shows it
 depends on the native update's raster time to within a line: the
-unmodified ROM's four cases overlap the interrupt by 3-5 lines (likely on a
-console too, medium-high confidence); the build's 5-3 a5 case by ~1.6 lines
-(medium) and the build's 6-3 a1 escape by 0.3 line (low: a console could go
-either way). It is a whole-frame-buffer effect of per-line rendering, not
+unmodified ROM's four cases overlap the interrupt by 3.1-5.5 lines (likely
+on a console too, medium-high confidence); the build's 5-3 a5 case by 1.9
+lines (medium); the build's 6-3 a1 escape is 0.26 line (low: a console could
+go either way). It is a whole-frame-buffer effect of per-line rendering, not
 an artefact of how the emulator samples the frame.
 
 Fix, in short: the only way to show exactly the original's frame is to make
@@ -160,12 +161,12 @@ before the instruction; the IRQ normally enters at 63.297):
 | 5-3 a3 79,285 | 25.175-39.018 / 39.207-46.135 / 63.297 | 41.163-55.006 / 55.195-62.123 / 63.300 | 16.0 |
 | 5-3 a4 80,294 | 24.133-37.318 / 38.165-45.093 / 63.300 | 40.127-53.312 / 54.159-61.087 / 63.300 | 16.0 |
 | 5-3 a5 80,627 | 36.078-49.263 / 50.110-57.038 / 63.298 | 52.073-**65.264** / 66.245-73.173 / **65.264** | 16.0 |
-| 5-3 a6 80,884 | 48.171-62.015 / 62.203-69.137 / **69.137** | 142.072-155.257 / 156.104-163.032 / 64.008 | 93.9 |
+| 5-3 a6 80,884 | 48.171-62.015 / 62.203-69.137 / **69.137** | 142.072-155.257 / 156.104-163.032 / 64.008 | 93.7 |
 | 6-3 a1 94,458 | 47.194-61.037 / 61.225-68.159 / **68.159** | 50.017-63.207 / 64.204-71.132 / 63.299 | 2.5 |
 | 6-3 a3 96,623 | 47.309-61.152 / 61.340-68.274 / **68.274** | 49.301-63.144 / 64.132-71.060 / 63.297 | 2.0 |
 
-(Dots run 0-341 per line; 1,365 master clocks a line. 4-1 a1's first TAI
-starts on the same line on both: the transfers move by R exactly.)
+(Dots run 0-341 per line; 1,365 master clocks a line. The two transfers
+take the same 13.5 + 6.8 lines on both ROMs; only their start moves, by R.)
 
 In the 5-3 a6 frame the build spends, before the native work, 6.0 lines in
 renderer bank `$7C` `$4Bxx`, 14.1 lines in `$4Axx` and 69.5 lines in RAM
@@ -187,19 +188,200 @@ neighbouring frames are equal.
 
 ## All 26 area changes
 
-TABLE
+Transition-start frame (first frame with `$2E63 = $0A`) of every surveyed
+area change. Cells: the split's BYR store as scanline.dot (on time =
+64.017-64.023; **late** = a later scanline), and in brackets the scanline at
+which the native palette save (TII `$F718`) starts. The unmodified ROM's
+split is late exactly when that TII starts between about scanline 43.5 and
+63.9, i.e. when the 20.3 lines of the two transfers cover the interrupt at
+63.297. ON / OFF = the current build with SMOOTH PARALLAX on / off, same
+recording and frame as the unmodified ROM; 1.10 and pt3 on
+`full-exact.json`, pt2 on `full.json` (first five only), at their own
+transition-start frame (the same frame up to 5-3; one later from 6-2 on), with
+Ryu's position and the camera equal to the build's in every row. Last
+column: differing pixels of that frame against the unmodified ROM; `S` = some
+visible scanline's latched BXR or BG Y differs (the drop); without `S` the
+difference is the parallax backdrop of finding 1.
+
+| Event | Area | Start frame | UNMOD | ON (new) | OFF (new) | 1.10 | pt3 | pt2 | px vs UNMOD, ON / OFF (S = scroll differs) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 11343 | 2-1 a1 | 11340 | 64.022 (TII 31.8) | 64.022 (TII 33.2) | 64.022 (TII 33.1) | 64.022 (TII 33.1) | 64.022 (TII 33.2) | 64.018 (TII 33.3) | 0 / 0 |
+| 12421 | 2-1 a2 | 12419 | 64.019 (TII 25.6) | 64.018 (TII 26.9) | 64.018 (TII 26.9) | 64.017 (TII 26.9) | 64.019 (TII 26.9) | 64.018 (TII 27.1) | 0 / 0 |
+| 12546 | 2-1 a3 | 12543 | 64.018 (TII 21.6) | 64.018 (TII 22.9) | 64.018 (TII 22.9) | 64.017 (TII 22.9) | 64.019 (TII 22.9) | 64.018 (TII 23.1) | 0 / 0 |
+| 14030 | 2-2 a1 | 14028 | 67.067 **late** (TII 46.0) | 69.118 **late** (TII 48.1) | 68.162 **late** (TII 47.2) | 68.194 **late** (TII 47.3) | 68.200 **late** (TII 47.3) | 68.257 **late** (TII 47.5) | 24846 S / 18571 S |
+| 14671 | 2-2 a2 | 14668 | 64.018 (TII 19.5) | 64.019 (TII 21.7) | 64.019 (TII 20.9) | 64.018 (TII 21.7) | 64.019 (TII 21.7) | 64.020 (TII 21.9) | 9244 / 0 |
+| 55309 | 4-1 a1 | 55307 | 64.018 (TII 19.8) | 64.019 (TII 21.4) | 64.018 (TII 21.1) | 64.018 (TII 21.4) | 64.019 (TII 21.4) | - | 1685 / 0 |
+| 55429 | 4-1 a2 | 55426 | 64.020 (TII 14.3) | 64.017 (TII 16.5) | 64.020 (TII 15.6) | 64.017 (TII 16.5) | 64.017 (TII 16.5) | - | 0 / 0 |
+| 60708 | 4-3 a1 | 60706 | 64.020 (TII 20.3) | 64.020 (TII 21.6) | 64.019 (TII 21.6) | 64.019 (TII 21.6) | 64.020 (TII 21.6) | - | 0 / 0 |
+| 61795 | 4-3 a2 | 61793 | 64.020 (TII 18.8) | 64.018 (TII 20.1) | 64.018 (TII 20.0) | 64.018 (TII 20.1) | 64.018 (TII 20.1) | - | 0 / 0 |
+| 63544 | 4-3 a3 | 63542 | 64.018 (TII 28.2) | 64.021 (TII 29.5) | 64.019 (TII 29.5) | 64.018 (TII 29.5) | 64.019 (TII 29.5) | - | 0 / 0 |
+| 74531 | 5-2 a1 | 74528 | 64.020 (TII 28.5) | 64.022 (TII 30.9) | 64.020 (TII 29.8) | 64.022 (TII 30.9) | 64.022 (TII 30.9) | - | 0 / 0 |
+| 75459 | 5-2 a2 | 75456 | 64.018 (TII 25.5) | 64.018 (TII 27.3) | 64.018 (TII 26.8) | 64.018 (TII 27.3) | 64.018 (TII 27.3) | - | 4668 / 0 |
+| 76157 | 5-2 a3 | 76155 | 64.020 (TII 21.9) | 64.020 (TII 24.3) | 64.019 (TII 23.2) | 64.020 (TII 24.3) | 64.020 (TII 24.3) | - | 0 / 0 |
+| 77972 | 5-3 a1 | 77970 | 64.017 (TII 24.7) | 64.023 (TII 40.7) | 64.020 (TII 26.0) | 64.019 (TII 40.7) | 64.023 (TII 40.7) | - | 796 / 0 |
+| 78669 | 5-3 a2 | 78666 | 64.018 (TII 23.4) | 64.018 (TII 39.4) | 64.019 (TII 24.7) | 64.019 (TII 39.4) | 64.018 (TII 39.4) | - | 590 / 0 |
+| 79287 | 5-3 a3 | 79285 | 64.018 (TII 25.4) | 64.020 (TII 41.3) | 64.018 (TII 26.6) | 64.020 (TII 41.3) | 64.020 (TII 41.3) | - | 337 / 0 |
+| 80296 | 5-3 a4 | 80294 | 64.020 (TII 24.2) | 64.021 (TII 40.2) | 64.021 (TII 25.5) | 64.020 (TII 40.2) | 64.021 (TII 40.2) | - | 3926 / 0 |
+| 80630 | 5-3 a5 | 80627 | 64.018 (TII 36.1) | 65.325 **late** (TII 52.0) | 64.017 (TII 37.4) | 65.325 **late** (TII 52.0) | 65.325 **late** (TII 52.0) | - | 23993 S / 0 |
+| 80887 | 5-3 a6 | 80884 | 69.198 **late** (TII 48.3) | 64.069 (TII 142.1) | 64.020 (TII 49.7) | 64.045 (TII 142.0) | 64.069 (TII 142.1) | - | 30735 S / 30735 S |
+| 90754 | 6-2 a1 | 90751 | 64.018 (TII 27.5) | 64.018 (TII 28.8) | 64.018 (TII 28.8) | 64.019 (TII 28.8) | 64.018 (TII 28.8) | - | 0 / 0 |
+| 91716 | 6-2 a2 | 91714 | 64.018 (TII 39.0) | 64.020 (TII 40.3) | 64.021 (TII 40.3) | 64.019 (TII 40.3) | 64.019 (TII 40.3) | - | 0 / 0 |
+| 91820 | 6-2 a3 | 91817 | 64.018 (TII 15.1) | 64.017 (TII 16.4) | 64.020 (TII 16.3) | 64.020 (TII 16.4) | 64.017 (TII 16.4) | - | 0 / 0 |
+| 92931 | 6-2 a4 | 92928 | 64.019 (TII 21.6) | 64.018 (TII 22.9) | 64.018 (TII 22.9) | 64.018 (TII 22.9) | 64.018 (TII 22.9) | - | 0 / 0 |
+| 94460 | 6-3 a1 | 94458 | 68.221 **late** (TII 47.4) | 64.019 (TII 49.9) | 69.314 **late** (TII 48.6) | 64.019 (TII 49.9) | 64.019 (TII 49.9) | - | 33893 S / 28734 S |
+| 94579 | 6-3 a2 | 94576 | 64.020 (TII 22.1) | 64.020 (TII 24.0) | 64.019 (TII 23.3) | 64.020 (TII 24.0) | 64.020 (TII 24.0) | - | 0 / 0 |
+| 96625 | 6-3 a3 | 96623 | 68.336 **late** (TII 47.8) | 64.017 (TII 49.7) | 70.086 **late** (TII 49.0) | 64.017 (TII 49.7) | 64.017 (TII 49.7) | - | 22701 S / 19809 S |
+
+Summary (transition-start frame, 26 area changes):
+
+| ROM | Late splits | Same scroll as the unmodified ROM on all lines |
+| --- | --- | --- |
+| Unmodified | 4: 2-2 a1 (3 lines), 5-3 a6 (5), 6-3 a1 (4), 6-3 a3 (4) | - |
+| Build, SMOOTH PARALLAX ON | 2: 2-2 a1 (5), 5-3 a5 (1-2) | 21 of 26 |
+| Build, SMOOTH PARALLAX OFF | 3: 2-2 a1 (4), 6-3 a1 (5), 6-3 a3 (6) | 22 of 26 |
+| Published 1.10 | 2: 2-2 a1 (4), 5-3 a5 (1-2) | 21 of 26 by split position |
+| Palette timing 3 | 2: 2-2 a1 (4), 5-3 a5 (1-2) | 21 of 26 by split position |
+| Palette timing 2 (first five) | 1: 2-2 a1 (4) | 4 of 5 by split position |
+
+The native work's shift (TII line, build minus unmodified): 1.3-1.4 lines
+in stages without an Enhanced renderer (2-1, 4-3, 6-2: the wrapper and
+the lookup), 1.6-2.5 in 2-2, 4-1, 5-2, 6-3, 16.0 in 5-3, 93.7 at 5-3 a6
+(full castle redraw on that update). With SMOOTH PARALLAX OFF: 1.2-1.4
+lines everywhere (5-3 1.3). Per-routine clock sums before the TII (trace,
+12 events) are equal on both ROMs for all native code except the routine
+the build skips when it renders (bank 1 `$80xx`/`$81xx`, the native
+backdrop work behind `$8472`: 48-846 clocks) and a few clocks of VDC
+access waits; the rest of the shift is Enhanced code (bank 0 `$FE`/`$FF`
+hooks, bank `$46` lookup, renderer banks, RAM routines).
 
 ## Which build introduced it
 
-HISTORY
+- The cause is the `$8457` hook (`jsr $FE40`): it is in every Enhanced
+  build checked (bytes `20 40 FE EA EA EA` in 1.09, the 1.10 candidates 1-5,
+  1.10-dev, published 1.10, and the four 1.11-dev builds in
+  `/workspace/roms/`). Measured behaviour: 1.10, palette timing 3 and the
+  current build put the split on the same scanline at 25 of 26 area changes
+  (dots within 4, 24 at 5-3 a6) and the same late/on-time pattern at all 26.
+- Palette timing 2 (vblank +228 clocks) moves the native update 0.17 line
+  later than 1.10 (TII 33.3 / 27.1 / 23.1 / 47.5 / 21.9 against 33.1 /
+  26.9 / 22.9 / 47.3 / 21.7): no change in which exits drop on this route.
+  Palette timing 3 and original load timing restored and kept 1.10's
+  vblank cost.
+- 2-2 a1 is 68.19x in 1.10 / pt3 and 69.118 in the current build. That is
+  not new code: pt3 and 1.10 run the 2-2 entry one update longer
+  (`load-exact`), and on this frame the native object routine `$ABD7`
+  (bank 2 `$ABxx`/`$ACxx`) costs 1,038 clocks less there than in the
+  current build and the unmodified ROM (per-routine sums of the traces;
+  the current build matches the unmodified ROM's native costs).
+- So no palette or load-timing change introduced it; the Enhanced renderer
+  hook did, and SMOOTH PARALLAX OFF does not remove it (the wrapper still
+  runs first).
 
 ## Hardware visibility
 
-HARDWARE
+Inferred from emulator evidence and the documented hardware behaviour;
+nothing measured on a console.
+
+- Block transfer instructions (TII/TDD/TIN/TIA/TAI) do not let an interrupt
+  in until they finish; this is the HuC6280 behaviour the project's
+  "one 32-byte TIA" rule already depends on (`PARALLAX.md`). A VDC raster
+  interrupt asserted during the 20.3 lines of `TII $F718` + `TAI $2205` is
+  taken when they end, so the split handler's BYR/BXR stores land late, and
+  the VDC applies them from the following line. Lines in between are drawn
+  with the HUD's Y counter and BXR 0. Geargrafx renders each line with the
+  scroll state latched for it, as the console does: the drop is in the
+  picture, not an artefact of how the emulator samples the frame.
+- Which exits drop on a console depends on the native update's raster time
+  to within a line, i.e. on Geargrafx's cycle timing over the ~45-50 lines
+  of the update before the transfer. The unmodified ROM's four drops overlap
+  the interrupt by 3.1-5.5 lines (medium-high confidence a console shows
+  them on this route). The build's 5-3 a5 drop: the TII ends 1.9 lines
+  after the interrupt (medium). The build's 6-3 a1 escape: its TII ends 90
+  dots (0.26 line) before the interrupt (low: a console could drop there).
+  2-2 a1: both drop; depths 3 against 5 lines could differ by a line on a
+  console.
+- What a player sees: for one frame, just before the 4-5 black frames, the
+  whole playfield (backdrop and foreground, not sprites or HUD) is drawn
+  3-5 px lower, with 3-5 lines of other map rows above it. At 60 Hz this is
+  a single-frame twitch; easy to miss, visible in a frame-by-frame capture.
 
 ## Fix proposals (not implemented)
 
-FIXES
+None implemented. "Exact" below means: the build's split lands where the
+unmodified ROM's does at every area change.
+
+1. **Record it, change nothing (recommended now).** The difference is the
+   original's own one-frame split drop, which the build reproduces only when
+   its native update runs at the same raster time; it does so at 21 of 26
+   area changes on this route (22 with SMOOTH PARALLAX OFF). Cost and risk:
+   none. Add it to the known deviations with the evidence above; tell the
+   owner it is the original glitching, the build not.
+
+2. **Never drop in the build (small, not exact).** In the build's area
+   change path only, replace the two uninterruptible transfers by
+   interruptible equivalents, so the split is at most one 32-byte block
+   late (as the renderers' rule already allows):
+   - bank 1 `$8420 jsr $F718` -> `jsr SAVE`: 32 x `TII $2286+32i,$2686+32i,32`
+     each followed by `nop` (256 bytes unrolled) + `rts`.
+   - bank 1 `$8429 jsr $F26F` -> `jsr FILL`: do what `$F26F` does except the
+     RAM `TAI`: set `<$15/<$16 = 0`, `<$17/<$18 = $0100`, `jsr $F350` (queue
+     colours 0-255), leave `<$15/<$16 = $2286`, `<$17/<$18 = $0200` and the
+     trampoline bytes `$2205-$220B` (`F3 84 22 86 22 00 02`) as the native
+     routine leaves them, then 16 x `TAI $2284,$2286+32i,32` + `nop` (128
+     bytes) and `rts`. (`$2284/$2285` are zero here: `$8423`/`$8426`.)
+   - Only the two 2-byte call operands in bank 1 change (ROM offsets
+     `0x2421-0x2422`, `0x242A-0x242B`); about 400 bytes of code in a bank with
+     free space and a ~16-byte bank-0 far-call stub (map the bank into
+     MPR2 and back, as `lookup_wrapper` does), placed by `project.py`'s
+     free-range audit. No new RAM. `$F718` and `$F26F` themselves stay
+     native (other callers unaffected).
+   - Cost: about +950 CPU cycles (~2.1 lines) in the transition-start
+     update only; measured spare time in that update is at least 111,375
+     master clocks (82 lines, 5-3 a6 ON) and 233,319 elsewhere, so the
+     vblank count should not change (re-run the `load-exact` survey to
+     verify). The entry contract check of `EMULATOR.md` (registers, MPRs,
+     zero page, RAM equal to the native routines' after the call) applies.
+   - Effect on this route: the build's split on time at all 26; matches the
+     unmodified ROM at 22 of 26 (today 21; with OFF 22 today); still differs
+     at the original's four drops, which the build would then never show.
+     Risk: low (one transition frame; palette RAM contents identical).
+
+3. **Run the native update at the original's raster time (exact as far as
+   possible, large).** Restore `$8457-$845C` to the original `jsr $E3F2 /
+   jsr $ABD7` and call the per-update Enhanced work (`$FE46`, with its
+   zero-page save) after the native gameplay update instead, e.g. from the
+   end of the update (`$8475 jmp $8485` routed through a stub that runs the
+   exit tests `$84AB`/`$84D9` first and renders only on the normal return;
+   an area change's first update then skips the renderer: its picture goes
+   black on the next vblank). The `$83F3` selector hook and the `$8472`
+   late hook would also have to cost what the native code costs, or move.
+   Limits and risks:
+   - Not cycle-exact in Enhanced stages: with a renderer, the build skips
+     the native `$8097` backdrop work at `$8472` (48-846 clocks in these
+     frames, state-dependent), so the native update would still be off by up
+     to ~0.6 line unless that cost is reproduced. Exact only where the
+     original's transfer overlaps the interrupt by more than that (all four
+     measured drops: 3.1-5.5 lines).
+   - The renderer would read the camera and upload phase tiles later in the
+     frame than today (after the whole update instead of after `$E3F2`/
+     `$ABD7`): the backdrop/foreground timing that `start-align` verified
+     (45 of 48 starts identical), the beam-racing order of uploads and the
+     castle/2-2 full-redraw frames all need re-measuring; a camera snapshot
+     to keep today's semantics costs cycles before the native code again.
+   - Vblank counts: the update plus renderer is the same sum, so the
+     `load-exact` counts should hold; verify.
+   - Benefit beyond this question: every native raster-timed effect in
+     gameplay (not only this exit frame) would happen at the original's
+     time.
+
+Overlap with `start-pos` (2-2 area-start backdrop offset, `src/stage22`,
+`src/dispatch`): proposal 2 touches neither (bank 1 call operands plus new
+code), but competes for free ROM in bank 0 (`src/dispatch` reserves
+`$FF2C-$FF6F`; `$FECF-$FEDF` is held for the 1-2 fix) and should be placed
+after `start-pos` is merged. Proposal 3 rewrites the `$8457` hook and the
+`early`/`multi_late` wrappers in `src/dispatch` and changes when the 2-2
+renderer runs, so it directly overlaps `start-pos` and would invalidate its
+measurements; it must come after `start-pos` and redo them.
 
 ## Not covered
 

@@ -12,6 +12,7 @@ from pathlib import Path
 import numpy as np
 sys.path.insert(0, str(Path(__file__).parent))
 from startframe import rows                                            # noqa: E402
+from analyze import lines                                              # noqa: E402
 
 STAGE = {11343: '2-1 a1', 12421: '2-1 a2', 12546: '2-1 a3', 14030: '2-2 a1', 14671: '2-2 a2', 55309: '4-1 a1',
          55429: '4-1 a2', 60708: '4-3 a1', 61795: '4-3 a2', 63544: '4-3 a3', 74531: '5-2 a1', 75459: '5-2 a2',
@@ -21,8 +22,11 @@ STAGE = {11343: '2-1 a1', 12421: '2-1 a2', 12546: '2-1 a3', 14030: '2-2 a1', 146
 
 
 def pix(da, db, ev, f):
+    """Differing pixels of frame f, with ' S' when any visible line's latched BXR / BG Y differs."""
     a, b = np.load(Path(da) / f'ev-{ev}.npz'), np.load(Path(db) / f'ev-{ev}.npz')
-    return int((a[f'img{f}'] != b[f'img{f}']).any(2).sum())
+    n = int((a[f'img{f}'] != b[f'img{f}']).any(2).sum())
+    la, lb = lines(a, f), lines(b, f)
+    return '%d%s' % (n, ' S' if any(la[v] != lb.get(v) for v in la) else '')
 
 
 def cell(r, ref=None):
@@ -39,13 +43,13 @@ def main():
     dirs = sys.argv[1:]
     R = [rows(d) for d in dirs]
     hdr = ['UNMOD', 'ON (new)', 'OFF (new)', '1.10', 'pt3', 'pt2'][:len(dirs)]
-    print('| Event | Area | Start frame | ' + ' | '.join(hdr) + ' | ON px / OFF px |')
+    print('| Event | Area | Start frame | ' + ' | '.join(hdr) + ' | px vs UNMOD, ON / OFF (S = scroll differs) |')
     print('|' + ' --- |' * (4 + len(dirs)))
     for ev in sorted(R[0]):
         u = R[0][ev]
         f = u['frame']
         pon = pix(dirs[0], dirs[1], ev, f); poff = pix(dirs[0], dirs[2], ev, f)
-        print('| %d | %s | %d | %s | %d / %d |' % (ev, STAGE[ev], f, ' | '.join(cell(r.get(ev)) for r in R), pon, poff))
+        print('| %d | %s | %d | %s | %s / %s |' % (ev, STAGE[ev], f, ' | '.join(cell(r.get(ev)) for r in R), pon, poff))
 
 
 if __name__ == '__main__':
