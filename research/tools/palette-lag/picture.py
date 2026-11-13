@@ -59,7 +59,7 @@ def main():
                 n = sum(1 for a, b in zip(exp, mw) if (a & 0x1ff) != (b & 0x1ff))
                 if n:
                     bad.append((i, n, o[i]['master']))
-            line = f'{run} {mode:10s} frames {len(m)} not equal to the mode's colours of ORIGINAL's (mapped in gameplay, as they are in cinemas): {len(bad)}'
+            line = f'{run} {mode:10s} frames {len(m)} not equal to ORIGINAL in the mode (mapped in gameplay, unmapped in cinemas): {len(bad)}'
             if bad:
                 line += f' first {bad[:6]}'
             if base and (base / f'{run}.{mode}.json').exists():
