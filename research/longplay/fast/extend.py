@@ -34,6 +34,16 @@ LEGS = Path('/workspace/build/longplay/legs')
 CACHE = Path('/workspace/build/longplay/states')
 
 
+TOPS = {}
+
+
+def on_top(i):
+    """Ryu's feet on a platform top of the ROM map (a slash at a jump's apex
+    also reads vertical speed 0)."""
+    return any(t in (0, 1, 3) and x0 - 8 <= i['x'] <= x1 + 8 and abs(y0 - i['y']) <= 1
+               for t, x0, y0, x1, y1 in TOPS.get(i['area'], []))
+
+
 def goal_fn(g, i0, boss_seen):
     def goal(i, seen=False):
         if g.get('stage_change') and (i['stage'] != i0['stage'] or i['master'] != 0):
@@ -44,7 +54,7 @@ def goal_fn(g, i0, boss_seen):
             x, y, r, ry = g['near']
             yy = i['y'] - 256 if i['y'] >= 224 else i['y']
             if abs(i['x'] - x) <= r and abs(yy - y) <= ry and i['area'] == g.get('in_area', i['area']) \
-                    and (i['state'] in (0, 1, 5) or (i['state'] in (2, 6, 8) and i['vy'] == 0)):
+                    and (i['state'] in (0, 1, 5) or (i['state'] in (2, 6, 8) and i['vy'] == 0 and on_top(i))):
                 return True
         if g.get('boss_dead') and (boss_seen[0] or seen) and i['boss'] == 0:
             return True
@@ -113,6 +123,9 @@ def main():
     full = json.loads(FULL.read_text())
     if any(s['name'] == stage for s in full['stages']):
         sys.exit(f'{stage} is already in full.json')
+    import stagemap
+    TOPS.update({a_: ar['rects'] for a_, ar in enumerate(stagemap.decode(
+        stagemap.load(), stagemap.NAMES.index(stage)))})
     f = Fast()
     total0 = replay_full(f, full)
     LEGS.mkdir(parents=True, exist_ok=True)
