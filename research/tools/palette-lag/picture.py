@@ -2,7 +2,7 @@
 """Picture check for the palette-lag fix (research probe): from the survey
 traces (palette_lag.py records the whole VCE on frames where it changed),
 per run and mapped mode, the frames whose VCE differs from the mode's
-mapping of ORIGINAL's VCE in the same frame (GB DMG / SMS: all 512 entries
+mode's colours of ORIGINAL's (mapped in gameplay, as they are in cinemas)'s VCE in the same frame (GB DMG / SMS: all 512 entries
 through the table; APOCALYPSE (HELL): entries below HELL_MAPPED through the
 table with the stage override, the rest as they are). NES-A/B and every mode
 are also compared with a baseline trace folder by VCE hash.
@@ -54,11 +54,12 @@ def main():
             for i, (ow, mw) in enumerate(zip(of, mf)):
                 if ow is None or mw is None:
                     continue
-                exp = expected(mode, ow, m[i]['stage'])
+                # cinemas, the title, the ending: original colours in every mode
+                exp = ow if m[i]['master'] else expected(mode, ow, m[i]['stage'])
                 n = sum(1 for a, b in zip(exp, mw) if (a & 0x1ff) != (b & 0x1ff))
                 if n:
                     bad.append((i, n, o[i]['master']))
-            line = f'{run} {mode:10s} frames {len(m)} not equal to the mapping of ORIGINAL: {len(bad)}'
+            line = f'{run} {mode:10s} frames {len(m)} not equal to the mode's colours of ORIGINAL's (mapped in gameplay, as they are in cinemas): {len(bad)}'
             if bad:
                 line += f' first {bad[:6]}'
             if base and (base / f'{run}.{mode}.json').exists():
