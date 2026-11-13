@@ -244,7 +244,28 @@ in these windows.
 
 ## Timing gates (verified)
 
-GATES
+Gate list of `load-exact`, this build, one emulator at a time
+(`/workspace/build/start-pos/gates.sh`, the load-exact script pointed at this
+branch; bram baseline = palette timing 3).
+
+| Gate | Result |
+| --- | --- |
+| Pristine build | unchanged source rebuilt to `27d1eaa0…dcf0` (the load-exact build) before the change |
+| `python3 -m unittest discover -s tests` | 54 OK |
+| `scripts/audit_public.py` | pass |
+| `check_boot.py` | pass: idle frames 1-899 identical to the original |
+| `check_menu.py --only options --only reset` | 68 of 68 ok, menu check passed |
+| `check_menu.py --only select` | 21 Level Select entries ok, language row ENGLISH, passed |
+| `check_bram.py --only cycle` | 17 of 17, PASS |
+| `palette_lag.py pairs` (36) | all 36: first update +0 clk, sound RAM, counter, Ryu and stage equal, no lag frame, interrupt clocks equal |
+| `palette_lag.py loadtime` (22 x 6) | 132 of 132 equal to ORIGINAL (+0) |
+| `palette_lag.py e2e` | all six: first update +0, no differing frame in 2,903, 96 sound commands; NES-A/B at ORIGINAL's clocks; GB DMG 6, APOCALYPSE 8, SMS 5 commands within -202..+60 clocks (as load-exact) |
+| `palette_lag.py fastok` (195-215 colours) | holds (`FASTOK` never 1 after a late vblank) |
+| `full-load.json`, in-process, six modes against the unmodified ROM (`lx.py`, `cmp7.py`) | ORIGINAL, NES-A, NES-B: counter, master flags, stage and area identical in all 126,001 frames; SMS, GB DMG, APOCALYPSE: counter differs in one frame (97,646, load-exact's residual), the rest identical. All six: the 22 stage starts, the 63 area changes and the ending (124,184) on the unmodified ROM's frames |
+| `full-load.json`, headless ORIGINAL (`longplay_six.py run`) | RESULT PASS (22 starts, ending at 126,001); its counter/master/stage/area arrays identical to load-exact's headless unmodified run |
+
+The two area-change frames are the only frames whose work changed; no load
+or area change takes another vblank (loadtime, the replays).
 
 ## Not covered
 
@@ -252,6 +273,20 @@ GATES
 - The mapped modes' stripe in 2-2 area 2's black frame (kept, see above).
 - The frames after the camera moves (by design, see Answer).
 - Respawns or Level Select entries with the camera moving; other recordings.
+
+## Deliverables
+
+In `/workspace/roms/` (not in the repository), from branch `start-pos`:
+
+| File | SHA-256 |
+| --- | --- |
+| `Ninja Ryukenden - Enhanced v1.11-dev (apocalypse, reset 2, palette timing 3, original load timing, 2-2 start).pce` | `888a87309656def55ca2770adf585b98954bf392106115a50a956c1d29b1d9f1` |
+| `ninja-ryukenden-enhanced-v1.11-dev-apocalypse-reset-2-palette-timing-3-original-load-timing-2-2-start.bps` (headered original) | `78f7e3c79e243da35d023d96571d53de74b0ce9cbc378b1612449a3f8837ef4e` |
+| `ninja-ryukenden-enhanced-v1.11-dev-apocalypse-reset-2-palette-timing-3-original-load-timing-2-2-start-headerless.bps` | `1460990befb72812b1ceb834f77fe6de470de018c5337b419b9d6bb290892767` |
+
+The build from either original is that ROM; both patches applied with
+`scripts/bps.py apply` give it (checksums verified). `patches/`, `release/`
+and `VERSION` (`1.11-dev`, shown in the menu) unchanged.
 
 ## Rerunning
 

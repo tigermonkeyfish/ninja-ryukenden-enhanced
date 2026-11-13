@@ -2,6 +2,8 @@
 
 Question (owner): "stage start should appear like the orginal. all stages and all substage/middle phases should have the backgrounds be perfectly aligned. to the original"; "the goal is for all of the background position starts to match the unmodified rom."
 
+Correction ([start-pos](start-pos.md)): the 2-2 area 1 and 2 first visible frames (14,033, 14,673) were already identical; the 8 px is the original's backdrop jumping a tile on the next frame, the camera's first step. The table's "8 of 9 frames differ" are the frames after that step. start-pos also found and fixed a two-line difference in 2-2 area 2's last black frame (14,672).
+
 Emulator evidence only (Geargrafx in-process tracer core, the one `load-exact` used), no real-hardware data. Nothing in `src/` was touched.
 
 ## Answer
