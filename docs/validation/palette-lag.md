@@ -407,3 +407,112 @@ videos, real hardware, audio.
    commands and gameplay unchanged).
 5. **RAM claim.** `$37C0-$37FD` and `$3C00-$3FFF` passed the watch audit
    above but not the ending, Continue/Game Over or unreplayed bosses.
+
+## Review follow-up (palette-lag review F1-F4; emulator evidence)
+
+Closes the findings of [palette-lag-review.md](palette-lag-review.md).
+Headless Geargrafx `78fc3d7` only; no real-hardware data. Builds: "fix8" =
+`4147a8b1...a8849` (the build reviewed, rebuilt from `cc4d77f`), "fix9" =
+this follow-up (SHA-256 in "Delivered" below).
+
+### Changes
+
+- **F1** (`src/options`): `preview_palette` makes every highlighted value
+  live, NES-A/NES-B included, whatever mode the menu opened in (the
+  `OPENED_OPTIONS` / `and #$10` special case is gone). Run's `set_palette`
+  therefore always finds the mode unchanged and returns at once, as in
+  Original. Visible change: while NES-A or NES-B is highlighted in a menu
+  opened in GB DMG, APOCALYPSE or SMS, the screen shows the RAM palette
+  unmapped (Original's colours) until Run or until a mapped value is
+  highlighted again; opened in Original, NES-A or NES-B nothing changes on
+  screen (as before). `docs/OPTIONS.md` and ARCHITECTURE say so;
+  `check_menu.py --only options` gained four cases that check the NES value
+  live in the preview from GB DMG, SMS and APOCALYPSE and exact after Run.
+- **F2** (`src/palette`): the worker ends with `inc FASTOK` (was `lda #1` /
+  `sta`, same 7 cycles); both fallback exits store `$80` (was `stz`). A
+  vblank between the worker's last `$12` check and its end now leaves
+  `$81`, which the next dispatch's `dec` cannot turn into 0. The empty path
+  stays 46 cycles (`lda #$80` / `sta` / `sax` for `stz` / `sax` / `nop`);
+  the fallback-with-work path is 2 cycles longer (it was never
+  Original-equal: it is the mapped upload).
+- **F3** not fixed: the empty fallback path's 10 spare cycles are now F2's
+  store, and the locked (13), plain (37), fast (37) and empty (46) paths
+  have no other spare cycles; any other place would change a timed path.
+  Cosmetic, GB DMG only (the review's 15 + 17 frames around a stage clear).
+- **F4** (`scripts/palette_lag.py`): `busy` removed (its RAM breakpoint
+  desynchronised the frame steps). Cause of the step hazard, read in the
+  emulator (`platforms/shared/desktop/emu.cpp`): a sync `debug_step_frame`
+  adds its frames to a pending count that only a completed frame
+  decrements; a breakpoint stop leaves 1 pending, so the next step(1) asks
+  for 2 and the emulator runs a second frame on its own, with the same
+  input. Reproduced: the first `fastok` attempt stopped once at the worker
+  and its next step ended exactly 358,995 clocks (one frame) late. Only a
+  `debug_pause` served during an active frame step clears the count, so
+  `resume_step` sends the step and a pause in one write (the pause is served
+  at the frame end; one more instruction runs), and `step_with_stops`
+  (used by `step_recording`, hence `e2e`, and by `fastok`) checks by
+  master clock that every step with a stop ends inside its own frame
+  (`StepError` otherwise). New subcommands: `pairs`, `fastok`, `dispatch`.
+
+### F1: the two-menu pair matrix (`palette_lag.py pairs`)
+
+Route (the review's): menu 1, opened in 1-1's Original gameplay, Runs into
+1-1 in mode 1; 30 frames later menu 2, opened in mode 1, chooses 3-2 and
+mode 2 (Right presses from mode 1, padded to five on the reset row: every
+pair presses the same buttons the same number of times) and Runs; then 3-2's
+stored input for 1,200 frame steps. Per pair against ORIGINAL -> ORIGINAL:
+the master clock of 3-2's first update (`$8457`), the sound driver's RAM
+(`$2080-$208F`, `$3800-$3BFF`) every frame, update counter / Ryu / stage /
+master state every frame, lag frames, and every interrupt entry's master
+clock.
+
+| build | pairs equal to ORIGINAL -> ORIGINAL in every measure | pairs that differ |
+|---|---|---|
+| fix8 (reviewed) | 30 of 36 | GB DMG, SMS, APOCALYPSE -> NES-A and -> NES-B (6): first update +6,369 clk, sound RAM differs from frame 0 on, lag frames 1033 and 1104, counter/Ryu differ in 167 frames from 1033, interrupt entries moved in 907 frames (max 9,246 clk) |
+| fix9 | **36 of 36**: first update +0 clk, sound RAM equal in all 1,200 frames, no lag frame, counter/Ryu/stage equal, interrupt entry clocks equal in all 1,200 frames (no wait-loop phase difference on this route either) | none |
+
+The review named three of the six failing pairs (GB DMG -> NES-A, SMS ->
+NES-B, APOCALYPSE -> NES-A); the matrix shows the other three fail the
+same way on fix8.
+
+### F2: the reproduction (`palette_lag.py fastok`)
+
+2-2 in GB DMG through the menu, replayed to the worker call of the area
+change (frame 793, 512 colours queued in one entry, worker entered 42,627
+clocks before the vblank, as in the review), saved there; per trial the
+entry cut to N colours, run on to the main loop's return from the wait
+(`$E064`), instruction trace of the way:
+
+| N colours | fix8 | fix9 |
+|---|---|---|
+| 195-204 | fast upload (37 cycles), `FASTOK` 0, queue 0 | the same |
+| 205, 206, 207 | fallback, then the worker's `sta`: **`FASTOK` = 1** with queue 1 (first colour 54, `$2104` = `$E0`) | fallback (`FASTOK` `$80`), then the worker's `inc`: **`$81`**, queue 1 |
+| 208-215 | fallback, worker aborted: `FASTOK` 0 | fallback, worker aborted: `$80` |
+
+So `FASTOK` = 1 now occurs only after a worker that finished before the
+vblank (fast upload taken, queue 0); after any fallback it is `$80`/`$81`
+and the next vblank's `dec` leaves it non-zero (no fast upload).
+
+### Dispatch path cycles (`palette_lag.py dispatch 2-2 785 16`)
+
+CPU cycles from `palette_entry` to its `rts` or to the upload it jumps to,
+every vblank of 2-2 frames 785-800 (the area change), instruction traces:
+
+| path | fix8 | fix9 |
+|---|---|---|
+| locked | 13 | 13 |
+| plain (ORIGINAL, NES-A) | 37 | 37 |
+| fast | 37 | 37 |
+| empty | 46 | 46 |
+| fallback with work | 58 (GB DMG), 60 (APOCALYPSE, SMS) | 60, 62 |
+
+### The three trace windows (`palette_lag.py itrace`, `research/tools/palette-lag/clockcmp.py`)
+
+3-2 frames 1031-1033 and 1101-1104, 4-1 frames 2485-2489 (the busiest 3-2
+updates and the stage-clear transition), every CPU instruction and
+interrupt, fix9 against fix8, all six menu modes: **every line at the same
+master clock** in all 18 traces (83,409-167,332 lines each; interrupt
+entries 9-15, none moved). In the mapped modes the empty path's filler
+reads `lda #$80` / `sta` / `sax` where it read `stz` / `sax` / `nop`, at the
+same clocks around it. So the earlier results of these windows against
+ORIGINAL carry over unchanged.
