@@ -31,7 +31,9 @@ from comparison_video import STAGE_NAMES                                      # 
 from longplay_lib import EMULATOR, ROM, MODE_BITS, Game, boot_to_first_update, FIRST_UPDATE_ROM  # noqa: E402
 import palette_lag as pl                                                      # noqa: E402
 
-MODES = ['original', 'apocalypse', 'nes-a', 'nes-b', 'sms', 'gb dmg']
+ORIGINAL_ROM = Path('/workspace/DO_NOT_COMMIT_ROMS/Ninja Ryukenden (J).pce')   # read-only, never copied
+UNMODIFIED = 'unmodified'
+MODES = ['original', 'apocalypse', 'nes-a', 'nes-b', 'sms', 'gb dmg', UNMODIFIED]
 FRAME = 358995
 CLOCK_HZ = 21477270
 
@@ -72,6 +74,60 @@ def expand(run):
     return inputs
 
 
+def rss(pid):
+    try:
+        for line in open(f'/proc/{pid}/status'):
+            if line.startswith('VmRSS'):
+                return int(line.split()[1]) // 1024
+    except OSError:
+        pass
+    return -1
+
+
+def memory(game):
+    import os
+    avail = next(int(l.split()[1]) // 1024 for l in open('/proc/meminfo') if l.startswith('MemAvailable'))
+    return f'RSS python {rss(os.getpid())} MB, geargrafx {rss(game.emu.proc.pid)} MB, MemAvailable {avail} MB'
+
+
+def boot_unmodified(game, rom, entered):
+    """longplay_lib.boot_to_first_update for the unpatched HuCard: no backup RAM,
+    no settings (patch-only addresses $2100/$2105 are not read). Same title
+    handling (Run), same stop at 1-1's first main-loop update ($8457)."""
+    game.power_on(rom, None)
+    previous, since, presses, pressed, title = None, 0, [200], False, False
+    for frame in range(1, 20000):
+        game.checked_step(1)
+        since += 1
+        master = bytes(game.read(0x240, 2))
+        if master != previous:
+            previous, since = master, 0
+        if master == b'\x01\x01':
+            title = True
+        if master == b'\x01\x01' and since == 180 and not pressed:
+            presses.append(frame)
+            pressed = True
+        if master in (b'\x00\x00', b'\x01\x00') and since % 300 == 150 and not title:
+            presses.append(frame)
+        for p in presses:
+            if frame == p:
+                game.call('controller_button', {'player': 1, 'button': 'run', 'action': 'press'})
+            elif frame == p + 2:
+                game.call('controller_button', {'player': 1, 'button': 'run', 'action': 'release'})
+        if title and master[0] == 0 and frame > presses[-1] + 2:
+            break
+    else:
+        raise RuntimeError('gameplay not reached')
+    status = {'boot_frames': frame, 'presses': presses}
+    game.call('set_breakpoint', {'address': f'{FIRST_UPDATE_ROM:x}', 'memory_area': 'rom', 'execute': True})
+    game.run_to('8457', polls=400000)
+    game.call('remove_breakpoint', {'address': f'{FIRST_UPDATE_ROM:x}', 'memory_area': 'rom'})
+    game.call('save_state_file', {'file_path': str(entered)})
+    game.call('load_state_file', {'file_path': str(entered)})
+    game.held = set()
+    return status
+
+
 def run_mode(a):
     run = json.loads(a.file.read_text())
     inputs = expand(run)
@@ -87,12 +143,24 @@ def run_mode(a):
     hits = []          # (frame, pc, clock) inside windows
     ends = {}          # frame -> clock of the frame end (windows only)
     t0 = time.time()
+
+    def dump(f):
+        # partial output at each progress line: a killed run leaves data up to frame f
+        for nm, arr in (('cnt', cnt), ('mas', mas), ('m2', m2s), ('stg', stg), ('are', are), ('bos', bos),
+                        ('core', core), ('wide', wide)):
+            (out / f'{tag}.{nm}.partial.bin').write_bytes(arr.tobytes())
+        (out / f'{tag}.partial.json').write_text(json.dumps({'last_frame': f, 'hits': hits}))
+
     with Game(EMULATOR, work) as game:
-        status = boot_to_first_update(game, a.rom, a.mode, work / 'entered.state')
+        if a.mode == UNMODIFIED:
+            status = boot_unmodified(game, a.rom, work / 'entered.state')
+        else:
+            status = boot_to_first_update(game, a.rom, a.mode, work / 'entered.state')
         entered = pl.master_clock(game, tmp)
         game.frame_end = None
         game.leftover = False
         prev = game.read(0, 0x2000)
+        print(f'{a.mode}: start {memory(game)}', flush=True)
         in_window = False
         for f in range(1, total + 1):
             game.press(set(inputs[f - 1]))
@@ -127,7 +195,8 @@ def run_mode(a):
             stg.append(ram[0xe5f]); are.append(ram[0xe60]); bos.append(ram[0x1035])
             core.append(fp(ram, CORE)); wide.append(fp(ram, WIDE))
             if f % 20000 == 0:
-                print(f'{a.mode}: frame {f} ({time.time() - t0:.0f} s)', flush=True)
+                print(f'{a.mode}: frame {f} ({time.time() - t0:.0f} s) {memory(game)}', flush=True)
+                dump(f)
         final = game.read(0, 0x1100)
     for nm, arr in (('cnt', cnt), ('mas', mas), ('m2', m2s), ('stg', stg), ('are', are), ('bos', bos),
                     ('core', core), ('wide', wide)):
@@ -159,6 +228,29 @@ def run_mode(a):
     print('RESULT', 'PASS' if ok else 'FAIL')
     (out / f'{tag}.result.txt').write_text('\n'.join(lines) + f'\nRESULT {"PASS" if ok else "FAIL"}\n')
     return 0 if ok else 1
+
+
+def probe(a):
+    """Plain replay of the first max(frames) frames, saving the whole RAM after each listed frame
+    (diagnostic for where the fingerprints differ; no breakpoints, no writes)."""
+    run = json.loads(a.file.read_text())
+    inputs = expand(run)
+    frames = sorted(set(a.frames))
+    work = Path(tempfile.mkdtemp(prefix='longplay-six-', dir='/workspace/build/longplay'))
+    a.out.mkdir(parents=True, exist_ok=True)
+    dumps = {}
+    with Game(EMULATOR, work) as game:
+        if a.mode == UNMODIFIED:
+            boot_unmodified(game, a.rom, work / 'entered.state')
+        else:
+            boot_to_first_update(game, a.rom, a.mode, work / 'entered.state')
+        for f in range(1, frames[-1] + 1):
+            game.press(set(inputs[f - 1]))
+            game.checked_step(1)
+            if f in frames:
+                dumps[str(f)] = game.read(0, 0x2000).hex()
+    (a.out / f'{a.mode.replace(" ", "")}.probe.json').write_text(json.dumps(dumps))
+    return 0
 
 
 def load(out, mode):
@@ -232,6 +324,11 @@ def compare(a):
     ref = D['original']
     evs = {m: events(D[m]) for m in MODES}
     print('## per mode: updates, lag frames, first divergence vs ORIGINAL (frame = state after that many frames)')
+    for m in MODES:
+        w = D[m]['wide']; r = ref['wide']
+        n = sum(1 for i in range(len(w)) if w[i] != r[i])
+        c = sum(1 for i in range(len(w)) if D[m]['core'][i] != ref['core'][i])
+        print(f'{m}: WIDE differs in {n} of {len(w)} frames, CORE in {c}')
     print('mode | frames | game updates | lag frames | multi-update frames | first diff counter | first diff master/stage/area/boss | first diff CORE | first diff WIDE | boot frames | entered clock')
     for m in MODES:
         d = D[m]
@@ -246,27 +343,46 @@ def compare(a):
     print('event | ' + ' | '.join(MODES))
     for nme in names:
         print(nme + ' | ' + ' | '.join(str(evs[m].get(nme)) for m in MODES))
-    print('\n## sub-frame: first main-loop update ($8457) and first sound-driver call ($4006) clock in the event frame')
-    ticks = lambda x: x
-    for nme in names:
-        row = []
-        for m in MODES:
-            f = evs[m].get(nme)
-            if f is None:
-                row.append('n/a'); continue
-            for tag, pc in (('upd', '8457'), ('snd', '4006')):
-                pass
-            u = stops_in(D[m], f, '8457')
-            s = stops_in(D[m], f, '4006')
-            row.append((f, u[0] if u else None, u[-1] if u else None, s[0] if s else None))
-        print(nme, row)
+    print('\n## sub-frame clocks (master clock from power-on; phase = clock mod 358995; delta vs ORIGINAL in ticks and ms)')
+    ms = lambda t: t * 1000 / CLOCK_HZ
+    points = []     # (label, frame in ORIGINAL, pc)
+    run = json.loads(a.file.read_text()) if a.file else None
+    o = D['original']
+    if run:
+        for st in run['stages']:
+            idx = STAGE_NAMES.index(st['name'])
+            f0 = next((f for f in range(max(1, st['start_frame'] - 400), st['start_frame'] + 1)
+                       if o['stg'][f - 1] == idx and o['mas'][f - 1] == 0), 1)
+            # the sound command of the stage load is the last one before the stage's first gameplay frame
+            snd = [f for f, pc, c in o['clk']['hits'] if pc == '4006' and f0 - 2 <= f <= f0 + 1]
+            if snd:
+                points.append((f'{st["name"]} start (first sound cmd)', snd[0], '4006', 'first'))
+    for nme, pc, which in (('boss hp 0', '8457', 'first'), ('area 1', '8457', 'first'),
+                           ('master leaves 0', '4006', 'first'), ('ending (1,14)', '4006', 'first')):
+        points.append((f'{nme} (first {"main-loop update" if pc == "8457" else "sound cmd"})', evs['original'][nme], pc, which))
+    print('point | ORIGINAL frame, clock, phase | ' + ' | '.join(f'{m}: frame, d-frames, d-ticks, d-ms' for m in MODES[1:]))
+    for label, f, pc, which in points:
+        rc = [c for ff, p, c in o['clk']['hits'] if ff == f and p == pc]
+        if not rc:
+            print(label, 'no stop in ORIGINAL'); continue
+        row = f'{label} | {f}, {rc[0]}, {rc[0] % FRAME} | '
+        for m in MODES[1:]:
+            mc = [c for ff, p, c in D[m]['clk']['hits'] if ff == f and p == pc]
+            if not mc:
+                fs = sorted({ff for ff, p, c in D[m]['clk']['hits'] if p == pc and abs(ff - f) < 40})
+                row += f'{m}: no stop in that frame (nearby {fs[:3]}) | '; continue
+            dt = mc[0] - rc[0]
+            row += f'{m}: {f}, 0, {dt:+d}, {ms(dt):+.6f} | '
+        print(row)
+    print('\nframe-end clocks: ORIGINAL frame 113213 end', o['clk']['frame_ends'].get('113213'),
+          '; recording end frame 126003 end', {m: D[m]['clk']['frame_ends'].get('126003') for m in MODES})
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest='cmd', required=True)
     r = sub.add_parser('run')
-    r.add_argument('--mode', default='original', choices=sorted(MODE_BITS))
+    r.add_argument('--mode', default='original', choices=sorted(MODE_BITS) + [UNMODIFIED])
     r.add_argument('--file', type=Path, required=True)
     r.add_argument('--rom', type=Path, default=ROM)
     r.add_argument('--out', type=Path, required=True)
@@ -275,11 +391,20 @@ def main():
     w.add_argument('out', type=Path)
     w.add_argument('--file', type=Path, required=True)
     w.add_argument('dest', type=Path)
+    pr = sub.add_parser('probe')
+    pr.add_argument('--mode', default='original', choices=sorted(MODE_BITS) + [UNMODIFIED])
+    pr.add_argument('--file', type=Path, required=True)
+    pr.add_argument('--rom', type=Path, default=ROM)
+    pr.add_argument('--out', type=Path, required=True)
+    pr.add_argument('--frames', type=int, nargs='+', required=True)
     c = sub.add_parser('compare')
     c.add_argument('out', type=Path)
+    c.add_argument('--file', type=Path)
     a = ap.parse_args()
     if a.cmd == 'run':
         return run_mode(a)
+    if a.cmd == 'probe':
+        return probe(a)
     if a.cmd == 'windows':
         d = load(a.out, 'original')
         run = json.loads(a.file.read_text())

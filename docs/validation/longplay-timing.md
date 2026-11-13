@@ -369,3 +369,108 @@ first gameplay frame came inside the previous stage's last input segment).
 - Beam settings that mattered: airborne nodes keep their takeoff score,
   falling nodes are dropped when no platform is within reach (map), a third of
   the beam stays on the ground, standing waypoints require Ryu to stand.
+
+## Six-mode plain replay of the whole recording (2026-11-13; emulator only)
+
+Input: `research/longplay/full.json` as committed at `4bba5f4` (126,003 frames after
+the 480 boot frames; 22 stage markers; ending record), replayed unchanged by
+`scripts/longplay_six.py run` in a fresh headless Geargrafx session per mode:
+power-on with the mode's backup-RAM image (menu never opened), title left with Run,
+stop at 1-1's first update (frame 0), then the whole input list with **no
+re-syncing and no RAM writes**. A seventh row, "unmodified ROM", is the original
+HuCard (`Ninja Ryukenden (J).pce`, read-only) with no backup RAM and no settings,
+same input, same start event. Raw logs and per-frame arrays: scratch
+`/workspace/build/longplay-six/full/` (`raw/`, `run-*.log`, `compare.txt`); not committed.
+
+| Mode | Result | Stage 1-1 .. 6-4C start frames | Ending (1,14) reached | Recording end | Game updates / lag frames | Gameplay state vs ORIGINAL |
+| --- | --- | --- | --- | --- | --- | --- |
+| ORIGINAL | PASS | all 22 as in `full.json` | 124,186 | 126,003 | 124,957 / 1,889 | reference |
+| HELL (apocalypse) | PASS | identical | 124,186 | 126,003 | 124,957 / 1,889 | identical every frame except 2 single-frame shifts (below) |
+| NES-A | PASS | identical | 124,186 | 126,003 | 124,957 / 1,889 | identical every frame |
+| NES-B | PASS | identical | 124,186 | 126,003 | 124,957 / 1,889 | identical every frame |
+| SMS | PASS | identical | 124,186 | 126,003 | 124,957 / 1,889 | identical except 1 single-frame shift |
+| GB DMG | PASS | identical | 124,186 | 126,003 | 124,957 / 1,889 | identical except 1 single-frame shift |
+| unmodified ROM | **FAIL** | 1-1 to 3-3 as ORIGINAL; 4-1 one frame early (53,287 vs 53,288); 4-2 onward missed | not reached (stuck in 4-1, stage byte 8) | 126,003 (stage 4-1) | 125,621 / 1,043 | diverges (below) |
+
+Stage starts (gameplay from frame, identical in the six modes): 1-1 0, 1-2 2,832,
+2-1 10,136, 2-2 13,241, 2-3 16,533, 3-1 27,777, 3-2 31,401, 3-3 34,853, 4-1 53,288,
+4-2 57,121, 4-3 60,358, 4-4 64,423, 5-1 70,013, 5-2 73,264, 5-3 77,206, 5-4 82,882,
+6-1 86,508, 6-2 88,446, 6-3 93,810, 6-4A 102,302, 6-4B 106,468, 6-4C 111,229.
+Frames count from 1-1's first update; all seven runs boot in 480 frames to it.
+
+### Difference between the six modes at the end
+
+Frames are a fixed 358,995 master clocks (21,477,270 Hz, 16.715 ms). Differences vs ORIGINAL:
+
+| Point (ORIGINAL frame) | Frames | Master-clock ticks | Milliseconds |
+| --- | --- | --- | --- |
+| Final boss defeated (boss health 0, 112,335), first main-loop update in that frame | 0 in all five | 0 in all five | 0 |
+| Boss death sequence over (area 1, 113,147), first main-loop update | 0 | HELL +9, SMS +9, GB DMG +6, NES-A 0, NES-B 0 | at most +0.0004 |
+| Last gameplay frame (master flag leaves 0 at 113,214), sound command | 0 | 0 | 0 |
+| Ending (1,14) reached (124,186), sound command | 0 | 0 | 0 |
+| End of the recording (126,003), frame-end clock | 0 | 0 | 0 |
+
+The frame at which every event happens is the same in all six modes. Every stage-start
+sound command (1-2 .. 6-4C) lands in the same frame at the same master clock in all
+six modes (0 ticks). The six runs also start from the same clock (1-1's first update at
+201,402,480 from power-on in each).
+
+### What was compared between the modes
+
+Every frame the harness reads the 8 KiB of RAM and stores the game-update counter
+($2000; a frame whose counter did not move is a lag frame), master flags ($2240/1),
+stage ($2E5F), area ($2E60), boss health ($3035) and two CRC32 fingerprints:
+
+- CORE: counter; master flags; camera/pages ($220F-10, $2237); stage/area; Ryu
+  block $2E9E-$2EB7 (position, health, lives); score and timer $2ED0-$2EDD; entity
+  slots $2F00-$30FF (enemies, boss).
+- WIDE: all RAM except $2100-$21FF (options byte, palette state, save status, stack),
+  $2260-$2283 (palette upload queue), $2286-$2A85 (RAM palette and backup),
+  $37C0-$37FD (WAITR, palette timing, worker scratch), $3C00-$3FFF (SHADOW). Those
+  hold mode-dependent colour data, mode bytes or stack contents, which differ by design.
+  No RNG address is identified in the docs; WIDE would include one.
+
+Result: stage, area, master flags and boss health are identical in every frame in all
+six modes. CORE: NES-A and NES-B identical in all 126,003 frames; HELL differs in 2
+frames, SMS and GB DMG in 1 frame each. The single-frame differences: frame 97,648
+(HELL, SMS, GB DMG): counter 55 vs 56 (one game update completed after that frame's
+end, caught up in the next frame; totals of updates and lag frames are equal in all six),
+with a few scratch bytes also differing; frame 60,709 (HELL only): Ryu's y byte $2EA0
+is 190 vs 20 for that one frame. WIDE is not a useful pass/fail: it differs in 23,100 to
+25,700 frames for HELL, SMS and GB DMG and in every frame for NES-A and NES-B, from
+palette-related bytes ($2206/07 and similar) outside the excluded areas; I did not
+find out what each byte is. Not measured: where inside the frame the update lands in
+the frames where the counter shifted (97,648, 60,709): the clock windows (195 frames)
+cover the stage starts and the end sequence only. So the sub-frame offsets are
+measured at the marker frames only, not the whole run.
+
+### Unmodified ROM (seventh row)
+
+The plain replay does not hold on the original HuCard. First differences (frame,
+what): 1: bytes $2050-$2051 differ (30,96 vs 182,181; a constantly changing value, role
+not identified), $2257/8, and $3227 = 0 instead of 1 (the language byte, per
+ARCHITECTURE: the patched default is English, the original Japanese); 5,668 first CORE
+difference (1-2 boss/cinema area); 13,258 first game-update counter difference (74 vs 73,
+17 frames into 2-2); 53,286 master flag and 53,287 stage/area: 3-3 hands over to 4-1 one
+frame earlier than on the patched ROM; 64,504 boss health differs; 4-1's input then no
+longer fits, and from 4-2 on every stage start FAILs. Stage-start sound commands up to
+3-3 land in the same frame as ORIGINAL but 207 to 420 ticks (0.010 to 0.020 ms) earlier.
+Not changed for the headline (no re-alignment). What is established: the
+unmodified ROM is not frame-identical to the patched ORIGINAL for this input, it runs
+2-2 onward with a different update count, and the language byte and the $2050 value differ
+from the first frame. What is not established: which of these (the English text and
+different screen lengths, or an unseeded random value) moves the 3-3 to 4-1 hand-over
+by one frame; that needs a probe on the unmodified ROM's 3-3 boss/cinema.
+
+### Method notes
+
+- Memory: one emulator at a time, 4 GB free required; each run holds the geargrafx
+  process at about 1.6-1.7 GB RSS from boot with no growth (1,688 to 1,704 MB over a run;
+  python 23-27 MB). The first attempt ran three at once and was killed by the system
+  for low memory near frame 120,000 (nothing wrong in the runs).
+- Breakpoints (sound command $38:$4006, main-loop update $8457) are armed only in
+  the 195 window frames (`step_with_stops`, state normalised after each window).
+  A 3,000-frame test gave fingerprints identical to the plain run.
+- Boot: the unmodified ROM boots in the same 480 frames; its start clock is 441
+  ticks earlier than the modes' (201,402,039 vs 201,402,480).
+- Everything here is emulator evidence (Geargrafx 78fc3d7); no real-hardware claim.
