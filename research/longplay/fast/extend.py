@@ -122,7 +122,7 @@ def main():
                             continue
                         if any(q[0] < fr <= q[0] + 8 or q[0] == fr for q in path if q[1] != area and q[0] < fr and fr - q[0] <= 8):
                             continue          # stale coordinates right after an area change
-                        if mo and mo[0] == 3 and fl.get('skip_air', True):
+                        if mo and mo[0] in (3, 9) and fl.get('skip_air', True):
                             continue          # mid-jump positions make poor waypoints
                         if last is None or fr - last[0] >= fl.get('every', 40) or area != last[1]:
                             pts.append([x, y, fl.get('r', 16), area, fl.get('ry', 24)])

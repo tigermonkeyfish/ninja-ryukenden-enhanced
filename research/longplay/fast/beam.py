@@ -12,7 +12,7 @@ the leg exactly from the start state.
 """
 import multiprocessing as mp
 import time
-from fastemu import Fast, BITS
+from fastemu import Fast, BITS, airborne
 
 NAMES = {v: k for k, v in BITS.items()}
 R, L, I, II, U, D = BITS['right'], BITS['left'], BITS['I'], BITS['II'], BITS['up'], BITS['down']
@@ -127,7 +127,7 @@ def near(info, wp):
 
 
 def search(pool, state, waypoints, goal, width=60, chunk=4, max_frames=3000, actions=ACTIONS,
-           lost=None, hp_weight=40, log=print, seconds=600, ywt=0.3, levels=3, prefer=None, stall_frames=600):
+           lost=None, hp_weight=40, log=print, seconds=600, ywt=0.3, levels=3, prefer=None, stall_frames=600, air_hold=True):
     """Return (node, reason). goal(info) -> True ends the leg. `prefer(info)` adds to the score."""
     W = len(pool.conns)
     import inspect
@@ -150,6 +150,9 @@ def search(pool, state, waypoints, goal, width=60, chunk=4, max_frames=3000, act
         if prefer:
             s += prefer(info)
         return s
+
+    def partial(info):
+        return hp_weight * info['health'] + (prefer(info) if prefer else 0)
 
     root = Node(ref, None, 0, 0, i0, 0, score(i0, 0), 0)
     beam = [root]
@@ -189,7 +192,13 @@ def search(pool, state, waypoints, goal, width=60, chunk=4, max_frames=3000, act
                 while wp < len(waypoints) and near(i, waypoints[wp]):
                     wp += 1
                 fr = sum(n for n, _ in a) if isinstance(a, tuple) else chunk
-                node = Node((w, nid), parent, a, fr, i, wp, score(i, wp), depth)
+                sc = score(i, wp)
+                if air_hold and airborne(i) and wp == parent.wp:
+                    # no credit for distance covered in the air until Ryu lands or
+                    # clings: a jump into a pit must not outrank the run-up that a
+                    # longer jump needs (health and boss terms still count)
+                    sc = parent.score - 0.01 + partial(i) - partial(parent.info)
+                node = Node((w, nid), parent, a, fr, i, wp, sc, depth)
                 if goal_node is None and (goal(i, node.seen) if goal_args == 2 else goal(i)):
                     goal_node = node
                 k = (wp, i['area'], i['x'] // 3, yv(i['y']) // 3) + kb
@@ -217,6 +226,20 @@ def search(pool, state, waypoints, goal, width=60, chunk=4, max_frames=3000, act
                 break
             if id(n) not in used:
                 keep.append(n); used.add(id(n))
+        # keep a safe frontier: at least a third of the beam on the ground or a
+        # wall, so leaps that look closer (a fall into a pit) cannot crowd out
+        # the nodes a longer jump has to start from
+        grounded = lambda n: not airborne(n.info)
+        need = width // 3 - sum(1 for n in keep if grounded(n))
+        if need > 0:
+            extra = [n for n in ranked if grounded(n) and id(n) not in used][:need]
+            air = [n for n in keep if not grounded(n)]
+            for n in extra:
+                if len(keep) < width:
+                    keep.append(n)
+                elif air:
+                    keep.remove(air.pop())
+                    keep.append(n)
         beam = keep
         for w in range(W):
             pool.conns[w].send(('keep', {n.ref[1] for n in beam if n.ref[0] == w}))

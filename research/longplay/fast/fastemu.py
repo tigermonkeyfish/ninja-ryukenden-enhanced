@@ -15,6 +15,12 @@ BITS = {'I': 1, 'II': 2, 'select': 4, 'run': 8, 'up': 16, 'right': 32, 'down': 6
 HEALTH, LIVES, X, Y, AREA, STAGE = 0xead, 0xeaf, 0xe9e, 0xea0, 0xe60, 0xe5f
 
 
+def airborne(i):
+    """Ryu's motion state $2EAA: 0 stand, 1 walk, 2 crouch, 3 air, 5 clinging to a
+    wall, 6 slash (ground or air), 8 crouch slash, 9 hurt (knocked back)."""
+    return i['state'] in (3, 9) or (i['state'] == 6 and i['vy'] != 0)
+
+
 def mask(buttons):
     m = 0
     for b in buttons:
@@ -84,7 +90,8 @@ class Fast:
         return {'x': r[X] | r[X + 1] << 8, 'y': r[Y], 'area': r[AREA], 'stage': r[STAGE],
                 'lives': r[LIVES], 'health': r[HEALTH], 'cam': r[0x20f] | r[0x210] << 8,
                 'pages': r[0x237], 'master': r[0x240], 'm2': r[0x241], 'boss': r[0x1035],
-                'state': r[0xeaa], 'bx': r[0xf1c]}
+                'state': r[0xeaa], 'bx': r[0xf1c],
+                'vy': r[0xea7] - 256 if r[0xea7] >= 128 else r[0xea7]}
 
     def screenshot(self, path):
         """Render the next frame's picture: call step(1, render=True) first."""

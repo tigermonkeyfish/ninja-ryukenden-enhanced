@@ -1,0 +1,21 @@
+{
+ "stage": "3-3",
+ "notes": "Boss room (one page). Beam search scored on the boss's health ($1035, as in 1-2 and 5-4) and Ryu's health; ends when the boss health returns to 0; then idle (no input) through the boss death and the cinema to the next stage. The beam is pulled toward the boss's x ($2F1C, the first enemy slot as in 2-3) while it lives.",
+ "legs": [
+  {
+   "name": "boss",
+   "beam": {
+    "waypoints": [],
+    "goal": {
+     "boss_dead": true
+    },
+    "boss_weight": 300,
+    "width": 60,
+    "max_frames": 4000,
+    "seconds": 1500,
+    "stall_frames": 1500,
+    "chase": 1.0
+   }
+  }
+ ]
+}
