@@ -24,8 +24,11 @@ for _a, _b in EXCLUDED:
         WIDE.append((_p, _a))
     _p = _b
 WIDE.append((_p, 0x2000))
-KEYS = [(0, 0xE06C), (0, 0xE061), (0, 0xFCEC), (0, 0xFD13), (0, 0xFD16)]
-NAMES = ['upd', 'wait', 'vbl', 'pal', 'pal_end']   # pal..pal_end: the vblank's palette path
+KEYS = [(0, 0xE06C), (0, 0xE061), (0, 0xFCEC), (0, 0xFD13), (0, 0xFD16), (0xF8, 0x374F), (0xF8, 0x37AE),
+        (0x46, 0x5000)]
+# pal..pal_end: the vblank's palette path; rent_body: RENT's M form past its gate (MS/MN upload);
+# rent_disp: RENT's M form to the dispatcher; entry: palette_entry (dispatcher or palette_now)
+NAMES = ['upd', 'wait', 'vbl', 'pal', 'pal_end', 'rent_body', 'rent_disp', 'entry']
 
 
 def fp(ram, ranges):
@@ -85,7 +88,7 @@ def main():
     entered_clock = t.clock()
     (a.out).mkdir(parents=True, exist_ok=True)
     (a.out / f'{a.tag}.entered.state').write_bytes(st)
-    arr = {k: np.zeros(n + 1, np.uint8) for k in ('cnt', 'mas', 'm2', 'stg', 'are', 'bos')}
+    arr = {k: np.zeros(n + 1, np.uint8) for k in ('cnt', 'mas', 'm2', 'stg', 'are', 'bos', 'gate', 'live')}
     core = np.zeros(n + 1, np.uint32); wide = np.zeros(n + 1, np.uint32); fend = np.zeros(n + 1, np.uint64)
     accs, hits = list(boot_acc), []
     ram = np.frombuffer(t.ram, dtype=np.uint8)
@@ -100,6 +103,7 @@ def main():
             r = bytes(t.ram)
             arr['cnt'][f] = r[0]; arr['mas'][f] = r[0x240]; arr['m2'][f] = r[0x241]
             arr['stg'][f] = r[0xe5f]; arr['are'][f] = r[0xe60]; arr['bos'][f] = r[0x1035]
+            arr['gate'][f] = r[0x174a]; arr['live'][f] = r[0x17e0]   # RENT+$0A (M form: $CE MS, $4E MN), LIVE
             core[f] = fp(r, CORE); wide[f] = fp(r, WIDE); fend[f] = t.clock()
         if f0 // CH % 40 == 0:
             print(a.tag, f0 + k - 1, round(time.time() - t0), flush=True)

@@ -80,8 +80,9 @@ def lost(d, last):
     m = sf < last
     print(f'updates {int(m.sum())} started before frame {last}; lost (vblanks inside updates) {int(nv[m].sum())}; '
           f'updates spanning a vblank {int((nv[m] > 0).sum())}')
-    close = np.argsort(np.where(m & (nv == 0), margin, 1 << 40))[:5]
-    print('closest calls (frame, clocks before the vblank):', [(int(sf[i]), int(margin[i])) for i in close])
+    close = np.argsort(np.where(m & (margin >= 0), margin, 1 << 40))[:5]
+    print('closest calls (update start frame, its wait this many clocks before the next vblank):',
+          [(int(sf[i]), int(margin[i])) for i in close])
 
 
 def starts(d):

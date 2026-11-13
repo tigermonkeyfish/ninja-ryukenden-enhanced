@@ -210,8 +210,9 @@ files to allocate free space.
 | `$2281-$2283` | Border colour (written to VCE entry `$100` after each upload) / upload lock |
 | `$2286-$2685` / `$2686-$2A85` | RAM palette (512 words, the source of every upload) / its backup (`$F718` copies to it, `$F720` back; fades compute `$2286` from it) |
 | `$2102–$2103` | Entrance anchor |
+| `$3740-$37BF` | `RENT` (1.11-dev palette-exact): the vblank interrupt's palette upload in RAM (bank 0 `$FD13` calls it instead of `$F3B5`), `$3740-$37B4` (`$37B5-$37BF` reserved, unused). Original, NES-A, NES-B: `$F3B5-$F428` byte for byte (the native upload; bytes after its `rts` never run) and an `rts` at `$37B4`; GB DMG, HELL, SMS: the native upload instruction for instruction with a 9-cycle gate on `FASTOK` that costs what the native `phx`/`plx` and second `lda #$04` cost (`src/palette`, "Palette timing"), in its MS form (colours from `SHADOW`) or MN form (from `$2286`). Written by configure (behind an entry routed to the `rts` at `$37B4`) and, after the reset, by the first unlocked vblank (the reset leaves `jmp $FEC0`); the worker switches MS/MN. Unused by the original game, 1.10 and 1.11-dev before it: write and read watch over the whole recorded playthrough ([record](validation/palette-exact.md#ram-audit)); the harness writes Original's bytes after loading a state made from the original game |
 | `$37C0-$37DD` | `WAITR` (1.11-dev palette-lag): the main loop's vblank wait in RAM (bank 0 `$E061` and the menu call it instead of `$FD67`). Original, NES-A, NES-B: `$FD67-$FD6F` byte for byte; GB DMG, HELL, SMS: the same wait with the palette worker (`src/palette`, "Palette timing"). Written by the reset (`src/bram` trampoline -> bank `$46` `$5B00`) and by configure after a mode change; the harness writes the plain bytes after loading a state made from the original game |
-| `$37E0-$37E9` | Palette timing (palette-lag): `LIVE` `$37E0` ($10 = mapped gameplay seen by the worker), `FASTOK` `$37E1` (1 = every queued colour is converted; the worker sets it with one `inc` from 0, a fallback upload stores `$80`, so a vblank between the worker's last `$12` check and its end leaves `$81`, never 1: palette-lag review F2), `BORDER_MAP` `$37E2/3`, worker scratch `$37E4-$37E8`, NES `FU_COUNT` `$37E9`. Zero after the RAM clear |
+| `$37E0-$37E9` | Palette timing (palette-lag): `LIVE` `$37E0` ($10 = mapped gameplay seen by the worker), `FASTOK` `$37E1` (`RENT`'s gate: 1 = every queued colour is converted, `RENT`'s MS form counts it down to 0 and uploads; the worker sets it with one `inc` from 0, every visit to the dispatcher stores `$80`, so a vblank between the worker's last `$12` check and its end leaves `$81`, never 1: palette-lag review F2; 0 in the MN form, whose `lsr` keeps it 0), `BORDER_MAP` `$37E2/3`, worker scratch `$37E4-$37E8`, NES `FU_COUNT` `$37E9`. Zero after the RAM clear |
 | `$3C00-$3FFF` | `SHADOW` (palette-lag): the mapped modes' converted colours, laid out as `$2286`; the fast upload reads the queued ranges from here |
 | `$2104` | The palette module's state (1.11-dev SMS; before it `$2100` bits 5-7): bit 5 a left-over palette entry is queued, bit 6 the main loop was busy at the last vblank with palette work, bit 7 the VCE holds mapped colours (GB DMG, HELL or SMS); bits 0-4 zero. Not a setting: never saved; zero at reset (the RAM clear `$E023`), and clearing it costs at most one needless full re-upload |
 | `$2105` | Save status (1.11-dev, `src/bram` ST_ values 0-8: what the reset found in backup RAM, then what the last Run's save came to); the menu shows it. Not a setting; zero (NONE) from the RAM clear until the loader sets it |
@@ -255,8 +256,8 @@ guard checks.
 | `$8457 / $8478` | Gameplay loop / native completion path |
 | `$8457-$845C` | Gameplay loop calls `$E3F2`, `$ABD7`; Enhanced: `jsr $FE40` (which makes both calls) and three NOPs |
 | `$FE20` | Damage gate (bank 1 `$8F70`): No Damage, then the NES Firewheel protection rule (`$DC00`, bank 3); timer expiry explicitly bypasses optional immunity (`$9BC3` jumps to `$FE34`). `$FE3E–$FE3F` unused in the options range |
-| `$FD13` | Vblank interrupt's palette upload (native `jsr $F3B5`): `jsr $FEC0` |
-| `$FEBE–$FECE` | Palette trampoline (1.11-dev, 17 bytes): `$FEBE` palette_now (stage modules: write colours X..X+Y-1 of the RAM palette to the VCE at once, in the mode's colours), `$FEC0` vblank upload; both map bank `$46` into MPR2 and restore the MPR2 they found (the SMS mode switches MPR2 to bank `$3B` on the way) |
+| `$FD13` | Vblank interrupt's palette upload (native `jsr $F3B5`): `jsr $3740` (`RENT`, 1.11-dev palette-exact; palette-lag had `jsr $FEC0`, 76 cycles a vblank more than the native call) |
+| `$FEBE–$FECE` | Palette trampoline (1.11-dev, 17 bytes): `$FEBE` palette_now (stage modules: write colours X..X+Y-1 of the RAM palette to the VCE at once, in the mode's colours), `$FEC0` vblank upload (since palette-exact reached from `RENT`'s dispatch `jmp`, and from the reset's `RENT` stub, not from `$FD13`); both map bank `$46` into MPR2 and restore the MPR2 they found (the SMS mode switches MPR2 to bank `$3B` on the way) |
 | `$FECF–$FEDF` | Free (`$FF`, 17 bytes) |
 | `$F1DC`, `$F234` | The sprite-palette and colour-set loaders' unpack calls (native `jsr $F2BE`): `jsr $7FE0`, the NES palette hook in bank `$37`'s free tail (MPR3 holds bank `$37` at both; 1.11-dev) |
 | `$CE98-$CE9C` (bank 3) | The animation-set setup's table pointer (native `lda #$32 / ldy #$CF / plx`): `plx / jsr $D400 / nop`, the NES copy of the animation table in NES gameplay (1.11-dev) |
@@ -344,15 +345,27 @@ map colours in the vblank interrupt: the main loop's only vblank wait (bank
 Original and NES is the native wait byte for byte; in a mapped mode it
 calls the worker (bank `$46` `$5Bxx`) when the queue holds work, after the
 update, and the worker converts the queued colours into `SHADOW`
-(`$3C00-$3FFF`). The vblank then runs `fast_upload`, the native upload
-(`$F3B5-$F421`) instruction for instruction reading `SHADOW`, reached in the
-same 37 cycles: the interrupt costs what Original's costs. The dispatch at
-`$FEBE` -> `palette_entry` tests `LIVE` (`$37E0`) instead of `$2100`; the
-locked path (13 cycles), the Original/NES path (37 to `$F3B5`) and an empty
-queue (46 to the `rts`) take Original's cycles in every mode. If the worker
-did not finish before the vblank (no idle time, no wait), the mapped upload
-of before is the fallback; a left-over entry it leaves is split by the
-worker at colour 511 and carried on by the fast upload. NES-A/B: the colour
+(`$3C00-$3FFF`). Since branch `palette-exact`
+([record](validation/palette-exact.md)) the vblank interrupt calls the
+upload in RAM, `RENT` (`$3740`; `$FD13` `jsr $3740` where the native code
+has `jsr $F3B5`), so no mode pays a dispatch in the interrupt (palette-lag's
+trampoline and `palette_entry` cost 76 cycles every vblank in every mode,
+which lost a frame in the act 3 story scene). In Original and NES `RENT` is
+the native upload byte for byte. In a mapped mode it is the native upload
+instruction for instruction with a gate after the lock test: `dec FASTOK` /
+`bne` to the dispatcher (MS form, colours from `SHADOW` and the border from
+`BORDER_MAP`, armed by the worker's `inc`), or `lsr FASTOK` with `FASTOK` 0
+(MN form, colours from the RAM palette: cinemas, the title, the ending, and
+a mapped mode before the worker has seen gameplay); the gate's 9 cycles take
+the place of the native `phx`/`plx` (X is never changed) and the second
+`lda #$04`, so an empty queue, a locked one and an upload of the same queue
+cost exactly the native cycles in every mode. The worker switches MS and MN
+when it sees `MASTER_STATE` change; configure rewrites `RENT` for a new mode
+behind an entry routed to an `rts`. If the worker did not finish before the
+vblank (no idle time, no wait), the gate sends the vblank to the dispatcher
+(`$FEC0` -> `palette_entry`) and the mapped upload of before is the
+fallback; a left-over entry it leaves is split by the worker at colour 511
+and carried on by `RENT`. NES-A/B: the colour
 set and sprite palette loaders' hook (`nes_unpack`, bank `$45`) pads every
 lookup path to 162 cycles and unpacks with `fast_unpack` (the native format,
 8 colours unrolled, the first two groups 122 cycles shorter, the rest padded
