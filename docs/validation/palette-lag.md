@@ -412,8 +412,9 @@ videos, real hardware, audio.
 
 Closes the findings of [palette-lag-review.md](palette-lag-review.md).
 Headless Geargrafx `78fc3d7` only; no real-hardware data. Builds: "fix8" =
-`4147a8b1...a8849` (the build reviewed, rebuilt from `cc4d77f`), "fix9" =
-this follow-up (SHA-256 in "Delivered" below).
+`4147a8b1...a8849` (the build reviewed, rebuilt from `cc4d77f`); "fix9"
+(`f76fcd87...f8f2`, F1 + F2 as the review proposed it); "fix10"
+(`abfe6fb8...12f1`, F2's empty exit as fix8's; the delivered build).
 
 ### Changes
 
@@ -429,12 +430,20 @@ this follow-up (SHA-256 in "Delivered" below).
   `check_menu.py --only options` gained four cases that check the NES value
   live in the preview from GB DMG, SMS and APOCALYPSE and exact after Run.
 - **F2** (`src/palette`): the worker ends with `inc FASTOK` (was `lda #1` /
-  `sta`, same 7 cycles); both fallback exits store `$80` (was `stz`). A
+  `sta`, same 7 cycles); the fallback with work stores `$80` (was `stz`). A
   vblank between the worker's last `$12` check and its end now leaves
-  `$81`, which the next dispatch's `dec` cannot turn into 0. The empty path
-  stays 46 cycles (`lda #$80` / `sta` / `sax` for `stz` / `sax` / `nop`);
-  the fallback-with-work path is 2 cycles longer (it was never
-  Original-equal: it is the mapped upload).
+  `$81`, which the next dispatch's `dec` cannot turn into 0. The
+  fallback-with-work path is 2 cycles longer (it was never Original-equal:
+  it is the mapped upload). The empty-queue exit keeps `stz` (46 cycles,
+  fix8's instructions): the review proposed `$80` there too, and "fix9"
+  did so, but the worker runs only with work queued and only an upload
+  empties the queue, so that exit never meets a worker under way; with
+  `$80` there `FASTOK` read `$80` instead of 0 after every empty mapped
+  vblank, an equivalent value (the next `dec` is not 0 either way, the
+  worker starts from `stz`) that `check_menu.py --only options --only reset`
+  reported as RAM differing from the run without the menu in 9 cancel cases
+  opened in a mapped mode. "fix10" (the delivered build) keeps `stz` there;
+  the measurements below were repeated on it.
 - **F3** not fixed: the empty fallback path's 10 spare cycles are now F2's
   store, and the locked (13), plain (37), fast (37) and empty (46) paths
   have no other spare cycles; any other place would change a timed path.
@@ -516,3 +525,34 @@ entries 9-15, none moved). In the mapped modes the empty path's filler
 reads `lda #$80` / `sta` / `sax` where it read `stz` / `sax` / `nop`, at the
 same clocks around it. So the earlier results of these windows against
 ORIGINAL carry over unchanged.
+
+### Regression (fix9)
+
+- **Survey** (`survey` + `report`, 11 runs x 9 variants, traces in
+  `/workspace/build/palette-lag/f9/traces`): the report is identical to
+  fix8's line for line (every mode equal to ORIGINAL and 1.10 in all 11
+  runs; the one 6-3 cinema-entry sample at 5138 as before). Every field of
+  every frame of all 77 traces (counter, `$12`, SAT/VCE hashes, Ryu, timer,
+  stage, area, lives, health, camera, master state, boss, options) equals
+  fix8's.
+- **Picture** (`research/tools/palette-lag/picture.py`, fix8's traces as
+  the baseline): the VCE equals fix8's in every frame of all 66 run x mode
+  traces (0 frames differ); the per-mode differences from ORIGINAL's colours
+  are fix8's exactly (the fallback frames, cinema starts, GB DMG's black
+  around stage clears: F3). The F1 change acts only inside the menu while
+  NES-x is highlighted, which the stored routes do not do.
+- **Load timing** (`loadtime`, 22 Level Select entries x 6 modes): every
+  sound command and first update at ORIGINAL's master clock (264 cells,
+  all +0), no load in another vblank; the log equals fix7's line for line.
+- **Saved-palette power-on** (`e2e`, each mode loaded from backup RAM,
+  status 9, menu never opened, 1-1's run), with the corrected
+  `step_recording`: first update +0 clk in every mode; gameplay fields equal
+  to ORIGINAL in all 2,903 frames in every mode; 96 sound commands in each
+  mode (NES-A/B at ORIGINAL's clocks; APOCALYPSE 7 at other clocks, max 54
+  clk; SMS 6, max 18; GB DMG 6, max 18); smallest margin of a sound command
+  to the next vblank 145,875 clocks. fix8 rerun with the same tool: hits and
+  traces identical to fix9's in all six modes. (fix8's recorded e2e, made
+  with the old `step_recording`, counted 56 commands and 478 boot frames:
+  inferred, the frame-step hazard ran unrecorded frames there; its
+  mode-to-mode comparison was still like with like, and its conclusions
+  hold with the corrected tool.)

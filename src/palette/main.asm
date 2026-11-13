@@ -144,7 +144,7 @@ TMP = $26
 WAITR = $37c0               ; RAM: the main loop's vblank wait ($37C0-$37DD)
 LIVE = $37e0                ; RAM: $10 = mapped gameplay seen by the worker, else 0
 FASTOK = $37e1              ; RAM: 1 = every queued colour is in SHADOW (0: not yet;
-                            ; $80/$81: the fallback ran since the worker began)
+                            ; $80/$81: a fallback upload with work ran since)
 BORDER_MAP = $37e2          ; RAM, 2 bytes: the border colour as the mode shows it
 W_LEFT = $37e4              ; RAM, 2 bytes: the worker's bytes left in an entry
 W_OVR = $37e6               ; RAM: nonzero = HELL's override applies (stage)
@@ -248,18 +248,23 @@ vblank_fallback:
  ; The worker has not converted the queue (it did not run, or the vblank
  ; came first). An empty queue costs what the native upload's does (46
  ; cycles to its rts); otherwise the mapped upload below, as before.
- ; FASTOK = $80 (palette-lag review F2): a worker this vblank interrupted
- ; after its last check of $12 ends with inc FASTOK, which then gives $81,
- ; never 1, so the next vblank cannot take the fast upload for colours the
- ; worker did not convert (the next worker run starts from 0).
  lda QUEUE_COUNT            ; 5
  bne fallback_work          ; 2
- lda #$80                   ; 2
- sta FASTOK                 ; 5
- sax                        ; 3: 46 cycles (X, A: scratch, as the native upload leaves them)
+ stz FASTOK                 ; 5
+ sax                        ; 3
+ nop                        ; 2: 46 cycles
 entry_return:
  rts
 fallback_work:
+ ; FASTOK = $80 (palette-lag review F2): a worker this vblank interrupted
+ ; after its last check of $12 ends with inc FASTOK, which then gives $81,
+ ; never 1, so the next vblank cannot take the fast upload for colours the
+ ; worker did not convert (the next worker run starts from 0). The empty
+ ; queue's exit above keeps stz: the worker runs only with work queued and
+ ; only an upload empties the queue, so an empty queue never meets a worker
+ ; under way (a second vblank inside one worker run would need it to
+ ; outlast a frame after its $12 check). 0 and $80 act the same at the next
+ ; dispatch (dec: not 0) and the worker starts from stz.
  lda #$80
  sta FASTOK
  lda OPTIONS
