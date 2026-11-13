@@ -2,11 +2,11 @@
 Diagnostic, emulator evidence only (in-process Geargrafx 78fc3d7, libgxe.so from this folder's Makefile).
 
     probe.py ROM MODE OUTDIR [REC] [--pre 40] [--post 6] [--events 14030 ...] [--area] [--states]
-    MODE: original (build, options 0) | parallax-off (build, options bit 0) | unmod-en (unmodified ROM)
+    MODE: none (no backup RAM, e.g. published 1.10) | original (build, options 0) | parallax-off (build, options bit 0) | unmod-en (unmodified ROM)
 
 One fresh power-on, one pass over the recording (as startalign/capture.py: lx.boot, then one input per
 frame). For each event EV, frames EV-pre .. EV+post run through gx_run_vdc with rendering and write
-OUTDIR/ev-<EV>.npz: img<frame>, meta (frame, cam, $2E4B-4E, $2E63, stage, area, counter, $2258),
+OUTDIR/ev-<EV>.npz: img<frame>, meta (frame, cam, $2E4B-4E, $2E63, stage, area, counter, $2258, $2E81, $2E82),
 vw (VDC BXR/BYR writes: frame, pc, bank, reg, val, old, vpos, hpos, raster, op, kind, clk),
 lr (per line: frame, vpos, latched BXR, BG Y offset, raster), hits (KEYS), ram (writes to $2E4B-$2E4E).
 --states also saves the core state before frame EV-pre (OUTDIR/ev-<EV>.state).
@@ -26,9 +26,9 @@ AREA = [11343, 12421, 12546, 14030, 14671, 55309, 55429, 60708, 61795, 63544, 74
         79287, 80296, 80630, 80887, 90754, 91716, 91820, 92931, 94460, 94579, 96625]   # the 26 surveyed area changes
 EVENTS = [14030, 14671, 55309, 75459, 77972, 78669, 79287, 80296, 80630, 80887, 94460, 96625]
 KEYS = [(0, 0xFCD7), (0, 0xFD26), (0, 0xFD3B), (0, 0xFD13), (1, 0x83F3), (1, 0x8457), (1, 0x85B4), (1, 0x80AB),
-        (0, 0xFF42), (0, 0xFF2C), (0, 0xFCEC), (0, 0xE06C), (0, 0xE061)]
+        (0, 0xFF42), (0, 0xFF2C), (0, 0xFCEC), (0, 0xE06C), (0, 0xE061), (1, 0x8490), (0, 0xF718), (1, 0x849B)]
 KNAMES = ['irq1', 'split', 'byr', 'vblpal', 'mainhook', 'gameloop', 'area', 'init80ab', 'ff42', 'ff2c', 'vbl',
-          'upd', 'wait']
+          'upd', 'wait', 'fwd8490', 'tii', 'back849b']
 VW = np.dtype([('frame', '<u4'), ('pc', '<u2'), ('bank', 'u1'), ('reg', 'u1'), ('val', '<u2'), ('old', '<u2'),
                ('vpos', '<i2'), ('hpos', '<i2'), ('raster', '<i2'), ('op', 'u1'), ('kind', 'u1'), ('clk', '<u8')],
               align=True)
@@ -61,7 +61,7 @@ def run_vdc(t, frame, button, keys, render=1):
 def meta(t, f):
     r = bytes(t.ram)
     return [f, r[0x20F] | r[0x210] << 8, r[0xE4B], r[0xE4C], r[0xE4D], r[0xE4E], r[0xE63], r[0xE5F], r[0xE60], r[0],
-            r[0x258]]
+            r[0x258], r[0xE81], r[0xE82]]
 
 
 def main():
@@ -77,7 +77,7 @@ def main():
         a.events = AREA
     out = Path(a.out); out.mkdir(parents=True, exist_ok=True)
     inp = inputs(a.rec)
-    t = W(a.rom, None if a.mode == 'unmod-en' else a.mode)
+    t = W(a.rom, None if a.mode in ('unmod-en', 'none') else a.mode)
     setup(t)
     t.watch_range(0xE4B, 0xE4F)
     bf, st = lx.boot(t, a.mode)
