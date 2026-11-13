@@ -148,8 +148,12 @@ the native code in both.
 | GB DMG | 126,002 / 126,003 | 125,984 / 125,996 | 18 / 7 |
 | APOCALYPSE | 126,002 / 126,003 | 125,970 / 125,996 | 32 / 7 |
 
-Palette timing 2 against 1.10 on the same frames: +228 at every vblank in
-every mode (+108/+129 on a few paths, measured in SMS over 20,000 frames).
+Palette timing 2 on the same frames (in-process SMS, `full-exact.json` to
+frame 51,760, where it loses the act 3 frame and then leaves the recording:
+4-1 at 53,288): against 1.10 +228 at 51,442 vblanks, +108/+129 at 311,
++7,977 at 3 cinema entries, +2,703/+16,626 at 2 fallback pairs. This build
+against palette timing 2 on those frames: -228 at 51,444, -108/-129 at 311,
+-438 at the 3 cinema entries, +54 at the 2 first fallback vblanks (below).
 The costs seen include empty queues (69 clocks), locked queues (90), every
 upload size up to 512 colours (22,179) and story scenes; the act 3 scene's
 two-vblank update at 51,761 now spends exactly 1.10's clocks (it reaches
@@ -219,7 +223,11 @@ at the 3-3 -> 4-1 hand-over (`scripts/longplay_realign.py build`, adjustment
 `full-unmodified.json`; gameplay inputs unchanged). Cold power-on (backup
 RAM with the mode), the whole file as one input list, no re-syncing:
 
-HEADLESS_EXACT_PLACEHOLDER
+Headless `longplay_six.py` (the `longplay_check.py` criteria: each of the
+22 stages is gameplay at its marker frame, area 0, and the end record
+master 1 / `$2241` 14 at frame 126,002), one emulator at a time:
+**RESULT PASS in all six modes** (22 of 22 stage starts and the ending,
+0 frames apart from the markers).
 
 In-process, all six modes: the same 22 starts and the ending (master 1,
 `$2241` = 14 at frame 126,002).
@@ -228,7 +236,12 @@ In-process, all six modes: the same 22 starts and the ending (master 1,
 
 1.10 booted as the tools boot it (no backup RAM, `--mode unmodified`):
 
-V110_PLACEHOLDER
+Headless 1.10 on `full-exact.json`: RESULT PASS (22 starts, the ending),
+and its per-frame counters equal the in-process 1.10's in all 126,002
+frames. Headless, the new build against headless 1.10, per frame: update
+counter, stage, area and master flags equal in all 126,002 frames in
+ORIGINAL, NES-A and NES-B; in GB DMG, APOCALYPSE and SMS equal except the
+counter sample at 97,647 (below). In-process the same.
 
 - ORIGINAL, NES-A, NES-B: update counter, stage, area and master flags
   equal to 1.10's in all 126,002 frames; all 22 stage starts identical
