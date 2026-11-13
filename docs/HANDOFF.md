@@ -92,6 +92,23 @@
   breakpoint). Emulator only; waiting for the owner's hardware test.
   Emulator only; RAM claim audited on the stored runs, boot and Level Select
   only.
+- **Palette timing exact** (1.11-dev, branch `palette-exact` from
+  `longplay`; the owner: "I do not want palette changes impacting
+  speedrunners"): the vblank interrupt calls the palette upload in RAM
+  (`RENT`, `$3740`; `$FD13 jsr $3740`), the native upload byte for byte in
+  ORIGINAL/NES-A/NES-B and a gated copy in the mapped modes, so the vblank
+  palette path costs 1.10's clocks in every mode (palette timing 2: +228
+  clocks every vblank, which lost the act 3 story scene's frame at 51,761).
+  Every vblank of the whole recorded playthrough equals 1.10's in ORIGINAL
+  and NES (126,002); the mapped modes differ only at cinema entries and
+  area-change fallbacks. All six modes: 4-1 at 53,287 again, counters equal
+  to 1.10, lost updates 654 before 5-4 (= 1.10). The adjusted recording
+  `research/longplay/full-exact.json` (one idle frame less before 4-1)
+  replays to the ending in all six modes. Build `a0019797...2621` in
+  `/workspace/roms/` as `... (apocalypse, reset 2, palette timing 3).pce`
+  with both patches. Emulator only
+  ([record](validation/palette-exact.md)); waiting for review and the
+  owner's hardware test.
 - **Palette modes** (1.11-dev, branch `gb-palette`): `$2100` bits 3-4 (bits
   3-5 since the SMS palette, below),
   00 Original (default), 01 NES (reserved, shown as Original), 10 GB DMG
