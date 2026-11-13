@@ -1,6 +1,6 @@
 {
  "stage": "6-3",
- "notes": "The Level Select comparison run (research/comparison-runs/6-3.json) is the guide: its path, recorded on the original through Level Select (research/longplay/fast/runpath.py, research/longplay/paths/6-3.json), gives beam waypoints (standing/walking/clinging points about every 40 frames), one leg per area, long areas in chunks of about 500 path frames. Area 0: the beam reached the left face of the door column x 676-719 and stalled; holding up climbs it (pipe climb, state 4) into area 1: fixed segment (the beam's route + 64 frames of up). Area 2: climb the block x 1040-1056 (two wall hops) onto its top (y 67), then jump to the post x 965-991 (top 68) (hand point).",
+ "notes": "The Level Select comparison run (research/comparison-runs/6-3.json) is the guide: its path, recorded on the original through Level Select (research/longplay/fast/runpath.py, research/longplay/paths/6-3.json), gives beam waypoints (standing/walking/clinging points about every 40 frames), one leg per area, long areas in chunks of about 500 path frames. Area 0: the beam reached the left face of the door column x 676-719 and stalled; holding up climbs it (pipe climb, state 4) into area 1: fixed segment (the beam's route + 64 frames of up). Area 2: climb the block x 1040-1056 (two wall hops) onto its top (y 67), then jump to the post x 965-991 (top 68) (hand point). The post x 965-991 (top y 68) holds an enemy; Ryu gets onto it the way the Level Select bot did, by a hit in the air: from the block's left face one wall hop, wait 54 frames, jump left (I+left 2 frames, then left). Grid-found fixed segment a2-post (health -2). The beam stalled clinging to the right face of the column x 388-427; a grid found the drop to the floor (I+right 3 frames, then nothing): fixed leg a2-2-3-fix (rescue.py). Area 2 exit: onto the block x 164-187 (top y 100, from its left face) and jump up-left into the door x 100-143 (y < 28) (hand points; the bot's back-and-forth at the post skipped).",
  "legs": [
   {
    "name": "a0-0-0",
@@ -140,22 +140,65 @@
    }
   },
   {
-   "name": "a2-2-2",
+   "name": "a2-post",
+   "segments": [
+    [
+     12,
+     [
+      "right"
+     ]
+    ],
+    [
+     4,
+     [
+      "I"
+     ]
+    ],
+    [
+     8,
+     [
+      "right"
+     ]
+    ],
+    [
+     2,
+     [
+      "I",
+      "left"
+     ]
+    ],
+    [
+     10,
+     [
+      "right"
+     ]
+    ],
+    [
+     54,
+     []
+    ],
+    [
+     2,
+     [
+      "I",
+      "left"
+     ]
+    ],
+    [
+     33,
+     [
+      "left"
+     ]
+    ]
+   ]
+  },
+  {
+   "name": "a2-2-2b",
    "beam": {
     "follow": {
      "path": "research/longplay/paths/6-3.json",
-     "from_frame": 2536,
-     "to_frame": 2936,
-     "add_points": [
-      [
-       2650,
-       1046,
-       67,
-       12,
-       3,
-       1
-      ]
-     ]
+     "from_frame": 2705,
+     "to_frame": 2936
     },
     "goal": {
      "near": [
@@ -172,11 +215,266 @@
    }
   },
   {
-   "name": "a2-2-3",
+   "name": "a2-2-3-fix",
+   "segments": [
+    [
+     44,
+     [
+      "left"
+     ]
+    ],
+    [
+     4,
+     [
+      "II",
+      "right"
+     ]
+    ],
+    [
+     12,
+     []
+    ],
+    [
+     4,
+     [
+      "left"
+     ]
+    ],
+    [
+     4,
+     [
+      "II",
+      "right"
+     ]
+    ],
+    [
+     12,
+     []
+    ],
+    [
+     20,
+     [
+      "left"
+     ]
+    ],
+    [
+     4,
+     [
+      "I",
+      "left"
+     ]
+    ],
+    [
+     4,
+     [
+      "II",
+      "left"
+     ]
+    ],
+    [
+     4,
+     [
+      "right"
+     ]
+    ],
+    [
+     4,
+     [
+      "I",
+      "left"
+     ]
+    ],
+    [
+     8,
+     [
+      "left"
+     ]
+    ],
+    [
+     4,
+     [
+      "II",
+      "left"
+     ]
+    ],
+    [
+     8,
+     [
+      "left"
+     ]
+    ],
+    [
+     3,
+     [
+      "I",
+      "right"
+     ]
+    ],
+    [
+     12,
+     [
+      "left"
+     ]
+    ],
+    [
+     2,
+     [
+      "I",
+      "right"
+     ]
+    ],
+    [
+     10,
+     [
+      "left"
+     ]
+    ],
+    [
+     4,
+     [
+      "I",
+      "right"
+     ]
+    ],
+    [
+     4,
+     [
+      "right"
+     ]
+    ],
+    [
+     4,
+     [
+      "I",
+      "right"
+     ]
+    ],
+    [
+     8,
+     [
+      "right"
+     ]
+    ],
+    [
+     4,
+     [
+      "I",
+      "right"
+     ]
+    ],
+    [
+     4,
+     [
+      "I",
+      "left"
+     ]
+    ],
+    [
+     4,
+     []
+    ],
+    [
+     8,
+     [
+      "left"
+     ]
+    ],
+    [
+     4,
+     [
+      "II",
+      "left"
+     ]
+    ],
+    [
+     36,
+     [
+      "left"
+     ]
+    ],
+    [
+     4,
+     [
+      "II",
+      "right"
+     ]
+    ],
+    [
+     12,
+     []
+    ],
+    [
+     24,
+     [
+      "left"
+     ]
+    ],
+    [
+     4,
+     []
+    ],
+    [
+     4,
+     [
+      "II",
+      "right"
+     ]
+    ],
+    [
+     4,
+     [
+      "I",
+      "left"
+     ]
+    ],
+    [
+     4,
+     [
+      "left"
+     ]
+    ],
+    [
+     3,
+     [
+      "I",
+      "right"
+     ]
+    ],
+    [
+     12,
+     [
+      "left"
+     ]
+    ],
+    [
+     4,
+     []
+    ],
+    [
+     12,
+     [
+      "left"
+     ]
+    ],
+    [
+     3,
+     [
+      "I",
+      "right"
+     ]
+    ],
+    [
+     41,
+     []
+    ]
+   ]
+  },
+  {
+   "name": "a2-2-3-b",
    "beam": {
     "follow": {
      "path": "research/longplay/paths/6-3.json",
-     "from_frame": 2936,
+     "from_frame": 3241,
      "to_frame": 3464
     },
     "goal": {
@@ -199,12 +497,42 @@
     "follow": {
      "path": "research/longplay/paths/6-3.json",
      "from_frame": 3464,
-     "to_frame": 4192
+     "to_frame": 4192,
+     "skip_frames": [
+      [
+       3464,
+       4111
+      ]
+     ],
+     "add_points": [
+      [
+       3500,
+       156,
+       120,
+       6,
+       20
+      ],
+      [
+       4112,
+       172,
+       100,
+       14,
+       3,
+       1
+      ],
+      [
+       4170,
+       126,
+       20,
+       12,
+       12
+      ]
+     ]
     },
     "goal": {
      "area": 3
     },
-    "width": 60,
+    "width": 120,
     "max_frames": 2187,
     "seconds": 2187
    }
