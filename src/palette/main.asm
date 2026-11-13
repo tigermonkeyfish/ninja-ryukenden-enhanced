@@ -237,6 +237,8 @@ palette_vblank:
  lda LIVE
  bne vblank_fallback
 vblank_plain:
+ lda PALETTE_STATE
+ bmi plain_requeue
  ; The reset leaves RENT as a jmp here (palette_boot; LIVE is 0 then): the
  ; first unlocked vblank writes it, once (FASTOK 0 again), then uploads.
  lda RENT
@@ -244,8 +246,6 @@ vblank_plain:
  bne plain_written
  jsr rent_install
 plain_written:
- lda PALETTE_STATE
- bmi plain_requeue
  jmp NATIVE_UPLOAD
 plain_requeue:
  ; The VCE holds mapped colours (the mode just changed to Original or NES,
@@ -844,6 +844,25 @@ upload_return:
 vblank_sms_near:
  jmp vblank_sms
 
+ ; rent_ms (with rent_mn in the timing section below; here for room: the
+ ; bank $3B copy is never run).
+rent_ms:
+ lda #$ce                   ; dec abs
+ sta RENT+RENT_GATE
+ lda #LOW(SHADOW)
+ sta RENT+RENT_SRC_LO
+ lda #HIGH(SHADOW)
+ sta RENT+RENT_SRC_HI
+ lda #LOW(BORDER_MAP)
+ sta RENT+RENT_BORDER_LO
+ lda #HIGH(BORDER_MAP)
+ sta RENT+RENT_BORDER_LO+1
+ lda #LOW(BORDER_MAP+1)
+ sta RENT+RENT_BORDER_HI
+ lda #HIGH(BORDER_MAP+1)
+ sta RENT+RENT_BORDER_HI+1
+ rts
+
 palette_code_end:
  .if (palette_code_end > $5400)
  .fail
@@ -1241,22 +1260,6 @@ rent_mn:
  lda #$4e                   ; lsr abs
  sta RENT+RENT_GATE
  rts
-rent_ms:
- lda #$ce                   ; dec abs
- sta RENT+RENT_GATE
- lda #LOW(SHADOW)
- sta RENT+RENT_SRC_LO
- lda #HIGH(SHADOW)
- sta RENT+RENT_SRC_HI
- lda #LOW(BORDER_MAP)
- sta RENT+RENT_BORDER_LO
- lda #HIGH(BORDER_MAP)
- sta RENT+RENT_BORDER_LO+1
- lda #LOW(BORDER_MAP+1)
- sta RENT+RENT_BORDER_HI
- lda #HIGH(BORDER_MAP+1)
- sta RENT+RENT_BORDER_HI+1
- rts
 
  ; M as it stands in RENT in MS form (assembled here, run at RENT: only
  ; relative branches and fixed addresses). Cycles against the native
@@ -1409,7 +1412,16 @@ worker:
  beq worker_gameplay
  stz LIVE                   ; cinema, title, ending: the native upload
  lda PALETTE_STATE
- bmi worker_cinema_done     ; VCE mapped: the dispatcher re-queues first
+ bpl worker_cinema_original
+ ; The VCE holds mapped colours (the cinema just began): all 512 colours
+ ; again, to be uploaded unmapped (what the dispatcher's cinema_requeue
+ ; does in the vblank, here in the idle time, so the cinema's vblanks all
+ ; go through RENT's MN form at the native cost).
+ jsr QUEUE_ALL
+ lda PALETTE_STATE
+ and #$ff - MAPPED_STATE
+ sta PALETTE_STATE
+worker_cinema_original:
  lda RENT+RENT_GATE
  cmp #$4e
  beq worker_cinema_done     ; MN already
@@ -1419,13 +1431,13 @@ worker_cinema_done:
  plx
  rts
 worker_gameplay:
+ lda #$10                   ; LIVE first: from now on the dispatcher maps
+ sta LIVE
  lda RENT+RENT_GATE
  cmp #$ce
  beq worker_ms              ; MS already
  jsr rent_ms
 worker_ms:
- lda #$10
- sta LIVE
  lda PALETTE_LOCK
  beq worker_unlocked
  jmp worker_exit            ; locked: no upload at this vblank anyway
