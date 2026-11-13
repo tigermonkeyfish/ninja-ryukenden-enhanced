@@ -242,6 +242,15 @@ recording the same way in 5-4 (Ryu dies, the 5-3 reload at 84,153 is a load
 at the original's 15 vblanks; picture below). pt3 and 1.10 follow
 `full-exact.json` instead (their 5-4 frame later).
 
+Headless confirmation (`scripts/longplay_six.py run`, one emulator at a
+time, the `longplay_check.py` criteria): this build in ORIGINAL and the
+unmodified ROM (`--mode unmodified --shortcut`, language byte 1) on
+`full-load.json`: **RESULT PASS** for both (22 of 22 stage starts at the
+frames above and the ending at frame 126,001, master 1, scene 14). Their
+per-frame update counter, master flags, stage and area arrays are identical
+to each other in all 126,001 frames, and to the in-process ORIGINAL run.
+The other five modes were run in-process only.
+
 Before this change the unmodified ROM could not follow any one recording
 past 5-4 with the patched build: the 2-2 frame was absorbed by 2-3, the 5-4
 frame was not.
@@ -316,7 +325,8 @@ equal in ORIGINAL and NES, one sample in the mapped modes).
   the emulator (it is the game's own level-0/level-1 table, not a timing
   effect); that the death and Level Select loads not replayed here behave
   as the ones that were (same `$8244` path and `$82D0`).
-- Not run: real hardware; deaths other than the one 5-4 death reload;
+- Not run: headless playthroughs of NES-A, NES-B, SMS, GB DMG and
+  APOCALYPSE (in-process only); real hardware; deaths other than the one 5-4 death reload;
   Continue / Game Over; Japanese and Chinese over the playthrough; the
   `check_menu.py` runs/sweep parts and `--preview`; `check_bram.py`
   matrix/cut/timing/lock.
