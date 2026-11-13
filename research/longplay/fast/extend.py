@@ -40,6 +40,12 @@ def goal_fn(g, i0, boss_seen):
             return True
         if 'area' in g and i['area'] == g['area'] and i['stage'] == i0['stage']:
             return True
+        if 'near' in g:
+            x, y, r, ry = g['near']
+            yy = i['y'] - 256 if i['y'] >= 224 else i['y']
+            if abs(i['x'] - x) <= r and abs(yy - y) <= ry and i['area'] == g.get('in_area', i['area']) \
+                    and i['state'] in (0, 1, 5):
+                return True
         if g.get('boss_dead') and (boss_seen[0] or seen) and i['boss'] == 0:
             return True
         if 'x>=' in g or 'x<=' in g:
@@ -75,7 +81,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('plan', type=Path)
     ap.add_argument('--dry', action='store_true', help='solve legs, do not write full.json')
-    ap.add_argument('--workers', type=int, default=4)
+    ap.add_argument('--workers', type=int, default=7)
     ap.add_argument('--save-end', type=Path, help='save the state after the last leg here (diagnostics)')
     a = ap.parse_args()
     plan = json.loads(a.plan.read_text())
@@ -122,8 +128,8 @@ def main():
                             continue
                         if any(q[0] < fr <= q[0] + 8 or q[0] == fr for q in path if q[1] != area and q[0] < fr and fr - q[0] <= 8):
                             continue          # stale coordinates right after an area change
-                        if mo and mo[0] in (3, 9) and fl.get('skip_air', True):
-                            continue          # mid-jump positions make poor waypoints
+                        if mo and mo[0] in (3, 6, 8, 9) and fl.get('skip_air', True):
+                            continue          # air, slash and hurt positions make poor waypoints
                         if last is None or fr - last[0] >= fl.get('every', 40) or area != last[1]:
                             pts.append([x, y, fl.get('r', 16), area, fl.get('ry', 24)])
                             last = (fr, area)

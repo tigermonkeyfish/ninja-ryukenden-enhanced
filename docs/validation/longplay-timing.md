@@ -195,3 +195,22 @@ Emulator evidence only.
 - Wall climbs need dense waypoints (every 12 frames, air points kept, r 12):
   2-2's area 2 climb up the right-hand door wall (x 1982, y 102 -> 18) is its
   own leg ("a2-climb", 296 frames).
+
+### Beam lessons (2-3, 3-1)
+
+- Motion state `$2EAA`: 0 stand, 1 walk, 2 crouch, 3 air, 5 clinging, 6 slash
+  (ground or air), 8 crouch slash, 9 hurt (knock-back). Airborne = 3, 9, or 6
+  with vertical speed `$2EA7` non-zero.
+- A jump over a pit was lost because falling nodes (closer to the next
+  waypoint) crowded the beam until they died. Now an airborne node keeps its
+  takeoff score (health/boss terms still count) and a third of the beam is
+  kept for grounded nodes. 3-1's gap at x 976-1040 needs a running start
+  (standing jump 0.5 px/frame, running 1.5 px/frame).
+- Path waypoints use standing/walking/clinging points only: the Level Select
+  bot's slash and jump points include detours to fight enemies.
+- Bosses: 2-3's boss health is `$1035` again (16 at frame 79 of the stage);
+  the beam needs a pull toward the boss (its x at `$2F1C`, first enemy slot),
+  otherwise ties keep Ryu standing; 708 frames, Ryu 14 -> 9 health. The idle
+  after it (boss death + act 2 cinema) is 10,535 frames.
+- `plan_from_path.py` cuts long areas into ~500-frame chunks ending on a
+  grounded path point (goal `near`), so a solved chunk is cached.
