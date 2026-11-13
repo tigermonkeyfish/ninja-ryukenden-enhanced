@@ -71,17 +71,19 @@ into the records before a merge; nothing has to be fixed before the test.
   | 5-3 area 6 | 80,890 | 0 | **3,079** | **1,950** | **3,183** |
 
   (47,104 pixels lie below the HUD.) The same at respawns into those areas
-  (timer deaths in 5-3 areas 0-2, 4 and 6 in APOCALYPSE: 17,149-19,025;
-  area 4 in SMS and GB DMG: 17,474 / 16,864). The four stage loads are
+  (timer deaths, APOCALYPSE: 5-3 areas 0, 1, 2 and 4 17,149-19,025, area 6
+  3,367; SMS and GB DMG, area 4: 17,474 / 16,864). The four stage loads are
   complete in every mode (the fade's steps change the picture on the
   original's frames and on no other frame).
 - Not a regression: palette timing 3 gives the same numbers frame for frame
   (APOCALYPSE and SMS re-run here: all six 5-3 values and 2-2 area 2 equal).
   Game timing is not involved (the counters are equal).
 - The update that carries the Enhanced draw leaves 95,000-139,000 clocks
-  before the vblank in 5-3 (2-2: 41,000-53,000; 5-2: 111,000-120,000); the
-  worker needs more than that for 512 colours in APOCALYPSE, and more than
-  about 103,000 in SMS and GB DMG (inferred from which areas fail).
+  before the vblank in 5-3 (2-2: 41,000-53,000; 5-2: 111,000-120,000). The
+  worker needs more than 139,000 for 512 colours in APOCALYPSE and between
+  103,000 and 112,000 in SMS and GB DMG (inferred from which 5-3 areas
+  fail). Where the partial upload happens to cover every palette on screen
+  (2-2, 5-2) nothing shows.
 - Other stages' area changes were not checked by picture in the mapped
   modes (no windows captured there).
 - Options (owner's decision; nothing here was built): record it as a known
@@ -104,7 +106,7 @@ into the records before a merge; nothing has to be fixed before the test.
 - Effect measured: none on any frame count (every update of those stages
   keeps the unmodified ROM's vblank count in all six modes; the tightest
   gameplay update there, 6-4 C at 112,475, keeps 5,919 clocks against the
-  unmodified ROM's 7,635; palette timing 3 had 18 more).
+  unmodified ROM's 7,635; palette timing 3 had 18 more, inferred).
 - One gate shows it: `check_menu.py --only runs --parallax-off` fails one
   of its 140 openings on this ROM and none on palette timing 3 (4-1, stored
   frame 1,664, `$2258` = `$FF`): after the menu is cancelled one music
@@ -143,8 +145,9 @@ into the records before a merge; nothing has to be fixed before the test.
 ### F4 (record corrections, verified)
 
 - load-exact's fixed-bank bytes are **six, `$FF67-$FF6C`** (`cmp #$fc`,
-  `bcc`, `bcc`), not the four `$FF67-$FF6A` of its record and of
-  ARCHITECTURE's wording; `draw_done`'s `rts` is at `$FF6C`. `$FE00-$FFF5`
+  `bcc`, `bcc`), not the four `$FF67-$FF6A` its record names twice
+  (`$FF42-$FF6A` should read `$FF42-$FF6C`); `draw_done`'s `rts` is at
+  `$FF6C`. `$FE00-$FFF5`
   is `$FF` in the original, the range is inside dispatch's `$FF2C-$FF6F`,
   the guard is `init_hook_end > $ff70`; three bytes are left.
 - The author's edge case (an area change with `$224A` = 0 and a cached
@@ -231,7 +234,15 @@ No, in every path found (verified where marked).
   reset are the script's end and END on the Game Over screen. A console
   reset meets the RAM clear (`tii` over `$2000-$3FFF` at `$E025`), which
   zeroes `$2257/$2258/$2E63` (read, not run).
-- The fallbacks (a marker left with `$2E63` = 0): TO BE FILLED (poke probe).
+- The fallbacks (verified by writing the bytes during gameplay in 2-2, 5-2,
+  5-3 and 5-4, 40 frames each against the same state left alone): `$FD` or
+  `$FC` left pending with `$2E63` = 0 is drawn at once in that update; the
+  picture, VRAM and the update counter are those of the untouched run in
+  every frame. `$FF` with `$2257` = `$FF` becomes `$FD` and is drawn one
+  update later; `$FF` alone and `$FE` draw at once. Those three re-anchor
+  the backdrop at the camera (as any `$FF` did before), which moves 2-2's
+  picture when the camera is away from the area's entry; no update is lost
+  and nothing hangs. None of them is reached in play.
 - `$2258` / `$2257` collisions: the native code touches them only in
   `$80C2` / `$80D4` (MPR5 and MPR6 saved and restored inside one `$8097` or
   `$80AB` call; byte search of the original for absolute operands). The
@@ -308,7 +319,7 @@ No, in every path found (verified where marked).
   queue 1-2, lock 1, `$2104` `$C0`, MS, `LIVE` 0; at 65,926 lock 0, `$40`,
   MN; from 65,927 the VCE is the RAM palette. Over each of the 11 scenes the
   number of frames with entries not yet uploaded equals ORIGINAL's in SMS
-  and APOCALYPSE; GB DMG has 13-24 more at each scene's start (black as
+  and APOCALYPSE; GB DMG has 13-22 more at each scene's start (black as
   `$040` until the scene's first upload).
 - Forced vblanks: TO BE FILLED.
 - Reset in a scene: the RAM clear. The menu cannot open in a scene.
@@ -353,28 +364,125 @@ No, in every path found (verified where marked).
 | `check_menu.py --only sweep` (step 1) | 1 of 727 openings FAILED: F3 (the same on palette timing 3) |
 | `check_menu.py --only runs --preview` | pass, 140 menus |
 | `check_menu.py --only runs --parallax-off` | 1 of 140 FAILED: F2 |
-| `check_menu.py --only runs` | TO BE FILLED |
+| `check_menu.py --only runs` | pass, 140 menus |
 | `check_bram.py --only matrix` | PASS, 211 images |
 | `check_bram.py --only cut` | PASS |
 | `check_bram.py --only timing` | PASS |
-| Japanese, `full-load.json` to 84,500 | TO BE FILLED |
-| Chinese | TO BE FILLED |
+| Japanese (saved language 0; the unmodified ROM as it powers on), `full-load.json` to 84,500, ORIGINAL | game fields equal in every frame; every picture of 13,200-13,386 (the 2-2 load, fade and start window), 14,029-14,033 and 14,669-14,673 identical to the unmodified ROM's; the recording leaves the route at 65,933 in both |
+| Chinese (saved language 2; the unmodified ROM with `$3227` = 2 written at 1-1's first update), to 84,500, ORIGINAL | the same result as Japanese, frame for frame |
 | SMOOTH PARALLAX OFF | TO BE FILLED |
 | Deaths, Continue, Level Select | question 1 |
 | cinema-lock forced vblanks | TO BE FILLED |
 
 ### 8. Hardware assumptions and residual risks
 
-TO BE FILLED
+What these three changes take from the emulator (all inferred for the
+console; none was measured on hardware):
+
+- **The entry's black frames.** The two load pieces write tiles and the
+  tile map while the picture is displayed, in frames where every colour is
+  the same. That the colours are equal is the game's own fade (level 0),
+  not a timing effect. In the mapped modes it also needs the worker to
+  convert 512 colours in the first entry update's idle time (231,000 clocks
+  there against a need of 103,000-139,000 or more, question F1); the
+  emulator shows single-colour frames from the update before the first
+  piece in every mode, also after a Level Select from a lit screen. VRAM
+  writes during the picture are what the gameplay renderers do every
+  frame; a late playfield split in those frames is invisible.
+- **Vblank counts.** The changed loads end 188,000-242,000 clocks (52-67
+  percent of a frame) before their last vblank and the pieces leave at
+  least 126,000: the console would have to be a third of a frame slower
+  than the emulator to change a count there. The places where "no added
+  frame" rests on the emulator's cycle accuracy are older and elsewhere
+  (measured here, ORIGINAL, clocks left before the vblank, build /
+  unmodified): native updates the hooks make 360-1,116 clocks tighter:
+  2-2 area 1's event update 7,635 / 8,085, 4-2's load 8,529 / 9,519, 4-1's
+  load 9,369 / 10,485, 6-3 area 1 15,705 / 15,825, 5-3 area 5 17,835 /
+  18,195; gameplay updates the Enhanced renderers fill: 3-2 at 32,770
+  (7,515 / 59,385) and 32,903 (12,495 / 73,929), 2-2 at 13,929 (12,495 /
+  231,885), 13,942 (13,749 / 60,519) and 13,936 (15,945 / 62,595), 5-2 at
+  75,689 (19,809 / 93,537); and 2-2's two area-change draws (47,000 and
+  53,000 / 327,000). A console 2-4 percent of a frame slower than the
+  emulator in one of those updates would add a frame there. F2's 18 clocks
+  per update belong to this list.
+- **VCE writes in the picture** (F5): mapped modes, 2-2's area changes.
+- **Sprites, SATB transfer:** not touched by these changes.
+- **Turbo EverDrive Pro:** the saved settings are unchanged (matrix, cut
+  and timing gates pass). A save state made on an older build must not be
+  loaded (previous review F4: the vblank routine lives in RAM).
+- **What a screen cannot show:** one frame more or less. The frame counts
+  need a 60 fps capture of the console against the original HuCard on the
+  same console.
 
 ## Hardware checklist for the owner
 
-TO BE FILLED
+Correct = what the emulator shows; anything else is worth a note with the
+stage, area, palette mode and what was pressed.
+
+1. **2-2's start** (finish 2-1; ORIGINAL, then APOCALYPSE): black, then
+   the fade-in with the mountains, clouds and lower rows there from its
+   first dim frame. No coloured band on the black screen before the fade
+   (earlier builds showed one for three frames). Nothing appears late.
+2. **5-2, 5-3 and 5-4 starts** (5-4 follows the story scene): black, then
+   the complete fade-in (5-3 / 5-4: sky, moon and stars from the first dim
+   frame).
+3. **Level Select** into 2-2, 5-2, 5-3 and 5-4 (Select, STAGE, Run): about a
+   quarter of a second of the new stage in the old colours while it loads
+   (known, as before), then black, then the complete fade-in.
+4. **2-2's two area changes** (and back): the screen is black between the
+   areas and the new area is complete on its first frame. ORIGINAL and NES:
+   nothing at all in the black (earlier builds showed two lit lines). APOCALYPSE, SMS,
+   GB DMG: a short dash at mid-height for one frame at the second change is
+   known (F5); note anything more (dots, a line across the screen).
+5. **5-3's area changes:** ORIGINAL and NES: complete on the first frame.
+   APOCALYPSE (and SMS / GB DMG at two of them): the platforms are black for
+   one frame (F1, known, as in the previous build).
+6. **Deaths:** let the timer run out in each area of 2-2, in 5-2 and in 5-3,
+   and lose to 5-4's boss (the game goes back to 5-3). After the black the
+   backdrop is complete at once, in the right place, no stray tiles.
+7. **Game Over -> Continue** in 2-2 and in 5-3: as a stage start.
+8. **GB DMG, 4-4's boss beaten -> the story scene:** its colours are the
+   original's from the first picture (cinema-lock).
+9. **SMOOTH PARALLAX OFF**, 2-2 and 5-3: the original's picture.
+10. **If a capture is possible:** frames from the last lit frame before 2-2
+    and before 5-4 to their first lit frame, against the original HuCard:
+    the same count (1.10: one more).
+11. Power off or reset during a stage load, then boot: normal. Do not load
+    EverDrive save states made with an older build.
 
 ## Not checked
 
-TO BE FILLED
+- Real hardware; a real-time core; sound beyond the PSG registers the menu
+  gates compare.
+- Deaths, Continue and Level Select in NES-A and NES-B (ORIGINAL, SMS, GB
+  DMG and APOCALYPSE were run); a respawn in 5-3 area 5; deaths with the
+  camera moving; a death during a transition.
+- Area changes of the other stages in the mapped modes by picture (F1 may
+  apply to them; only the four changed stages have picture windows here).
+- Japanese and Chinese past the act 5 scene on the recorded route (its text
+  runs to another length, so the recording leaves the route at 65,933 in
+  both ROMs alike); 5-2, 5-3 and 5-4 were reached with the language byte set
+  in a saved state instead.
+- `check_bram.py --only lock` and the `--bram-model` variants (they need the
+  test-only emulator); `palette_lag.py` pairs / loadtime / e2e / fastok,
+  `check_boot.py`, `check_menu.py` select / options / reset (the combined
+  record's results taken as read).
+- The scratch variant of F5's idea is an experiment, not a proposal that
+  was gated.
 
 ## Probes
 
 Scratch, not committed: `/workspace/build/align-combined-review/`.
+`lib/libgxar.so`: load-exact's `shim_load.cpp` with a render flag for the
+hit-recording run loop, linked against the same core objects (the other
+branches' libraries were not rebuilt). `ar_run.py` (whole recording: fields,
+`RENT` hash, hits, VCE against the mode's table, pictures in the changed
+stages' windows, saved states), `ar_an.py` / `ar_marg.py` (updates, vblank
+counts, margins, markers), `ar_fv.py` / `ar_fv2.py` / `ar_loads.py`
+(first visible frames by picture), `ar_branch.py` / `ar_bran.py` /
+`ar_bran2.py` (deaths, Continue, Level Select, language branches),
+`ar_poke.py` (fallback paths), `sweep_one.py` (one menu opening of
+`check_menu.py` with the differing video and PSG state printed), the
+cinema-lock author's `cl_fuzz_worker.py` on a copy of the previous review's
+core. The source at the branch tip rebuilds to the reviewed ROM
+(`project.py build`, same SHA-256).
