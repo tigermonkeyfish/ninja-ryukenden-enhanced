@@ -1,0 +1,146 @@
+{
+ "stage": "6-2",
+ "notes": "No Level Select run. Map + poke exit scans; beam legs to standing spots read off the ROM map. Area 0 (6 pages) is played leftward from x 1504: floors, the platforms x 624-656 and 528-560 (y 70), the block x 400-496 (top y 38), and the exit up the left face of the hanging block x 100-143 (poke: x 104, y < 24 -> area 1).",
+ "legs": [
+  {
+   "name": "a0-1",
+   "beam": {
+    "waypoints": [
+     [
+      1150,
+      153,
+      30,
+      0,
+      4,
+      1
+     ]
+    ],
+    "goal": {
+     "near": [
+      900,
+      153,
+      30,
+      4
+     ],
+     "in_area": 0
+    },
+    "width": 100,
+    "max_frames": 1500,
+    "seconds": 1500,
+    "ywt": 1.0
+   }
+  },
+  {
+   "name": "a0-2",
+   "beam": {
+    "waypoints": [
+     [
+      700,
+      153,
+      30,
+      0,
+      4,
+      1
+     ]
+    ],
+    "goal": {
+     "near": [
+      640,
+      70,
+      16,
+      3
+     ],
+     "in_area": 0
+    },
+    "width": 100,
+    "max_frames": 1500,
+    "seconds": 1500,
+    "ywt": 1.0
+   }
+  },
+  {
+   "name": "a0-3",
+   "beam": {
+    "waypoints": [
+     [
+      544,
+      70,
+      16,
+      0,
+      4,
+      1
+     ]
+    ],
+    "goal": {
+     "near": [
+      450,
+      38,
+      40,
+      3
+     ],
+     "in_area": 0
+    },
+    "width": 100,
+    "max_frames": 1500,
+    "seconds": 1500,
+    "ywt": 1.0
+   }
+  },
+  {
+   "name": "a0-4",
+   "beam": {
+    "waypoints": [
+     [
+      352,
+      102,
+      16,
+      0,
+      4,
+      1
+     ]
+    ],
+    "goal": {
+     "near": [
+      150,
+      102,
+      30,
+      3
+     ],
+     "in_area": 0
+    },
+    "width": 100,
+    "max_frames": 1500,
+    "seconds": 1500,
+    "ywt": 1.0
+   }
+  },
+  {
+   "name": "a0-exit",
+   "beam": {
+    "waypoints": [
+     [
+      92,
+      70,
+      8,
+      0,
+      20
+     ],
+     [
+      92,
+      20,
+      8,
+      0,
+      14
+     ]
+    ],
+    "goal": {
+     "area": 1
+    },
+    "width": 100,
+    "max_frames": 1500,
+    "seconds": 1500,
+    "ywt": 1.0
+   }
+  }
+ ]
+}
