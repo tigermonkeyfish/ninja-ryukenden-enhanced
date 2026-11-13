@@ -16,7 +16,7 @@ from fastemu import Fast, BITS
 
 NAMES = {v: k for k, v in BITS.items()}
 R, L, I, II, U, D = BITS['right'], BITS['left'], BITS['I'], BITS['II'], BITS['up'], BITS['down']
-ACTIONS = [0, R, L, R | I, L | I, I, R | II, L | II, II]
+ACTIONS = [0, R, L, R | I, L | I, I, R | II, L | II, II, R | I | II, L | I | II]
 
 
 def buttons(m):
@@ -121,7 +121,7 @@ def near(info, wp):
 
 
 def search(pool, state, waypoints, goal, width=60, chunk=4, max_frames=3000, actions=ACTIONS,
-           lost=None, hp_weight=40, log=print, seconds=600, ywt=0.3, levels=3, prefer=None):
+           lost=None, hp_weight=40, log=print, seconds=600, ywt=0.3, levels=3, prefer=None, stall_frames=600):
     """Return (node, reason). goal(info) -> True ends the leg. `prefer(info)` adds to the score."""
     W = len(pool.conns)
     pool.conns[0].send(('put', state))
@@ -148,6 +148,7 @@ def search(pool, state, waypoints, goal, width=60, chunk=4, max_frames=3000, act
     t0 = time.time()
     best = root
     frames = 0
+    best_frames = 0
     depth = 0
     while frames < max_frames:
         depth += 1
@@ -215,6 +216,9 @@ def search(pool, state, waypoints, goal, width=60, chunk=4, max_frames=3000, act
             pool.conns[w].recv()
         if beam[0].score > best.score:
             best = beam[0]
+            best_frames = frames
+        elif frames - best_frames > stall_frames:
+            return best, 'stall'
         if depth % 25 == 0:
             b = beam[0]
             log(f'depth {depth} wp {b.wp} area {b.info["area"]} x {b.info["x"]} y {b.info["y"]} hp {b.info["health"]} '

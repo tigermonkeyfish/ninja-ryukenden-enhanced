@@ -159,3 +159,22 @@ Emulator evidence only.
 - **Cold-start check:** `scripts/longplay_check.py --mode MODE` (headless, one
   fresh session from power-on, whole file, PASS/FAIL per stage start and at the
   end record).
+
+### 2-1 with the map (in progress)
+
+- Area 1 (5 pages): the exit is at the **top right** (door x 1218-1248,
+  y 0-64; poke scan: x 1224, y 8-24 -> area 2), not up the left wall where the
+  bot was trapped (that wall x 0-20 is the area's left edge). Route: the pit
+  hop at x 516 (old bot), girder x 562-640 y 69, block x 657-800 y 104, drop to
+  the floor x 872-1023 y 152, girders up (y 133, 101, 69), along y 69 to
+  x 1152, jump into the door. Beam leg a1: 544 frames, no hits.
+- Area 2 (one-page shaft): entered at the bottom (x 156, y 190); exit door at
+  the top x 164-208 y 0-32 (poke: x 168, y 8-24 -> area 3), reached by
+  standing on the lower pillar (top y 106) and jumping beside the upper pillar.
+  Leg a2: 124 frames.
+- Area 3 (4 pages, played leftward from x 924): exit at the left end (poke:
+  x 8, y 136-152 -> area 4). The floor has a gap x 100-328; the girder
+  x 128-257 (top y 101) cannot be reached from the floor (y 152); the way is
+  the small platform x 320-368 (top y 85) first. Leg a3 under search.
+- Beam waypoints are [x, y, r(, area, ry)]; a floor gate needs a loose ry
+  (girders above a floor change y by 19 px).

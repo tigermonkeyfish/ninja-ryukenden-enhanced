@@ -92,7 +92,7 @@ def main():
     boss_seen = [False]
     for leg in plan['legs']:
         st = f.save()
-        h = hashlib.sha1(st).hexdigest()[:16]
+        h = hashlib.sha1(st[:-188]).hexdigest()[:16]   # the state header (time stamp) excluded
         cfile = LEGS / f'{stage}.{leg["name"]}.json'
         legsegs = None
         if 'segments' in leg:
@@ -114,6 +114,9 @@ def main():
                 b = dict(leg['beam'])
                 wps = [tuple(w) for w in b.pop('waypoints')]
                 g = goal_fn(b.pop('goal'), f.info(), boss_seen)
+                bw = b.pop('boss_weight', 0)
+                if bw:
+                    b['prefer'] = lambda i, bw=bw: -bw * i['boss'] if i['boss'] else 0
                 acts = b.pop('actions', None)
                 if acts:
                     b['actions'] = [sum(BITS[k] for k in x) if isinstance(x, list) else x for x in acts]
