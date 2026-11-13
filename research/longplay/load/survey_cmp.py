@@ -15,24 +15,30 @@ import survey                                                          # noqa: E
 
 def main():
     ref = survey.events(sys.argv[1])
-    others = [(a.split('=')[0], {(e['kind'], e['upd_frame']): e for e in survey.events(a.split('=')[1])}) for a in sys.argv[2:]]
+    # events are paired in order (a build one frame behind still has the same events)
+    others = [(a.split('=')[0], survey.events(a.split('=')[1])) for a in sys.argv[2:]]
     hdr = '| Event | Frame | Stage | Original: vblanks / left / window min | ' + ' | '.join(
         f'{t}: vblanks / left / window min / pattern' for t, _ in others) + ' |'
     print(hdr)
     print('|' + ' --- |' * (4 + len(others)))
+    for t, o in others:
+        if len(o) != len(ref):
+            print(f'<!-- {t}: {len(o)} events against {len(ref)} -->')
     bad = 0
-    for e in ref:
+    for i, e in enumerate(ref):
         mn = min(m for m in e['wmargin'] if m >= 0)
         row = [e['kind'], str(e['frame']), f"{e['stage']} a{e['area']}", f"{e['nv']} / {e['margin']:,} / {mn:,}"]
         for t, o in others:
-            x = o.get((e['kind'], e['upd_frame']))
+            x = o[i] if i < len(o) and o[i]['kind'] == e['kind'] and o[i]['stage'] == e['stage'] else None
             if x is None:
                 row.append('missing'); bad += 1; continue
             xm = min(m for m in x['wmargin'] if m >= 0)
             same = x['window'] == e['window']
             bad += not same
             flag = '*' if xm < 20000 else ''
-            row.append(f"{x['nv']} / {x['margin']:,} / {xm:,}{flag} / {'equal' if same else 'DIFFERENT ' + ''.join(map(str, x['window']))}")
+            shift = x['upd_frame'] - e['upd_frame']
+            row.append(f"{x['nv']} / {x['margin']:,} / {xm:,}{flag} / {'equal' if same else 'DIFFERENT ' + ''.join(map(str, x['window']))}"
+                       + (f' ({shift:+d} fr)' if shift else ''))
         print('| ' + ' | '.join(row) + ' |')
     print(f'\nevents {len(ref)}; differing or missing {bad}')
 

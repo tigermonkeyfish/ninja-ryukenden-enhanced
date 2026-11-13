@@ -92,6 +92,23 @@
   breakpoint). Emulator only; waiting for the owner's hardware test.
   Emulator only; RAM claim audited on the stored runs, boot and Level Select
   only.
+- **Load timing exact** (1.11-dev, branch `load-exact` from
+  `palette-exact`; the owner: "stage start should appear like the
+  original ... all stages and all substage/middle phases ... perfectly
+  aligned"): the 2-2, 5-2 and castle (5-3/5-4) stage loads no longer draw
+  the Enhanced backdrop; the renderer draws it in two pieces in the stage
+  entry's short updates while every colour is still black (`$2258` =
+  `$FD`/`$FC`, picked by the native entry countdown `$2E63` = `$38`/`$37`).
+  2-2 and 5-4 load in the original's 16 and 17 vblanks (were 17 and 18,
+  1.10 too), and the 2-2 load's three-frame palette flash is gone. All 47
+  loads and area changes of the playthrough take the original's vblanks in
+  every update, all six modes; the unmodified ROM and this build replay one
+  recording (`full.json` with idle shifts at 53,288 and 82,966) from power-on
+  to the ending on the same frames. First visible frames pixel-identical to
+  palette timing 3. Build `27d1eaa0...dcf0` in `/workspace/roms/` as `...
+  (apocalypse, reset 2, palette timing 3, original load timing).pce` with
+  both patches. Emulator only ([record](validation/load-exact.md)); waiting
+  for review and the owner's hardware test.
 - **Palette timing exact** (1.11-dev, branch `palette-exact` from
   `longplay`; the owner: "I do not want palette changes impacting
   speedrunners"): the vblank interrupt calls the palette upload in RAM
