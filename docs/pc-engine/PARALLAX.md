@@ -11,8 +11,9 @@ each rule are in [LESSONS.md](LESSONS.md).
 
 Find out how the original backdrop moves before designing anything: sample it
 at several camera positions and compare with the native map. Ninja's
-backdrops are screen-locked (no parallax; an 8 px jitter that depends on
-travel history). A screen-locked backdrop has no designed continuation and no
+backdrops are screen-locked (no parallax; an 8 px sawtooth: the backdrop is
+redrawn a tile over when the camera crosses a multiple of 8, and its BAT
+redraw runs a frame ahead of the scroll register). A screen-locked backdrop has no designed continuation and no
 guaranteed art outside its window, so scrolling it means building a
 continuation, and areas entered at different cameras show different parts of
 it.

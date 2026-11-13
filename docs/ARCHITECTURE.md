@@ -28,8 +28,16 @@ Stage 2-2 uses a separately researched 200-pixel mountain repeat; its coarse
 tile selection must use the same absolute coordinate as the fine phase.
 Stage 6-1 has a stationary upper sky and a separate moving lower horizon.
 
-The native backdrops are screen-locked (no parallax), apart from an 8px
-jitter that depends on travel history. Each native profile is a 34-tile-wide
+The native backdrops are screen-locked (no parallax), apart from an 8 px
+sawtooth. Every camera move sets `$224B` (bank 0 `$E341`); the native render
+(`$8097` -> `$80DF`) then puts map column 0 at BAT column
+floor((C - 8) / 8) (0 below camera 8) from the current camera C and redraws
+when that changes, while the playfield's BXR is the render-time camera
+`$2E4B`, which follows C one frame later. Map column 0 is therefore at
+x = 8 floor((C - 8) / 8) - BXR: -8 to -15 px at rest, and on a first step
+left from a multiple of 8 the backdrop jumps a whole tile left for one frame
+before the foreground scrolls (traced at the 2-2 area starts,
+[start-pos](validation/start-pos.md)). Each native profile is a 34-tile-wide
 map; columns 32-33 are filler for the jitter (in the castle they break the
 ground rows' 8-tile period). At a round entered at camera 0 the original shows
 columns 0-31; at a round entered at camera C > 0 (a multiple of 16) it shows
@@ -196,7 +204,16 @@ the uploads made 5-3 area 2 and 2-2 area 0 miss vblank.
   impossible camera high byte); the next main-loop frame (`$83F3`, Select
   hook) turns it into `$FF` and draws 2-2, 5-2 and the castle stages there,
   in a frame the original spends waiting for vblank (`$FD6F`). Other
-  renderers see `$FF` and draw on their first update, as before. The
+  renderers see `$FF` and draw on their first update, as before. That
+  main-loop frame is also the transition's last black one: the native
+  keeps every VCE colour black until it re-queues all 512 colours
+  (`$F394`) in it, so in Original and NES 2-2's merged palettes go into
+  the RAM palette only and reach the VCE with that upload (since start-pos;
+  a VCE write there lit two backdrop lines in the black frame of 2-2 area
+  2). The mapped modes (`$2100` bit 4) still write them at once
+  (`palette_now`): their worker cannot convert all 512 colours before that
+  vblank after the draw, and the rows were black on the first visible frame
+  without it. The
   renderers initialize only on `$FF`, so `$FE` must never reach them; the
   main-loop hook always runs before the first update. Measured with delay-loop ROMs, a 6-1 load-time draw of up to 71,749
   cycles kept the original's load length and 72,053 added a frame; the

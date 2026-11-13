@@ -2,10 +2,12 @@
 
     respawn_cmp.py DIR_A DIR_B [PNGDIR]
 
-Per scenario: whether the RAM sample is equal on every frame, the respawn's dark run and first
-visible frame (first frame after the last all-dark run), the first frame the camera changes after
-it, the frames that differ, and the best backdrop shift (startalign compare.best_shift) per
-differing frame (first 12 printed). PNGs (A | B | difference) of the first differing frame.
+Per scenario: whether the RAM sample is equal on every frame, the respawn's dark run (the last run
+of frames whose playfield, rows 60-229, has under 10 percent non-black pixels; HUD and sprites may
+show) and first visible frame (the frame after it), the first frame the camera changes after it,
+whether the dark run and the start window (first visible .. camera change - 1) are pixel-identical,
+the frames that differ, and the best backdrop shift (startalign compare.best_shift) per differing
+frame from first visible (first 12 printed). PNGs (A | B | difference) of the first differing frame.
 """
 import sys
 from pathlib import Path
@@ -24,7 +26,7 @@ for fa in sorted(A_DIR.glob('*.npz')):
     A, B = np.load(fa), np.load(B_DIR / fa.name)
     ma, mb, ia, ib = A['meta'], B['meta'], A['imgs'], B['imgs']
     ram_eq = bool((ma == mb).all())
-    dark = [int(lum(x).sum()) < 2000 * 256 for x in ia]      # mean luminance sum < ~8 per pixel
+    dark = [float((ia[i][60:230] != 0).mean()) < 0.10 for i in range(len(ia))]
     # the respawn: the last dark run in the window
     runs, s = [], None
     for i, d in enumerate(dark):
@@ -37,6 +39,11 @@ for fa in sorted(A_DIR.glob('*.npz')):
     move = next((i for i in range(vis, len(ma)) if ma[i][1] != cam0), None)
     diff = [i for i in range(len(ia)) if not np.array_equal(ia[i], ib[i])]
     post = [i for i in diff if i >= vis]
+    d0 = runs[-1][0] if runs else vis
+    end = move if move is not None else len(ia)
+    dark_eq = all(np.array_equal(ia[i], ib[i]) for i in range(d0, vis))
+    win_eq = all(np.array_equal(ia[i], ib[i]) for i in range(vis, end))
+    print(f'{fa.stem}: dark run identical {dark_eq}, start window ({end - vis} frames) identical {win_eq}')
     print(f'{fa.stem}: RAM equal {ram_eq}; dark runs {[(int(ma[a][0]), int(ma[b][0])) for a, b in runs]}; '
           f'first visible {int(ma[vis][0]) if vis < len(ma) else None} (stage {ma[vis][7]} area {ma[vis][8]} '
           f'cam {cam0}, lives {ma[vis][10]}); camera first changes at '
