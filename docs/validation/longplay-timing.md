@@ -462,6 +462,49 @@ from the first frame. What is not established: which of these (the English text 
 different screen lengths, or an unseeded random value) moves the 3-3 to 4-1 hand-over
 by one frame; that needs a probe on the unmodified ROM's 3-3 boss/cinema.
 
+### Cause of the unmodified-ROM drift: language or patch code (cause runs)
+
+Emulator evidence only (Geargrafx 78fc3d7), plain replays of the same pinned recording
+(cold power-on, real input, no RAM writes, no re-sync; frames count from 1-1's first
+update). Raw outputs: `/workspace/build/longplay-six/cause/` (`raw/` per-frame arrays,
+`probe/` RAM dumps, `run-*.log`). Tool options added to `scripts/longplay_six.py`:
+`--tag`, `--shortcut` (native title language switch: hold I + II, tap Select, as in
+`guide_screenshots.py`; the language byte read $3227 = 1 at the start of 1-1),
+`--language` (saved language in the backup-RAM image for the patched modes; 0 = Japanese).
+"ORIGINAL" below is 1.11-dev ORIGINAL palette, English (the earlier headline run).
+
+| Run | Language ($3227) | Code | Result | 4-1 starts | First divergence from 1.11-dev ORIGINAL (English) |
+| --- | --- | --- | --- | --- | --- |
+| earlier | Japanese (0) | unmodified | FAIL from 4-2 | 53,287 | CORE 5,668; update counter 13,258; master/stage 53,286/53,287 |
+| A | English (1, native shortcut) | unmodified | FAIL from 4-2 | 53,287 | identical to the Japanese unmodified run |
+| B | Japanese (0, saved) | 1.11-dev ORIGINAL | FAIL from 5-1 (4-2 57,121, 4-3 60,358, 4-4 64,423 PASS) | 53,288 | update counter and CORE 65,934; master/stage/area 70,013 |
+| C | English (1, default) | published 1.10 | FAIL from 4-2 | 53,287 | CORE 5,668; update counter 51,763; master/stage 53,286/53,287 |
+
+Updates / lag frames / frames with more than one update: ORIGINAL 124,957 / 1,889 / 844;
+unmodified (JP) and A (EN) 125,621 / 1,043 / 662 each; B 125,448 / 1,239 / 685; C 125,620 / 1,044 / 662.
+Stage starts 1-2 .. 3-3 are the same frame in all runs (2,832; 10,136; 13,241; 16,533;
+27,777; 31,401; 34,853). 1-1 is the common start.
+
+Pairwise (first differing frame; None = identical over all 126,003 frames):
+- unmodified JP vs A unmodified EN: None in counter, master, stage, area, boss health and CORE.
+  The language byte alone changes nothing the arrays see in the unmodified code, story scenes included.
+- unmodified JP vs C (1.10 EN): master, stage, area, boss: None; update counter 13,258 (C one update behind, 73 vs 74); CORE 13,258. 1.10 ends with 125,620 updates against 125,621.
+- 1.11-dev ORIGINAL EN vs B 1.11-dev JP: nothing before 65,934; there B is one update behind (158 vs 159, nothing else in CORE differs).
+- B vs unmodified (either language): same divergence as ORIGINAL vs unmodified (13,258; 53,286/53,287).
+
+Where, and what the game is doing:
+- 5,668 (CORE only, 1.11-dev vs unmodified and 1.10; counter equal): stage 1 area 0 to 1 (the boss/cinema area opens, counter 7 to 8). Five bytes in entity slots differ ($3099, $30B5, $30BC, $30D4, $30E4: 192/8/32/242/190 unmodified, 128/7/255/127/224 in 1.11-dev); they stay different afterwards. Not identified what those slot bytes are. Present in 1.11-dev in both languages, absent in 1.10.
+- 13,258: stage 2-2 (stage byte 3, scene 3, master 0), 17 frames into gameplay: the unmodified and A runs complete one more game update (74) than 1.10 and 1.11-dev (73) in the same frame; the update/lag pattern differs for 8 frames in a repeating pair (13,258-13,316) and the totals stay one apart. Shared by 1.10 and 1.11-dev, independent of language. Cause not identified (RAM differs in about 530 bytes there, mostly the stack page and RAM-palette areas).
+- 51,763: inside the act 3 story scene (master 1, scene 5, stage 7; the scene runs 36,490 to 53,287 in ORIGINAL). Unmodified is two updates ahead from here (it had one from 13,258; the shift at 51,763-51,765 adds one), 1.10 equals unmodified in master flow. 1.10 vs 1.11-dev: counter 210 vs 209 and a handful of bytes ($2011-$2029 scene variables, $2088) differ, i.e. the story scene's own text/timing variables run out of step. The story text engine is the code that reads $3227, but the Japanese/English runs of the unmodified code match exactly, so the difference is in the patched code's text/scene handling, not the choice of language.
+- 53,286-53,287: the hand-over to 4-1 happens one frame earlier (53,287) in unmodified, A and C, and at 53,288 in every 1.11-dev run (the recording's own marker is 53,288).
+- 65,934 (B only): stage 4-4's end (stage byte 11, master 1, scene 7, area 1): the Japanese run is one update behind the English run, then 70,013 (5-1) fails. Here language does matter, in 1.11-dev code only; what the text-scene code is waiting on is not identified.
+
+What the evidence establishes:
+- Language is not what separates the unmodified ROM from the patch: English-selected unmodified (A) is frame-for-frame identical to Japanese unmodified over the whole run, and 1.10 (English) matches the unmodified master flow, 4-1 at 53,287, at every frame. The same stage-start drift appears with unmodified code in either language.
+- The earlier drift (4-1 one frame early, then fail) therefore follows the code: 1.11-dev's 4-1 start (53,288) differs from unmodified and 1.10 (53,287); 1.10 and 1.11-dev differ from each other from 51,763 in the act 3 story scene, and from the unmodified at 13,258 (both patched), i.e. the patches add timing (one update at 2-2) and 1.11-dev adds more.
+- Within 1.11-dev language has a small effect of its own, from 65,934 (4-4 end scene), in this recording.
+- Not proven: what in the code makes the 13,258 update, the 51,763 scene shift and the 5,668 entity bytes (no disassembly or breakpoints on those frames); that the 1.10 EN and 1.11-dev defaults differ only in code (they also differ in start clock: 201,402,243 vs 201,402,480 vs unmodified 201,402,039); other languages (Chinese); real hardware.
+
 ### Method notes
 
 - Memory: one emulator at a time, 4 GB free required; each run holds the geargrafx

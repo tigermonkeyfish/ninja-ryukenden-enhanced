@@ -252,13 +252,13 @@ def probe(a):
         if a.mode == UNMODIFIED:
             boot_unmodified(game, a.rom, work / 'entered.state')
         else:
-            boot_to_first_update(game, a.rom, a.mode, work / 'entered.state')
+            boot_to_first_update(game, a.rom, a.mode, work / 'entered.state', a.language)
         for f in range(1, frames[-1] + 1):
             game.press(set(inputs[f - 1]))
             game.checked_step(1)
             if f in frames:
                 dumps[str(f)] = game.read(0, 0x2000).hex()
-    (a.out / f'{a.mode.replace(" ", "")}.probe.json').write_text(json.dumps(dumps))
+    (a.out / f'{(a.tag or a.mode).replace(" ", "")}.probe.json').write_text(json.dumps(dumps))
     return 0
 
 
@@ -408,6 +408,8 @@ def main():
     pr.add_argument('--file', type=Path, required=True)
     pr.add_argument('--rom', type=Path, default=ROM)
     pr.add_argument('--out', type=Path, required=True)
+    pr.add_argument('--tag')
+    pr.add_argument('--language', type=int, default=1)
     pr.add_argument('--frames', type=int, nargs='+', required=True)
     c = sub.add_parser('compare')
     c.add_argument('out', type=Path)
