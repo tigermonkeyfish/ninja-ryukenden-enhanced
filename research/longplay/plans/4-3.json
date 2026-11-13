@@ -1,6 +1,6 @@
 {
  "stage": "4-3",
- "notes": "No Level Select run. Map (stagemap.py) + poke exit scans; beam legs with hand waypoints. Area 0 (one page): a column hangs from the top (x 101-144, to y 122) over a floor with a pit x 169-210; the exit is up the column (door x 100-141, y < 24): jump the pit, walk under it, cling to its left face (the door is only touched from that side), wall-hop up. Area 1 (4 pages): the block x 352-448 (top y 46) is climbed (cling), then floor, a girder (y 110) and platforms (y 76) to the exit door at the top right (x 932-976, y < 74). Area 2 (5 pages): up the entry column, blocks (tops 134, 102), floor, cling and climb onto the hanging block x 579-753 (top y 44), platforms (y 76, 60), floor, then up the left face of the hanging column x 1188-1214 to the exit (poke: x 1192, y < 24 -> area 3).",
+ "notes": "No Level Select run. Map (stagemap.py) + poke exit scans; beam legs with hand waypoints. Area 0 (one page): a column hangs from the top (x 101-144, to y 122) over a floor with a pit x 169-210; the exit is up the column (door x 100-141, y < 24): jump the pit, walk under it, cling to its left face (the door is only touched from that side), wall-hop up. Area 1 (4 pages): the block x 352-448 (top y 46) is climbed (cling), then floor, a girder (y 110) and platforms (y 76) to the exit door at the top right (x 932-976, y < 74). Area 2 (5 pages): up the entry column, blocks (tops 134, 102), floor, cling and climb onto the hanging block x 579-753 (top y 44), platforms (y 76, 60), floor, then up the left face of the hanging column x 1188-1214 to the exit (poke: x 1192, y < 24 -> area 3). Area 3 (3 pages): up the entry column, along the floor (y 170) under three hanging blocks, then over the gap x 624-720 by way of the hanging wall x 544-592 (cling to its right face, climb onto its top y 46) and the platform x 645-672 (y 76) to the right end (poke: x 744, y 136-168 -> area 4, the stage end).",
  "legs": [
   {
    "name": "a0",
@@ -323,6 +323,100 @@
     ],
     "goal": {
      "area": 3
+    },
+    "width": 100,
+    "max_frames": 1500,
+    "seconds": 1500,
+    "ywt": 1.0
+   }
+  },
+  {
+   "name": "a3-1",
+   "beam": {
+    "waypoints": [
+     [
+      150,
+      120,
+      10,
+      3,
+      30
+     ],
+     [
+      186,
+      78,
+      14,
+      3,
+      4,
+      1
+     ],
+     [
+      260,
+      170,
+      16,
+      3,
+      4,
+      1
+     ]
+    ],
+    "goal": {
+     "near": [
+      600,
+      170,
+      16,
+      3
+     ],
+     "in_area": 3
+    },
+    "width": 100,
+    "max_frames": 1500,
+    "seconds": 1500,
+    "ywt": 1.0
+   }
+  },
+  {
+   "name": "a3-2",
+   "beam": {
+    "waypoints": [
+     [
+      600,
+      110,
+      10,
+      3,
+      25
+     ],
+     [
+      600,
+      60,
+      10,
+      3,
+      20
+     ],
+     [
+      568,
+      46,
+      16,
+      3,
+      4,
+      1
+     ],
+     [
+      658,
+      76,
+      10,
+      3,
+      4,
+      1
+     ],
+     [
+      745,
+      160,
+      8,
+      3,
+      20
+     ]
+    ],
+    "goal": {
+     "area": 4
     },
     "width": 100,
     "max_frames": 1500,
