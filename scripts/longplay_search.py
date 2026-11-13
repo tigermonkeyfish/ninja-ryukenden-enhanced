@@ -49,6 +49,7 @@ def main():
     ap.add_argument('--frames', type=int, default=9000, help='frame limit for this stage')
     ap.add_argument('--extra', type=Path, help='hand-scripted segments played before the search')
     ap.add_argument('--extra-frames', type=int, default=10 ** 9)
+    ap.add_argument('--seconds', type=int, default=600, help='wall-clock limit for the search loop')
     ap.add_argument('--out', type=Path, help='write the extended run here instead of full.json')
     ap.add_argument('--commit-partial', action='store_true', help='write unfinished search into the output as a partial stage')
     args = ap.parse_args()
@@ -83,7 +84,7 @@ def main():
             stack = [[snap, cands, 0, start, 0]]
             finished, nodes = None, 0
             tmpout = states / 'partial.json'
-            while stack and nodes < args.budget:
+            while stack and nodes < args.budget and time.time() - t0 < args.seconds:
                 nodes += 1
                 top = stack[-1]
                 snap, cands, idx, info, frames = top
