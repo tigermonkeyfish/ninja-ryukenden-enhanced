@@ -1,0 +1,108 @@
+{
+ "stage": "5-2",
+ "notes": "The Level Select comparison run (research/comparison-runs/5-2.json) is the guide: its path, recorded on the original through Level Select (research/longplay/fast/runpath.py, research/longplay/paths/5-2.json), gives beam waypoints (standing/walking/clinging points about every 40 frames), one leg per area, long areas in chunks of about 500 path frames.",
+ "legs": [
+  {
+   "name": "a0-0-0",
+   "beam": {
+    "follow": {
+     "path": "research/longplay/paths/5-2.json",
+     "from_frame": 1,
+     "to_frame": 544
+    },
+    "goal": {
+     "area": 1
+    },
+    "width": 60,
+    "max_frames": 1632,
+    "seconds": 1632
+   }
+  },
+  {
+   "name": "a1-1-0",
+   "beam": {
+    "follow": {
+     "path": "research/longplay/paths/5-2.json",
+     "from_frame": 551,
+     "to_frame": 1192
+    },
+    "goal": {
+     "area": 2
+    },
+    "width": 60,
+    "max_frames": 1926,
+    "seconds": 1926
+   }
+  },
+  {
+   "name": "a2-2-0",
+   "beam": {
+    "follow": {
+     "path": "research/longplay/paths/5-2.json",
+     "from_frame": 1200,
+     "to_frame": 1816
+    },
+    "goal": {
+     "area": 3
+    },
+    "width": 60,
+    "max_frames": 1851,
+    "seconds": 1851
+   }
+  },
+  {
+   "name": "a3-3-0",
+   "beam": {
+    "follow": {
+     "path": "research/longplay/paths/5-2.json",
+     "from_frame": 1821,
+     "to_frame": 2344
+    },
+    "goal": {
+     "near": [
+      362,
+      72,
+      12,
+      6
+     ],
+     "in_area": 3
+    },
+    "width": 60,
+    "max_frames": 1572,
+    "seconds": 1572
+   }
+  },
+  {
+   "name": "a3-3-1",
+   "beam": {
+    "follow": {
+     "path": "research/longplay/paths/5-2.json",
+     "from_frame": 2344,
+     "to_frame": 2856
+    },
+    "goal": {
+     "area": 4
+    },
+    "width": 60,
+    "max_frames": 1539,
+    "seconds": 1539
+   }
+  },
+  {
+   "name": "a4-4-0",
+   "beam": {
+    "follow": {
+     "path": "research/longplay/paths/5-2.json",
+     "from_frame": 2861,
+     "to_frame": 2928
+    },
+    "goal": {
+     "stage_change": true
+    },
+    "width": 60,
+    "max_frames": 900,
+    "seconds": 900
+   }
+  }
+ ]
+}

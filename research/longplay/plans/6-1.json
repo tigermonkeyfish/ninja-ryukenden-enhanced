@@ -1,0 +1,82 @@
+{
+ "stage": "6-1",
+ "notes": "The Level Select comparison run (research/comparison-runs/6-1.json) is the guide: its path, recorded on the original through Level Select (research/longplay/fast/runpath.py, research/longplay/paths/6-1.json), gives beam waypoints (standing/walking/clinging points about every 40 frames), one leg per area, long areas in chunks of about 500 path frames.",
+ "legs": [
+  {
+   "name": "a0-0-0",
+   "beam": {
+    "follow": {
+     "path": "research/longplay/paths/6-1.json",
+     "from_frame": 1,
+     "to_frame": 504
+    },
+    "goal": {
+     "near": [
+      1510,
+      148,
+      12,
+      6
+     ],
+     "in_area": 0
+    },
+    "width": 60,
+    "max_frames": 1512,
+    "seconds": 1512
+   }
+  },
+  {
+   "name": "a0-0-1",
+   "beam": {
+    "follow": {
+     "path": "research/longplay/paths/6-1.json",
+     "from_frame": 504,
+     "to_frame": 1000
+    },
+    "goal": {
+     "near": [
+      918,
+      120,
+      12,
+      6
+     ],
+     "in_area": 0
+    },
+    "width": 60,
+    "max_frames": 1491,
+    "seconds": 1491
+   }
+  },
+  {
+   "name": "a0-0-2",
+   "beam": {
+    "follow": {
+     "path": "research/longplay/paths/6-1.json",
+     "from_frame": 1000,
+     "to_frame": 1664
+    },
+    "goal": {
+     "area": 1
+    },
+    "width": 60,
+    "max_frames": 1995,
+    "seconds": 1995
+   }
+  },
+  {
+   "name": "a1-1-0",
+   "beam": {
+    "follow": {
+     "path": "research/longplay/paths/6-1.json",
+     "from_frame": 1667,
+     "to_frame": 1728
+    },
+    "goal": {
+     "stage_change": true
+    },
+    "width": 60,
+    "max_frames": 900,
+    "seconds": 900
+   }
+  }
+ ]
+}

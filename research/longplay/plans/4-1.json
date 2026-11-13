@@ -1,0 +1,114 @@
+{
+ "stage": "4-1",
+ "notes": "The Level Select comparison run (research/comparison-runs/4-1.json) is the guide: its path, recorded on the original through Level Select (research/longplay/fast/runpath.py, research/longplay/paths/4-1.json), gives beam waypoints (standing/walking/clinging points about every 40 frames), one leg per area, long areas in chunks of about 500 path frames.",
+ "legs": [
+  {
+   "name": "a0-0-0",
+   "beam": {
+    "follow": {
+     "path": "research/longplay/paths/4-1.json",
+     "from_frame": 1,
+     "to_frame": 568
+    },
+    "goal": {
+     "near": [
+      811,
+      72,
+      12,
+      6
+     ],
+     "in_area": 0
+    },
+    "width": 60,
+    "max_frames": 1704,
+    "seconds": 1704
+   }
+  },
+  {
+   "name": "a0-0-1",
+   "beam": {
+    "follow": {
+     "path": "research/longplay/paths/4-1.json",
+     "from_frame": 568,
+     "to_frame": 1080
+    },
+    "goal": {
+     "near": [
+      1471,
+      72,
+      12,
+      6
+     ],
+     "in_area": 0
+    },
+    "width": 60,
+    "max_frames": 1539,
+    "seconds": 1539
+   }
+  },
+  {
+   "name": "a0-0-2",
+   "beam": {
+    "follow": {
+     "path": "research/longplay/paths/4-1.json",
+     "from_frame": 1080,
+     "to_frame": 1632
+    },
+    "goal": {
+     "area": 1
+    },
+    "width": 60,
+    "max_frames": 1659,
+    "seconds": 1659
+   }
+  },
+  {
+   "name": "a1-1-0",
+   "beam": {
+    "follow": {
+     "path": "research/longplay/paths/4-1.json",
+     "from_frame": 1635,
+     "to_frame": 1824
+    },
+    "goal": {
+     "area": 2
+    },
+    "width": 60,
+    "max_frames": 900,
+    "seconds": 900
+   }
+  },
+  {
+   "name": "a2-2-0",
+   "beam": {
+    "follow": {
+     "path": "research/longplay/paths/4-1.json",
+     "from_frame": 1828,
+     "to_frame": 2416
+    },
+    "goal": {
+     "area": 3
+    },
+    "width": 60,
+    "max_frames": 1767,
+    "seconds": 1767
+   }
+  },
+  {
+   "name": "a3-3-0",
+   "beam": {
+    "follow": {
+     "path": "research/longplay/paths/4-1.json",
+     "from_frame": 2421,
+     "to_frame": 2488
+    },
+    "goal": {
+     "stage_change": true
+    },
+    "width": 60,
+    "max_frames": 900,
+    "seconds": 900
+   }
+  }
+ ]
+}

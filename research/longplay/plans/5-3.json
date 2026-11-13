@@ -1,0 +1,266 @@
+{
+ "stage": "5-3",
+ "notes": "The Level Select comparison run (research/comparison-runs/5-3.json) is the guide: its path, recorded on the original through Level Select (research/longplay/fast/runpath.py, research/longplay/paths/5-3.json), gives beam waypoints (standing/walking/clinging points about every 40 frames), one leg per area, long areas in chunks of about 500 path frames.",
+ "legs": [
+  {
+   "name": "a0-0-0",
+   "beam": {
+    "follow": {
+     "path": "research/longplay/paths/5-3.json",
+     "from_frame": 1,
+     "to_frame": 704
+    },
+    "goal": {
+     "area": 1
+    },
+    "width": 60,
+    "max_frames": 2112,
+    "seconds": 2112
+   }
+  },
+  {
+   "name": "a1-1-0",
+   "beam": {
+    "follow": {
+     "path": "research/longplay/paths/5-3.json",
+     "from_frame": 710,
+     "to_frame": 1416
+    },
+    "goal": {
+     "area": 2
+    },
+    "width": 60,
+    "max_frames": 2121,
+    "seconds": 2121
+   }
+  },
+  {
+   "name": "a2-2-0",
+   "beam": {
+    "follow": {
+     "path": "research/longplay/paths/5-3.json",
+     "from_frame": 1424,
+     "to_frame": 1920
+    },
+    "goal": {
+     "near": [
+      200,
+      154,
+      12,
+      6
+     ],
+     "in_area": 2
+    },
+    "width": 60,
+    "max_frames": 1491,
+    "seconds": 1491
+   }
+  },
+  {
+   "name": "a2-2-1",
+   "beam": {
+    "follow": {
+     "path": "research/longplay/paths/5-3.json",
+     "from_frame": 1920,
+     "to_frame": 2368
+    },
+    "goal": {
+     "area": 3
+    },
+    "width": 60,
+    "max_frames": 1347,
+    "seconds": 1347
+   }
+  },
+  {
+   "name": "a3-3-0",
+   "beam": {
+    "follow": {
+     "path": "research/longplay/paths/5-3.json",
+     "from_frame": 2372,
+     "to_frame": 2824
+    },
+    "goal": {
+     "near": [
+      395,
+      106,
+      12,
+      6
+     ],
+     "in_area": 3
+    },
+    "width": 60,
+    "max_frames": 1359,
+    "seconds": 1359
+   }
+  },
+  {
+   "name": "a3-3-1",
+   "beam": {
+    "follow": {
+     "path": "research/longplay/paths/5-3.json",
+     "from_frame": 2824,
+     "to_frame": 3320
+    },
+    "goal": {
+     "near": [
+      685,
+      101,
+      12,
+      6
+     ],
+     "in_area": 3
+    },
+    "width": 60,
+    "max_frames": 1491,
+    "seconds": 1491
+   }
+  },
+  {
+   "name": "a3-3-2",
+   "beam": {
+    "follow": {
+     "path": "research/longplay/paths/5-3.json",
+     "from_frame": 3320,
+     "to_frame": 3776
+    },
+    "goal": {
+     "near": [
+      738,
+      106,
+      12,
+      6
+     ],
+     "in_area": 3
+    },
+    "width": 60,
+    "max_frames": 1371,
+    "seconds": 1371
+   }
+  },
+  {
+   "name": "a3-3-3",
+   "beam": {
+    "follow": {
+     "path": "research/longplay/paths/5-3.json",
+     "from_frame": 3776,
+     "to_frame": 4296
+    },
+    "goal": {
+     "near": [
+      738,
+      106,
+      12,
+      6
+     ],
+     "in_area": 3
+    },
+    "width": 60,
+    "max_frames": 1563,
+    "seconds": 1563
+   }
+  },
+  {
+   "name": "a3-3-4",
+   "beam": {
+    "follow": {
+     "path": "research/longplay/paths/5-3.json",
+     "from_frame": 4296,
+     "to_frame": 4816
+    },
+    "goal": {
+     "near": [
+      738,
+      106,
+      12,
+      6
+     ],
+     "in_area": 3
+    },
+    "width": 60,
+    "max_frames": 1563,
+    "seconds": 1563
+   }
+  },
+  {
+   "name": "a3-3-5",
+   "beam": {
+    "follow": {
+     "path": "research/longplay/paths/5-3.json",
+     "from_frame": 4816,
+     "to_frame": 5288
+    },
+    "goal": {
+     "area": 4
+    },
+    "width": 60,
+    "max_frames": 1419,
+    "seconds": 1419
+   }
+  },
+  {
+   "name": "a4-4-0",
+   "beam": {
+    "follow": {
+     "path": "research/longplay/paths/5-3.json",
+     "from_frame": 5295,
+     "to_frame": 6192
+    },
+    "goal": {
+     "area": 5
+    },
+    "width": 60,
+    "max_frames": 2694,
+    "seconds": 2694
+   }
+  },
+  {
+   "name": "a5-5-0",
+   "beam": {
+    "follow": {
+     "path": "research/longplay/paths/5-3.json",
+     "from_frame": 6194,
+     "to_frame": 6488
+    },
+    "goal": {
+     "area": 6
+    },
+    "width": 60,
+    "max_frames": 900,
+    "seconds": 900
+   }
+  },
+  {
+   "name": "a6-6-0",
+   "beam": {
+    "follow": {
+     "path": "research/longplay/paths/5-3.json",
+     "from_frame": 6494,
+     "to_frame": 6696
+    },
+    "goal": {
+     "area": 7
+    },
+    "width": 60,
+    "max_frames": 900,
+    "seconds": 900
+   }
+  },
+  {
+   "name": "a7-7-0",
+   "beam": {
+    "follow": {
+     "path": "research/longplay/paths/5-3.json",
+     "from_frame": 6702,
+     "to_frame": 6768
+    },
+    "goal": {
+     "stage_change": true
+    },
+    "width": 60,
+    "max_frames": 900,
+    "seconds": 900
+   }
+  }
+ ]
+}
