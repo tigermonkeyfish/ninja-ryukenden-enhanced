@@ -415,6 +415,9 @@
 
 ## Known boundaries
 
+Known deficiencies of the 1.11-dev build against the unmodified ROM are
+listed in [DEFICIENCIES.md](DEFICIENCIES.md).
+
 Hardware confirmation covers the reports in [VALIDATION.md](VALIDATION.md).
 A complete damage/death/Continue pass is not claimed, and audio was not
 compared. The Geargrafx keyboard issue (opposite directions filtered, so
