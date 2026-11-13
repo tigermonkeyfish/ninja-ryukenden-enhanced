@@ -112,12 +112,17 @@ class Node:
         return [[fr, buttons(m)] for fr, m in merged]
 
 
+def yv(y):
+    """Ryu's y byte wraps above the top of the screen (a climb past it reads 250s)."""
+    return y - 256 if y >= 224 else y
+
+
 def near(info, wp):
-    x, y, r = wp[0], wp[1], wp[2]
+    x, y, r = wp[0], yv(wp[1]), wp[2]
     if len(wp) > 3 and wp[3] is not None and info['area'] != wp[3]:
         return False
     ry = wp[4] if len(wp) > 4 else r
-    return abs(info['x'] - x) <= r and abs(info['y'] - y) <= ry
+    return abs(info['x'] - x) <= r and abs(yv(info['y']) - y) <= ry
 
 
 def search(pool, state, waypoints, goal, width=60, chunk=4, max_frames=3000, actions=ACTIONS,
@@ -138,7 +143,7 @@ def search(pool, state, waypoints, goal, width=60, chunk=4, max_frames=3000, act
         s = 100000 * wp + hp_weight * info['health']
         if wp < len(waypoints):
             w = waypoints[wp]
-            s -= abs(info['x'] - w[0]) + ywt * abs(info['y'] - w[1])
+            s -= abs(info['x'] - w[0]) + ywt * abs(yv(info['y']) - yv(w[1]))
         if prefer:
             s += prefer(info)
         return s
@@ -184,7 +189,7 @@ def search(pool, state, waypoints, goal, width=60, chunk=4, max_frames=3000, act
                 node = Node((w, nid), parent, a, fr, i, wp, score(i, wp), depth)
                 if goal(i) and goal_node is None:
                     goal_node = node
-                k = (wp, i['area'], i['x'] // 3, i['y'] // 3) + kb
+                k = (wp, i['area'], i['x'] // 3, yv(i['y']) // 3) + kb
                 if k not in cand or cand[k].score < node.score:
                     cand[k] = node
         frames += chunk

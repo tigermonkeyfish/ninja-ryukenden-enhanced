@@ -48,7 +48,7 @@ def goal_fn(g, i0, boss_seen):
                          ('y>=', lambda v: i['y'] >= v), ('y<=', lambda v: i['y'] <= v)):
                 if k in g and not f(g[k]):
                     ok = False
-            if g.get('ground') and i.get('state') != 1:
+            if g.get('ground') and i.get('state') not in (0, 1):
                 ok = False
             return ok
         return False
@@ -112,6 +112,25 @@ def main():
                     legsegs = c['segments']
             if legsegs is None:
                 b = dict(leg['beam'])
+                if 'follow' in b:
+                    fl = b.pop('follow')
+                    path = json.loads((ROOT / fl['path']).read_text())['path']
+                    lo, hi = fl.get('from_frame', 0), fl.get('to_frame', 10 ** 9)
+                    pts, last = [], None
+                    for fr, area, x, y, hp, stg, *mo in path:
+                        if not lo <= fr <= hi:
+                            continue
+                        if any(q[0] < fr <= q[0] + 8 or q[0] == fr for q in path if q[1] != area and q[0] < fr and fr - q[0] <= 8):
+                            continue          # stale coordinates right after an area change
+                        if mo and mo[0] == 3 and fl.get('skip_air', True):
+                            continue          # mid-jump positions make poor waypoints
+                        if last is None or fr - last[0] >= fl.get('every', 40) or area != last[1]:
+                            pts.append([x, y, fl.get('r', 16), area, fl.get('ry', 24)])
+                            last = (fr, area)
+                    span = [r for r in path if lo <= r[0] <= hi]
+                    if span:      # the span's last point (the way out), even in the air
+                        pts.append([span[-1][2], span[-1][3], 6, span[-1][1], 6])
+                    b['waypoints'] = pts + b.get('waypoints', [])
                 wps = [tuple(w) for w in b.pop('waypoints')]
                 g = goal_fn(b.pop('goal'), f.info(), boss_seen)
                 bw = b.pop('boss_weight', 0)

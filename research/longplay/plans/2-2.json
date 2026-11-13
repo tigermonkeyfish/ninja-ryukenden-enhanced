@@ -1,0 +1,92 @@
+{
+ "stage": "2-2",
+ "notes": "The Level Select comparison run (research/comparison-runs/2-2.json) does not replay from the played-in start (dies in area 0 at any start offset 0-12). Its path, recorded on the original through Level Select (research/longplay/paths/2-2.json, research/longplay/fast/runpath.py), gives the beam its waypoints (grounded/clinging points about every 40 frames), one leg per area.",
+ "legs": [
+  {
+   "name": "a0",
+   "beam": {
+    "follow": {
+     "path": "research/longplay/paths/2-2.json",
+     "from_frame": 0,
+     "to_frame": 789
+    },
+    "goal": {
+     "area": 1
+    },
+    "width": 60,
+    "max_frames": 1600,
+    "seconds": 900
+   }
+  },
+  {
+   "name": "a1",
+   "beam": {
+    "follow": {
+     "path": "research/longplay/paths/2-2.json",
+     "from_frame": 790,
+     "to_frame": 1656
+    },
+    "goal": {
+     "area": 2
+    },
+    "width": 60,
+    "max_frames": 1800,
+    "seconds": 900
+   }
+  },
+  {
+   "name": "a2-climb",
+   "beam": {
+    "follow": {
+     "path": "research/longplay/paths/2-2.json",
+     "from_frame": 1657,
+     "to_frame": 2000,
+     "every": 12,
+     "r": 12,
+     "ry": 12,
+     "skip_air": false
+    },
+    "goal": {
+     "x<=": 1930,
+     "y<=": 45,
+     "ground": true
+    },
+    "width": 60,
+    "max_frames": 900,
+    "seconds": 900,
+    "ywt": 1.0
+   }
+  },
+  {
+   "name": "a2-rest",
+   "beam": {
+    "follow": {
+     "path": "research/longplay/paths/2-2.json",
+     "from_frame": 2001,
+     "to_frame": 3877
+    },
+    "goal": {
+     "area": 3
+    },
+    "width": 60,
+    "max_frames": 4000,
+    "seconds": 1500
+   }
+  },
+  {
+   "name": "a3",
+   "beam": {
+    "follow": {
+     "path": "research/longplay/paths/2-2.json",
+     "from_frame": 3878
+    },
+    "goal": {
+     "stage_change": true
+    },
+    "width": 60,
+    "max_frames": 600,
+    "seconds": 600
+   }
+  }
+ ]
+}
