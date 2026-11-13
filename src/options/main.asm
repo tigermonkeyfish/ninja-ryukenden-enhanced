@@ -390,6 +390,14 @@ preview_palette:
  bne preview_draft
  tsx
  lda OPENED_OPTIONS,x       ; $2100 as the menu found it (pushed in menu_open)
+ ; Palette timing (palette-lag): opened in an unmapped mode (Original,
+ ; NES-A, NES-B: bit 4 clear) the NES value goes live now, which changes
+ ; nothing on screen (unmapped to unmapped: no re-upload) and leaves Run
+ ; nothing to change, so Run's restart takes Original's cycles. Opened in a
+ ; mapped mode the live mode stays (as before).
+ and #$10
+ beq preview_draft
+ lda OPENED_OPTIONS,x
  bra preview_masked
 preview_draft:
  lda DRAFT
@@ -403,33 +411,27 @@ preview_masked:
  ; $2100 bit 7 is set with SMS and only then (src/palette tells SMS from
  ; HELL by it).
 set_palette:
- ; Palette timing (palette-lag): the same cycles whether the bits change or
- ; not (Run calls it with the draft's mode, changed or not, and restarts the
- ; stage at once; a mode-dependent length would move the restart's sound
- ; start against the vblanks), except the full re-queue a change into or
- ; out of a mapped mode needs (the preview does that before Run).
- phx
- and #PALETTE_BITS
  sta <SCRATCH
- cmp #PALETTE_SMS           ; carry: SMS ($38, the highest value)
- cla
- ror a                      ; $80 with SMS
- ora <SCRATCH
- sta <SCRATCH               ; the new bits 3-5 and 7
- ; queue all colours only when the bits change and the old or the new mode
- ; is a mapped one (bit 4: GB DMG, HELL, SMS)
  lda OPTIONS
- eor <SCRATCH
  and #PALETTE_BITS
- lsr a
- lsr a
- lsr a
- tax
+ cmp <SCRATCH
+ beq palette_kept
+ ; Palette timing (palette-lag): the colours are queued only when the old
+ ; or the new mode is a mapped one (bit 4: GB DMG, HELL, SMS). Between
+ ; Original and NES-A/NES-B the VCE shows the RAM palette's colours as
+ ; they are either way (NES colours come with Run's stage restart), so a
+ ; full re-upload would change nothing on screen and only cost the restart
+ ; time Original's Run does not spend.
  lda OPTIONS
  ora <SCRATCH
  and #$10
- and nonzero_mask,x
- tax                        ; nonzero: queue all
+ pha
+ lda <SCRATCH
+ cmp #PALETTE_SMS
+ bne palette_flagged
+ ora #SMS_FLAG
+ sta <SCRATCH
+palette_flagged:
  php
  sei
  lda OPTIONS
@@ -437,14 +439,13 @@ set_palette:
  ora <SCRATCH
  sta OPTIONS
  plp
- txa
+ pla
  beq palette_unqueued
  jsr QUEUE_ALL
 palette_unqueued:
- plx
- jmp PALETTE_CONFIGURE      ; src/palette: WAITR, ANIMR and LIVE for the mode
-nonzero_mask:
- .db $00, $ff, $ff, $ff, $ff, $ff, $ff, $ff
+ jmp PALETTE_CONFIGURE      ; src/palette: WAITR, ANIMR and LIVE for the new mode
+palette_kept:
+ rts
 
  ; X = option field (1..FIELDS-1). Y = its choice entry for the draft's
  ; value (the field's first entry if none matches).
