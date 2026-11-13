@@ -61,6 +61,30 @@ def goal_fn(g, i0, boss_seen):
     return goal
 
 
+def make_doomed(allrects):
+    """A falling Ryu is doomed when no platform top or wall below him is within
+    the horizontal reach of the rest of his fall (ROM rectangles; gravity about
+    0.25 px/frame^2, air speed 1.5 px/frame). Lets the beam drop jumps into a
+    pit as soon as they are lost instead of when Ryu dies at the bottom."""
+    def doomed(i):
+        if i['state'] not in (3, 6, 9) or i['vy'] <= 0 or i['y'] >= 224:
+            return False
+        y, x = i['y'], i['x']
+        for t, x0, y0, x1, y1 in allrects.get(i['area'], []):
+            if t in (0, 1, 3) and y0 >= y - 2:
+                dy = y0 - y
+                frames = (-i['vy'] + (i['vy'] ** 2 + 0.5 * dy) ** 0.5) / 0.25
+                reach = 10 + 1.6 * frames
+            elif t in (2, 3, 0x13) and y1 >= y:
+                reach = 10 + 1.6 * 40
+            else:
+                continue
+            if x0 - reach <= x <= x1 + reach:
+                return False
+        return True
+    return doomed
+
+
 def replay_full(f, full):
     f.load(ENTERED)
     total = sum(n for n, _ in full['segments'])
@@ -174,6 +198,11 @@ def main():
                 if bw:
                     b['prefer'] = lambda i, bw=bw, c=chase: (-bw * i['boss'] - c * abs(i['x'] - i['bx'])
                                                              if i['boss'] and i['bx'] else 0)
+                if b.pop('doom', True):
+                    import stagemap
+                    allrects = {a_: ar['rects'] for a_, ar in enumerate(stagemap.decode(
+                        stagemap.load(), stagemap.NAMES.index(stage)))}
+                    b['doomed'] = make_doomed(allrects)
                 acts = b.pop('actions', None)
                 if acts:
                     b['actions'] = [sum(BITS[k] for k in x) if isinstance(x, list) else x for x in acts]

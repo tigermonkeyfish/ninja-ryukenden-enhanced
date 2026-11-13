@@ -1,6 +1,6 @@
 {
  "stage": "5-1",
- "notes": "No Level Select run. One area, 12 pages (3,072 px), played rightward; beam legs to standing spots read off the ROM map (floor y 155, ledges y 104/72/109/128/40, the hanging blocks), each leg ending standing on the next spot; then right to the stage end.",
+ "notes": "No Level Select run. One area, 12 pages (3,072 px), played rightward; beam legs to standing spots read off the ROM map (floor y 155, ledges y 104/72/109/128/40, the hanging blocks), each leg ending standing on the next spot; then right to the stage end. p1: the block x 480-608 (y 76-144) leaves no room under it; over it by the floating block x 416-448 (cling, climb onto its top y 72). The same over the blocks at x 1504-1600 (by the floating block x 1440-1472, top y 40) and x 2768-2896 (by the blocks x 2576-2608 and 2640-2672 and the pillar x 2706-2734).",
  "legs": [
   {
    "name": "p0",
@@ -24,7 +24,31 @@
   {
    "name": "p1",
    "beam": {
-    "waypoints": [],
+    "waypoints": [
+     [
+      408,
+      100,
+      12,
+      0,
+      30
+     ],
+     [
+      432,
+      72,
+      16,
+      0,
+      4,
+      1
+     ],
+     [
+      540,
+      76,
+      30,
+      0,
+      4,
+      1
+     ]
+    ],
     "goal": {
      "near": [
       700,
@@ -119,7 +143,31 @@
   {
    "name": "p6",
    "beam": {
-    "waypoints": [],
+    "waypoints": [
+     [
+      1428,
+      100,
+      12,
+      0,
+      30
+     ],
+     [
+      1456,
+      40,
+      16,
+      0,
+      4,
+      1
+     ],
+     [
+      1550,
+      44,
+      30,
+      0,
+      4,
+      1
+     ]
+    ],
     "goal": {
      "near": [
       1650,
@@ -233,7 +281,31 @@
   {
    "name": "p12",
    "beam": {
-    "waypoints": [],
+    "waypoints": [
+     [
+      2564,
+      100,
+      12,
+      0,
+      30
+     ],
+     [
+      2592,
+      40,
+      16,
+      0,
+      4,
+      1
+     ],
+     [
+      2656,
+      72,
+      16,
+      0,
+      4,
+      1
+     ]
+    ],
     "goal": {
      "near": [
       2720,
@@ -252,7 +324,16 @@
   {
    "name": "p13",
    "beam": {
-    "waypoints": [],
+    "waypoints": [
+     [
+      2850,
+      44,
+      40,
+      0,
+      4,
+      1
+     ]
+    ],
     "goal": {
      "near": [
       2950,

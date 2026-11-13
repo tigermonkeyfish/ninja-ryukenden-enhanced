@@ -136,7 +136,7 @@ def near(info, wp):
 
 
 def search(pool, state, waypoints, goal, width=60, chunk=4, max_frames=3000, actions=ACTIONS,
-           lost=None, hp_weight=40, log=print, seconds=600, ywt=0.3, levels=3, prefer=None, stall_frames=600, air_hold=True):
+           lost=None, hp_weight=40, log=print, seconds=600, ywt=0.3, levels=3, prefer=None, stall_frames=600, air_hold=True, doomed=None):
     """Return (node, reason). goal(info) -> True ends the leg. `prefer(info)` adds to the score."""
     W = len(pool.conns)
     import inspect
@@ -195,7 +195,7 @@ def search(pool, state, waypoints, goal, width=60, chunk=4, max_frames=3000, act
         for w in range(W):
             for pid, a, nid, i, kb in pool.conns[w].recv():
                 parent = nodes[(w, pid)]
-                if lost(i):
+                if lost(i) or (doomed and doomed(i)):
                     continue
                 wp = parent.wp
                 while wp < len(waypoints) and near(i, waypoints[wp]):

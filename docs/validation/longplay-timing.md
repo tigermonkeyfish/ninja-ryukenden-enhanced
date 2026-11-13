@@ -231,3 +231,18 @@ Emulator evidence only.
 - New plan options: `add_points` [frame, x, y, r, ry(, standing)] and
   `skip_frames` [[a, b]] in a `follow` leg; wall hops are tried only while
   clinging.
+
+### 4-3, 4-4, 5-1 (no Level Select runs for 4-3 and 5-1)
+
+- 4-3 was made from the map alone: poke exit scans gave the exits (area 0:
+  x 104, y < 24 on the left face of the hanging column; area 1: top right;
+  area 2: x 1192, y < 24; area 3: right end x 744 -> area 4 = stage end).
+  Hand waypoints per area; the gap x 624-720 in area 3 is crossed over the
+  hanging wall x 544-592 and the platform x 645-672. Committed `cefe43c`.
+- 4-4 boss: the 2-3 boss plan unchanged (484 frames). Committed `bcd18df`.
+- Beam: a falling node is dropped as soon as no platform top or wall below it
+  is within reach of the rest of its fall (ROM rectangles), so a walk off a
+  ledge no longer outranks the running jump that clears the gap (5-1 x 1086).
+- 5-1 (one area, 12 pages): legs to standing spots read off the map; the
+  blocks that hang to 11-16 px above the floor (x 480-608, 1504-1600,
+  2768-2896) are passed over, by the floating blocks before them.
