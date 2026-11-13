@@ -208,7 +208,12 @@ def main():
                 g = goal_fn(b.pop('goal'), f.info(), boss_seen)
                 bw = b.pop('boss_weight', 0)
                 chase = b.pop('chase', 0)     # pull toward the boss's x ($2F1C, 2-3)
-                if bw:
+                hw = b.pop('head_weight', 0)  # 6-4C: hits on the head ($303C) first
+                tx = b.pop('target_x', None)
+                if hw:
+                    b['prefer'] = lambda i, bw=bw, hw=hw, tx=tx: (-hw * i['head'] - bw * i['boss']
+                                                                  - (abs(i['x'] - tx) if tx else 0))
+                elif bw:
                     b['prefer'] = lambda i, bw=bw, c=chase: (-bw * i['boss'] - c * abs(i['x'] - i['bx'])
                                                              if i['boss'] and i['bx'] else 0)
                 if b.pop('doom', True):
@@ -255,19 +260,27 @@ def main():
         # `settle` frames (the ending's last screen), within `ending_frames`.
         settle, limit = plan.get('settle', 3600), plan.get('ending_frames', 60000)
         seen, last_change, prev = [], 0, None
+        target = plan.get('end_idle')
         while idle < limit:
             f.step(1, 0)
             idle += 1
+            if target and idle == target:
+                r = f.ram
+                key = (r[0x240], r[0x241], r[0xe5f], r[0xe60])
+                if key != prev:
+                    seen.append((idle, key))
+                prev, last_change = key, idle - settle
+                break
             r = f.ram
             key = (r[0x240], r[0x241], r[0xe5f], r[0xe60])
             if key != prev:
                 seen.append((idle, key))
                 prev, last_change = key, idle
-            if idle - last_change >= settle:
+            if not target and idle - last_change >= settle:
                 break
         else:
             sys.exit(f'ending did not settle in {limit} frames: {seen[-10:]}')
-        idle = last_change + 1          # stop on the first frame of the last screen
+        idle = target or last_change + 1   # end_idle: the last screen's picture fully faded in
         print('ending transitions', seen, 'final screen from idle frame', last_change, flush=True)
         stage_frames = sum(n for n, _ in segs)
         full['segments'] = full['segments'] + segs + [[idle, []]]

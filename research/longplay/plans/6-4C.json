@@ -1,6 +1,6 @@
 {
  "stage": "6-4C",
- "notes": "Final boss room. Beam search scored on the boss's health ($1035) and Ryu's health, pulled toward the boss's x ($2F1C); then the ending plays with no input until its last screen (no change in the master flags $2240/$2241, stage or area for 3,600 frames); the recording ends on the first frame of that screen.",
+ "notes": "Final boss room (owner's hint): the health bar does not move at first; the head must be hit until it falls off (its hit counter is $303C, RAM offset $103C, 16 down to 0), then the stump (boss health $3035). Beam search scored on the head counter, then the boss health, and Ryu's health, near x 130 (where jump-slashes reach the head); then the ending plays with no input until its last screen (no change in $2240/$2241, stage or area for 3,600 frames); the recording ends on the first frame of that screen. Measured after the boss: the ending cinema starts at idle frame 877 (master flags 1,13), the THE END screen's flags (1,14) at 11,846, and its picture stops changing at 13,665 (fade-in done; rendered-frame hashes): the recording ends with 13,666 idle frames, on the finished THE END screen.",
  "legs": [
   {
    "name": "boss",
@@ -11,14 +11,16 @@
     },
     "boss_weight": 300,
     "width": 60,
-    "max_frames": 4000,
-    "seconds": 1500,
-    "stall_frames": 1500,
-    "chase": 1.0
+    "max_frames": 6000,
+    "seconds": 3000,
+    "stall_frames": 2000,
+    "head_weight": 300,
+    "target_x": 130
    }
   }
  ],
  "final": true,
  "settle": 3600,
- "ending_frames": 60000
+ "ending_frames": 60000,
+ "end_idle": 13666
 }
