@@ -517,3 +517,68 @@ What the evidence establishes:
 - Boot: the unmodified ROM boots in the same 480 frames; its start clock is 441
   ticks earlier than the modes' (201,402,039 vs 201,402,480).
 - Everything here is emulator evidence (Geargrafx 78fc3d7); no real-hardware claim.
+
+### Re-aligned replay on the unmodified ROM (secondary diagnostic)
+
+RE-ALIGNED, not a plain replay: the plain-replay headline above stands unchanged. Emulator
+evidence only (Geargrafx 78fc3d7). Tool: `scripts/longplay_realign.py` (`build`, `starts`);
+runs by `scripts/longplay_six.py run --mode unmodified --shortcut` (cold power-on, real
+input). Raw outputs: `/workspace/build/longplay-six/realign/` (`raw/`, `run-*.log`, `probe/`).
+Recording: `research/longplay/full-unmodified.json` (`adjustments` list; flagged
+`complete: false`).
+
+Method: only the number of idle (no button) frames in a hand-over stretch was changed,
+at the end of the stretch; gameplay inputs and their order are untouched. One adjustment
+was needed: frame 53,288 (3-3 to 4-1, act 3 story scene), -1 idle frame, because the
+unmodified ROM reaches 4-1 one frame earlier (53,287). With it the unmodified ROM
+reproduces every stage start 4-1 .. 5-4 exactly one frame earlier than the patched ROM
+(each start keeps the same offset to the recording's marker; PASS in the checker with
+shifted markers). A cold run of the 4-1 .. 4-3 prefix and a cold full run gave the same
+starts.
+
+Stage start = first frame with stage byte set and master flag 0 (the recording's
+marker can be a few frames later). Patched = 1.11-dev ORIGINAL, English, untouched
+recording (still PASS in the earlier full run). Unmodified = adjusted recording.
+
+| Stage | Patched frame | Unmodified frame (re-aligned) | Cumulative difference (unmod - patched) |
+| --- | --- | --- | --- |
+| 1-1 | 1 | 1 | 0 |
+| 1-2 | 2,832 | 2,832 | 0 |
+| 2-1 | 10,136 | 10,136 | 0 |
+| 2-2 | 13,241 | 13,241 | 0 |
+| 2-3 | 16,533 | 16,533 | 0 |
+| 3-1 | 27,777 | 27,777 | 0 |
+| 3-2 | 31,401 | 31,401 | 0 |
+| 3-3 | 34,853 | 34,853 | 0 |
+| 4-1 | 53,288 | 53,287 | -1 |
+| 4-2 | 57,121 | 57,120 | -1 |
+| 4-3 | 60,358 | 60,357 | -1 |
+| 4-4 | 64,423 | 64,422 | -1 |
+| 5-1 | 70,013 | 70,012 | -1 |
+| 5-2 | 73,264 | 73,263 | -1 |
+| 5-3 | 77,206 | 77,205 | -1 |
+| 5-4 | 82,882 | 82,881 | -1 |
+| 6-1 .. 6-4C | 86,508 .. 111,229 | not reproduced | n/a |
+| Ending (1,14) | 124,186 | not reproduced | n/a |
+
+Result: the patched ROM is 1 frame (16.715 ms) SLOWER than the original game from the
+act 3 story scene (between 51,763 and 53,288) through the 5-4 start, 0 before. Last
+gameplay frame and ending: not measured (the unmodified ROM does not get there).
+Updates / lag frames over the same stretch (unmodified frames 1..82,880 vs patched
+1..82,881): unmodified 82,227 / 1,329; patched 82,226 / 1,339. Whole-run totals of the
+patched ROM 124,957 / 1,889; the unmodified whole-run totals are only available from the
+plain replay (125,621 / 1,043), which is out of step and not comparable.
+
+Where idle shifts were not enough: stage 5-4 (stage byte 15), inside the stage, not in a
+hand-over. The update/lag pattern parts at unmodified frame 82,899 (18 frames in: the
+unmodified ROM completes updates in different frames, 17 frames from 82,899 to 82,956),
+the boss spawns (boss health $3035 = 16) at 82,965 against 82,967 in the patched ROM
+(one frame earlier than the -1 shift explains), boss health then drops at 83,023 against
+83,024, the area change to the boss area never happens in step, and the unmodified game
+leaves 5-4 at 84,154 (stage byte 14) while the patched game enters the 5-4 boss area at
+84,320. The input no longer fits and 6-1 on fails. No inputs were invented.
+What differs is the in-stage lag/update timing (same family as the 2-2 difference at
+13,258, which did not break the run there); why 5-4 breaks is not identified. An RAM probe
+at 82,880-82,965 (`probe/`) showed the Ryu block unchanged in both runs over those frames,
+so it did not locate the cause either. Not measured: stages 6-1 to the ending, the
+difference at the last gameplay frame and at the ending, any real-hardware timing.
