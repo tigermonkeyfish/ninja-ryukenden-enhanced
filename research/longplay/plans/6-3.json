@@ -1,6 +1,6 @@
 {
  "stage": "6-3",
- "notes": "The Level Select comparison run (research/comparison-runs/6-3.json) is the guide: its path, recorded on the original through Level Select (research/longplay/fast/runpath.py, research/longplay/paths/6-3.json), gives beam waypoints (standing/walking/clinging points about every 40 frames), one leg per area, long areas in chunks of about 500 path frames.",
+ "notes": "The Level Select comparison run (research/comparison-runs/6-3.json) is the guide: its path, recorded on the original through Level Select (research/longplay/fast/runpath.py, research/longplay/paths/6-3.json), gives beam waypoints (standing/walking/clinging points about every 40 frames), one leg per area, long areas in chunks of about 500 path frames. Area 0: the beam reached the left face of the door column x 676-719 and stalled; holding up climbs it (pipe climb, state 4) into area 1: fixed segment (the beam's route + 64 frames of up). Area 2: climb the block x 1040-1056 (two wall hops) onto its top (y 67), then jump to the post x 965-991 (top 68) (hand point).",
  "legs": [
   {
    "name": "a0-0-0",
@@ -25,20 +25,59 @@
    }
   },
   {
-   "name": "a0-0-1",
-   "beam": {
-    "follow": {
-     "path": "research/longplay/paths/6-3.json",
-     "from_frame": 504,
-     "to_frame": 1168
-    },
-    "goal": {
-     "area": 1
-    },
-    "width": 60,
-    "max_frames": 1995,
-    "seconds": 1995
-   }
+   "name": "a0-climb",
+   "segments": [
+    [
+     8,
+     [
+      "right"
+     ]
+    ],
+    [
+     4,
+     [
+      "I",
+      "right"
+     ]
+    ],
+    [
+     4,
+     [
+      "left"
+     ]
+    ],
+    [
+     4,
+     [
+      "right"
+     ]
+    ],
+    [
+     8,
+     [
+      "up"
+     ]
+    ],
+    [
+     2,
+     [
+      "I",
+      "left"
+     ]
+    ],
+    [
+     10,
+     [
+      "right"
+     ]
+    ],
+    [
+     64,
+     [
+      "up"
+     ]
+    ]
+   ]
   },
   {
    "name": "a1-1-0",
@@ -106,7 +145,17 @@
     "follow": {
      "path": "research/longplay/paths/6-3.json",
      "from_frame": 2536,
-     "to_frame": 2936
+     "to_frame": 2936,
+     "add_points": [
+      [
+       2650,
+       1046,
+       67,
+       12,
+       3,
+       1
+      ]
+     ]
     },
     "goal": {
      "near": [
@@ -117,7 +166,7 @@
      ],
      "in_area": 2
     },
-    "width": 60,
+    "width": 120,
     "max_frames": 1203,
     "seconds": 1203
    }

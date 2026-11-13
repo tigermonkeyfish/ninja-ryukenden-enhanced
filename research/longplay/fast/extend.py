@@ -250,6 +250,38 @@ def main():
         return 0
     f.press(0)
     idle = 0
+    if plan.get('final'):
+        # The ending: no input; idle until the screen state has not changed for
+        # `settle` frames (the ending's last screen), within `ending_frames`.
+        settle, limit = plan.get('settle', 3600), plan.get('ending_frames', 60000)
+        seen, last_change, prev = [], 0, None
+        while idle < limit:
+            f.step(1, 0)
+            idle += 1
+            r = f.ram
+            key = (r[0x240], r[0x241], r[0xe5f], r[0xe60])
+            if key != prev:
+                seen.append((idle, key))
+                prev, last_change = key, idle
+            if idle - last_change >= settle:
+                break
+        else:
+            sys.exit(f'ending did not settle in {limit} frames: {seen[-10:]}')
+        idle = last_change + 1          # stop on the first frame of the last screen
+        print('ending transitions', seen, 'final screen from idle frame', last_change, flush=True)
+        stage_frames = sum(n for n, _ in segs)
+        full['segments'] = full['segments'] + segs + [[idle, []]]
+        full['frames'] = sum(n for n, _ in full['segments'])
+        full['stages'].append({'name': stage, 'start_frame': total0, 'finished': True,
+                               'end_frame': total0 + stage_frames, 'idle_after': idle,
+                               'health_end': end['health'], 'lives_end': end['lives']})
+        full['end'] = {'frame': full['frames'], 'state': {'master': prev[0], 'm2': prev[1]},
+                       'transitions_after_last_stage': seen}
+        full.pop('tail', None)
+        full.setdefault('notes', {})[stage] = plan.get('notes', '') + ' Legs: ' + '; '.join(notes)
+        FULL.write_text(json.dumps(full, separators=(',', ':')) + '\n')
+        print('wrote', FULL, full['frames'], flush=True)
+        return 0
     while idle < 20000:
         f.step(1, 0)
         idle += 1
