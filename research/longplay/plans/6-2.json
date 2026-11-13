@@ -1,6 +1,6 @@
 {
  "stage": "6-2",
- "notes": "No Level Select run. Map + poke exit scans; beam legs to standing spots read off the ROM map. Area 0 (6 pages) is played leftward from x 1504: floors, the platforms x 624-656 and 528-560 (y 70), the block x 400-496 (top y 38), and the exit up the left face of the hanging block x 100-143 (poke: x 104, y < 24 -> area 1). The wall x 692-751 (y 38-154) closes the floor: cling to its right face, climb onto its top (y 38), then left to the platforms. Area 1 (4 pages, leftward from the bottom at x 860): up the block x 785-831 (cling, top y 38), the platforms (y 70), the floor, up the block x 160-224 (top y 72), and up the left face of the column x 100-128 (poke: x 104, y < 24 -> area 2). Area 2 (one page): straight up the left face of the full-height column x 100-143 (poke: x 104, y < 24 -> area 3). Area 3 (3 pages): up the entry column, right along the platforms (y 70), the block x 624-656 (top y 102), up the left face of the hanging column x 692-735 (poke: x 696, y < 24 -> area 4).",
+ "notes": "No Level Select run. Map + poke exit scans; beam legs to standing spots read off the ROM map. Area 0 (6 pages) is played leftward from x 1504: floors, the platforms x 624-656 and 528-560 (y 70), the block x 400-496 (top y 38), and the exit up the left face of the hanging block x 100-143 (poke: x 104, y < 24 -> area 1). The wall x 692-751 (y 38-154) closes the floor: cling to its right face, climb onto its top (y 38), then left to the platforms. Area 1 (4 pages, leftward from the bottom at x 860): up the block x 785-831 (cling, top y 38), the platforms (y 70), the floor, up the block x 160-224 (top y 72), and up the left face of the column x 100-128 (poke: x 104, y < 24 -> area 2). Area 2 (one page): straight up the left face of the full-height column x 100-143 (poke: x 104, y < 24 -> area 3). Area 3 (3 pages): up the entry column, right along the platforms (y 70), the block x 624-656 (top y 102), up the left face of the hanging column x 692-735 (poke: x 696, y < 24 -> area 4). Area 4 (3 pages): up the entry column, along the floor under the hanging blocks, up the right face of the block x 512-592 onto its top (y 40), the post x 644-670 (top y 70), the floor to the right end (poke: x 744, y 120-152 -> area 5, the stage end).",
  "legs": [
   {
    "name": "a0-1",
@@ -424,6 +424,120 @@
     ],
     "goal": {
      "area": 4
+    },
+    "width": 100,
+    "max_frames": 1500,
+    "seconds": 1500,
+    "ywt": 1.0
+   }
+  },
+  {
+   "name": "a4-1",
+   "beam": {
+    "waypoints": [
+     [
+      156,
+      110,
+      8,
+      4,
+      24
+     ],
+     [
+      185,
+      70,
+      16,
+      4,
+      4,
+      1
+     ]
+    ],
+    "goal": {
+     "near": [
+      400,
+      153,
+      40,
+      4
+     ],
+     "in_area": 4
+    },
+    "width": 100,
+    "max_frames": 1500,
+    "seconds": 1500,
+    "ywt": 1.0
+   }
+  },
+  {
+   "name": "a4-2",
+   "beam": {
+    "waypoints": [
+     [
+      560,
+      153,
+      30,
+      4,
+      4,
+      1
+     ],
+     [
+      600,
+      100,
+      8,
+      4,
+      24
+     ],
+     [
+      600,
+      55,
+      8,
+      4,
+      16
+     ],
+     [
+      565,
+      40,
+      24,
+      4,
+      4,
+      1
+     ]
+    ],
+    "goal": {
+     "near": [
+      657,
+      70,
+      14,
+      3
+     ],
+     "in_area": 4
+    },
+    "width": 100,
+    "max_frames": 1500,
+    "seconds": 1500,
+    "ywt": 1.0
+   }
+  },
+  {
+   "name": "a4-exit",
+   "beam": {
+    "waypoints": [
+     [
+      730,
+      153,
+      16,
+      4,
+      4,
+      1
+     ],
+     [
+      744,
+      140,
+      8,
+      4,
+      20
+     ]
+    ],
+    "goal": {
+     "stage_change": true
     },
     "width": 100,
     "max_frames": 1500,
