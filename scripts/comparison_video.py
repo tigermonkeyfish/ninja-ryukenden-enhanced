@@ -207,9 +207,17 @@ def start_point(game, rom, seed, enhanced=False):
         # palette-lag) as it leaves it for the default settings: the native
         # $FD67-$FD6F in RAM; the bytes are unused in the original and in
         # builds before it.
-        game.write(0x17c0, bytes.fromhex('6412a512c90190fa60'))
-        # ... and ANIMR ($37EA), the animation table choice for Original.
-        game.write(0x17ea, bytes.fromhex('a932a0cf0828eaeaea60'))
+        # As the reset's configure writes them for Original: WAITR's 30
+        # bytes ($37C0, the native wait and never-run padding) and ANIMR's 20
+        # ($37EA, the animation table choice; bytes 16-19 take bank 3
+        # $D400's pointer, unused outside NES). Unused RAM in older builds.
+        data = Path(rom).read_bytes()
+        data = data[len(data) % 0x2000:]
+        pointer = data[3 * 0x2000 + 0x1400:3 * 0x2000 + 0x1402]
+        game.write(0x17c0, bytes.fromhex('6412a512c90190fa60') + b'\xea' * 21)
+        game.write(0x17ea, bytes.fromhex('a932a0cf0828eaeaea60') + b'\xea' * 6
+                   + bytes([pointer[0], 0xea, pointer[1], 0xea]))
+        game.write(0x17e4, b'\x10')      # configure's scratch: ANIMR's pointer offset
 
 
 def start_stage(game, stage):
