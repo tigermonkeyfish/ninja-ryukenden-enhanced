@@ -66,7 +66,7 @@ a merge; nothing has to be fixed before the test.
   | Area change | First visible frame | ORIGINAL, NES-A, NES-B | SMS | GB DMG | APOCALYPSE |
   | --- | --- | --- | --- | --- | --- |
   | 2-2 area 1 | 14,033 | 0 | 0 | 0 | 0 |
-  | 2-2 area 2 | 14,673 | 0 | 56 (one sprite) | 56 | 56 |
+  | 2-2 area 2 | 14,673 | 0 | 56 (a 15 x 15 patch, taken for a sprite) | 56 | 56 |
   | 5-2 areas 1-3 | 74,534, 75,462, 76,161 | 0 | 0 | 0 | 0 |
   | 5-3 area 1 | 77,976 | 0 | 0 | 0 | **17,126** |
   | 5-3 area 2 | 78,672 | 0 | 0 | 0 | **18,429** |
@@ -120,7 +120,7 @@ a merge; nothing has to be fixed before the test.
   end of the second frame only; its envelope and every other register agree
   from the next frame, so the driver itself is in step). The eight
   neighbouring frames 1,660-1,668 pass on both builds; with SMOOTH PARALLAX
-  ON the same frames pass. Inferred: the 18 clocks move the main loop's
+  ON frames 1,662-1,666 pass. Inferred: the 18 clocks move the main loop's
   wait against the timer interrupt, which the menu cannot hold.
 - Fix: none needed for the test. For the record: state the cost. A
   cycle-neutral dispatch would have to keep the first compare `cmp #$fe` /
@@ -236,7 +236,8 @@ No, in every path found (verified where marked).
   every area of 2-2 and 5-2, in 5-3 areas 0-4 and 6 and in 5-4 (which
   reloads 5-3), Game Over -> Continue from 2-2, 5-2, 5-3 and 5-4, Level
   Select into 2-2, 5-2, 5-3 and 5-4 (from 2-2) and restarts of each: the
-  pieces at `$38` / `$37` at every reload, no fallback draw, the game fields
+  pieces at `$38` / `$37` at every reload, no fallback draw, and for the
+  deaths and Continues the game fields
   equal to the unmodified ROM's in every frame (760 each; one frame-end
   sample of the lives byte and of `$2E63` apart in some, with the counter
   equal), and from the respawn or reload on every picture identical to the
@@ -336,7 +337,19 @@ No, in every path found (verified where marked).
   number of frames with entries not yet uploaded equals ORIGINAL's in SMS
   and APOCALYPSE; GB DMG has 13-22 more at each scene's start (black as
   `$040` until the scene's first upload).
-- Forced vblanks: TO BE FILLED.
+- Forced vblanks (verified; the author's `cl_fuzz_worker.py` on this ROM,
+  a vblank forced at every instruction from 12 before the worker's entry to
+  6 after its return, 200 frames each against the unforced run): the locked
+  runs 65,923 and 65,924 (31 points each) and the unlocked re-queue 65,926
+  (69) in GB DMG, SMS and APOCALYPSE, and in GB DMG also the scene starts
+  5,748, 97,646 and 113,229 (the ending; 69 each): 600 forced calls, all
+  returned, no `brk`, the VCE equal to the unforced run's in every compared
+  frame. 12 points are flagged for `RENT`'s form only (GB DMG, 5,748 and
+  113,229, a vblank 7-12 instructions before the worker's entry): the
+  previous review's residual (the dispatcher re-queues, the queue is then
+  empty, the worker is not called and `RENT` stays MS for that scene, each
+  upload going through the dispatcher); none at the locked or unlocked
+  65,92x points.
 - Reset in a scene: the RAM clear. The menu cannot open in a scene.
 
 ### 5. Timing
@@ -388,7 +401,7 @@ No, in every path found (verified where marked).
 | SMOOTH PARALLAX OFF (saved options `$01`), ORIGINAL, to 84,500, every picture of 2-2 and 5-2 to 5-4 hashed | game fields and all 83,807 updates equal to the unmodified ROM's; the four loads and the frames from each area change to 8 frames past the first visible one identical, except the exit frames 14,028 and 80,884 (the `exit-frames` record's playfield drop) and three frames after 2-2's camera moves; 833 of 14,702 pictures differ in all (2-2 724, 5-2 17, 5-3 92, 5-4 0): single frames where the native backdrop is redrawn a tile over, 19-42 pixels in the three looked at. Palette timing 3 with OFF gives the same picture as this build in every frame of 2-2 (0 of 3,401 differ), so this is the older cost of the wrapper before the native redraw, not these changes |
 | Japanese and Chinese through the 5-2 and 5-3 loads and 5-2's area changes (from 73,200, 4,200 frames) and through 5-3's end, the story scene and the 5-4 load (from 81,000, 3,500 frames): the language byte written in a saved state of both ROMs, the recording replayed | game fields equal to the unmodified ROM's in every frame, the loads and area changes on the same frames (5-4's at 82,897 in both languages); APOCALYPSE's fields equal ORIGINAL's |
 | Deaths, Continue, Level Select | question 1 |
-| cinema-lock forced vblanks | TO BE FILLED |
+| cinema-lock forced vblanks | 600 calls, all returned, colours right; 12 flagged for the form only (the known residual; question 4) |
 
 ### 8. Hardware assumptions and residual risks
 
@@ -484,6 +497,10 @@ stage, area, palette mode and what was pressed.
   `check_boot.py`, `check_menu.py` select / options / reset (the combined
   record's results taken as read).
 - The scratch variant of F5 beyond frame 14,700 and with any gate.
+- Seen and left alone (not these changes): in 5-4's boss fight single
+  frames differ from the unmodified ROM by 1-14 pixels of one HUD digit
+  (rows 19-23), the digit's redraw landing at another raster time behind
+  the Enhanced wrapper; the game fields are equal.
 
 ## Probes
 
