@@ -275,48 +275,135 @@ scenarios cannot be ruled out); this is the open risk of the RAM claim.
 
 ## Results on the fixed build (emulator evidence)
 
-Build `fix5` (see "Delivered" for its SHA-256). Pristine identity: the
-pre-fix source (tip 3a1dbe4) rebuilds to `cec5f7b3...8059`, the build
-under test; 1.10's bytes are untouched (`release/`, `patches/` unchanged).
+Build under test: `4147a8b1...a8849` (source `palette-lag`, see the
+report's commit list; "fix8" in `/workspace/build/palette-lag`). Load
+timing and the NES loader probe ran on "fix7", which differs from it only
+in `src/options` (1,192 bytes, all in the options module's ranges; neither
+probe runs menu code). Pristine identity: the pre-fix source (3a1dbe4)
+rebuilds to `cec5f7b3...8059`; `project.py apply` still reproduces 1.10
+(`3d5c05df...bbf6`); `patches/`, `release/` and `VERSION` (1.11-dev)
+unchanged.
 
-### Margins of the three windows (itrace, exact accounting)
+### Survey (`palette_lag.py survey` + `report`, 11 runs x 9 variants)
 
-Update woken at the given frame; busy = vblank interrupt entry to the
-update's `STZ $12`; left = clocks before the next vblank interrupt.
+Every mode equals ORIGINAL and 1.10 in update-counter deltas and every
+gameplay field (SAT hash, Ryu, timer, camera, health, lives, stage, area)
+in all 11 runs, the tails included, except one transition sample:
 
-| window | build | ORIGINAL | APOCALYPSE | SMS | GB DMG | NES-A | NES-B |
-|---|---|---|---|---|---|---|---|
-| 3-2 damage (1032) | pre-fix | 352,104 / +6,894 | 352,482 / +6,510 | 372,927 / overrun | 372,705 / overrun | 372,681 / overrun | (as NES-A) |
-| 3-2 damage (1032) | fix | 352,104 / +6,894 | same | same | same | same | same |
-| 3-2 frame 1104 | pre-fix | 353,232 / +5,772 | - | 393,168 / overrun | - | - | - |
-| 3-2 frame 1104 | fix | 353,232 / +5,772 | same | same | same | same | same |
-| 4-1 stage clear (2488) | pre-fix | 237,561 / +121,434 | 260,052 / +98,952 | 260,046 / +98,952 | - | 237,561 / +121,434 | - |
-| 4-1 stage clear (2488) | fix | 237,561 / +121,434 | same | same | same | same | same |
+| run | variants | first difference | what it is |
+|---|---|---|---|
+| 6-3 | APOCALYPSE, SMS, GB DMG | frame 5138 (16 frames after the stage end flag, cinema state) | the cinema-entry re-upload (all 512 colours in original, below): the update's counter increment falls after the frame step's end (delta 0 then 2); no update overruns |
 
-"same": every number (busy, left, main-loop clocks, vblank-handler clocks)
-equal to ORIGINAL's to the master clock. (The 1104 window holds the input
-change at 1103; `itrace` replays the stored input frame by frame, so the
-spurious overrun of the first worker's margin tool does not apply.)
+3-2 reaches its stage-end flag in every mode (pre-fix: NES-A, NES-B, SMS,
+GB DMG lost frames at 1033 and 1104 and ended one step short). 4-1, 5-3:
+the pre-fix stage-clear 0/2 samples are gone.
 
-### Stage loads (`loadtime`, all 22 Level Select entries, mode set and settled before the load)
+### Interrupt-level comparison (`palette_lag.py events`)
 
-ORIGINAL's sound-command margin to the next vblank: 38,118 clocks (3-1) to
-298,329 (5-1); first update 339,483 to 347,493 before the next vblank.
+The master clock of every interrupt entry, pad read and VCE register write,
+per frame, against ORIGINAL (the same menu route):
 
-| build | worst delay of the sound command / first update vs ORIGINAL | loads where either lands in another vblank |
+| run | APOCALYPSE | SMS | GB DMG | NES-A | NES-B |
+|---|---|---|---|---|---|
+| 3-2 (3,197 frames) | 29 frames, max 15 clk | 28, 15 | 29, 15 | 0 | 0 |
+| 2-2 (4,006) | 51, max 16,398 (frame 795) | 43, 16,398 | 48, 16,401 | 1, 9 clk | 1, 9 |
+| 4-1 (2,548) | 33, max 21,042 (2503, cinema) | 32, 21,042 | 35, 21,042 | 0 | 0 |
+| 6-3 (5,183) | 1,402, max 15 clk in gameplay; 5138 cinema | 1,350 | 65 | 2, 9 clk | 2, 9 |
+
+Pre-fix (3-2, SMS): every one of the 3,197 frames differs.
+
+### End to end with saved settings (`palette_lag.py e2e`)
+
+Power-on with backup RAM holding each mode's settings (`SETTINGS LOADED`,
+status 9; the menu never opened), the title left with Run, the game's own
+start into 1-1, then the 1-1 run's input; every sound-driver command
+(`$38:$4006`) from power-on, with its master clock (56 in each mode):
+
+| mode | first update of 1-1 | sound commands at another clock than ORIGINAL | gameplay fields |
+|---|---|---|---|
+| NES-A, NES-B | equal | none | equal in all 2,903 frames |
+| SMS | equal | 3 (-202: +12 clk; 1027: -9; 1716: +15) | equal |
+| GB DMG | equal | 4 (max 18 clk) | equal |
+| APOCALYPSE | equal | 3 (max 12 clk) | equal but frame 1858: one counter sample (next frame equal) |
+| pre-fix SMS | +5,100 clk | 52 of 56 (up to +24,387) | first difference at frame 1680 |
+| pre-fix NES-A | equal | 10, 7 extra commands (+87,630 at 1779) | first difference at 1550 |
+
+The smallest margin of any sound command to the next vblank in these runs:
+166,590 clocks.
+
+### Stage loads (`loadtime`, all 22 Level Select entries; the mode written and configured, settled 60 updates)
+
+ORIGINAL's sound-command margin to the next vblank: 38,118 (3-1) to 298,329
+(5-1) clocks; the first update 339,483 to 347,493.
+
+| build | worst delay of the sound command / first update vs ORIGINAL | a load landing in another vblank |
 |---|---|---|
-| pre-fix | APOCALYPSE 5,220, SMS 5,133, GB DMG 5,043, NES-A 7,392, NES-B 7,386 clocks | none |
+| pre-fix | APOCALYPSE 5,220, SMS 5,133, GB DMG 5,043, NES-A 7,392, NES-B 7,386 | none |
 | fix | 0 in every mode and stage (both events at ORIGINAL's master clock) | none |
 
-(Pre-fix, settled modes in a Level Select load did not flip; the 3-2 menu
-route did, by the preview's re-uploads and the NES colour lookups.)
+### Picture (`research/tools/palette-lag/picture.py`)
 
-### NES loaders (`research/tools/palette-lag/nes_cycles.py`)
+The VCE of every frame (whole contents where it changed) against ORIGINAL's
+in the same frame, mapped by the mode's table in gameplay, as it is in
+cinemas:
 
-992 calls of `$F1C0` (sprite palettes 0-159) and `$F211` (sets 0-21 in
-stages 1-1, 3-1, 3-2, 4-1), master state 0 and 1, NES-A and NES-B, from one
-saved state with interrupts off: every call takes exactly Original's
-clocks (pre-fix: +138 to +702); the RAM palette, backup and queue equal
-the pre-fix build's in every case; Original's calls are unchanged in clocks
-and results. (Zero page `$29` differs in the 3-2 variant case: the variant
-data moved address in bank `$45`; the colours are equal.)
+- ORIGINAL equals the pre-fix build in every frame of the 11 runs; NES-A and
+  NES-B too, except 3-2 from 3078 (the pre-fix NES modes were one update
+  behind there).
+- APOCALYPSE, SMS, GB DMG equal ORIGINAL's colours in their mode in every
+  gameplay frame except where the worker had no time (the fallback,
+  below): 2-2 793-794 and 1660-1661 (127 colours one frame late), 5-2
+  (APOCALYPSE) 555, 1204, 1825, 5-3 (APOCALYPSE) 714, 1428, 2376 and others
+  (13 frames), 5-3 (SMS, GB DMG) 5299, 6498. Cinema starts: one frame (the
+  first cinema colours sampled while the re-upload is under way: 4-1 2502,
+  5-3 6783, 6-3 5138); GB DMG only: the black after a stage clear stays its
+  darkest shade until the cinema queues its first colours (4-1 2487-2501,
+  6-3 5122-5137, 5-3 6768-; pre-fix switched to black at the first cinema
+  vblank). The pre-fix build differs from the fix in 4-218 frames a run:
+  its mapped upload took at most 168 colours a vblank (16 for a left-over),
+  so changes arrived over several frames; the fix uploads them in
+  ORIGINAL's frame.
+
+### Checks
+
+`python3 -m unittest discover -s tests` (54 pass), `audit_public.py` (pass),
+`check_boot.py` (pass), `check_menu.py --only options --only reset` (64 of
+64 after adding the worker scratch, `BORDER_MAP` and `SHADOW` to the
+preview scratch list), `check_menu.py --only select` (23 of 23),
+`check_bram.py --only cycle` (17 of 17, PASS). Not run: `check_bram.py
+--only matrix` (only the trampoline's call changed in `src/bram`),
+`check_menu.py` sweep, the lock-modelling emulator, the stored routes'
+videos, real hardware, audio.
+
+## Residual differences (what is not zero)
+
+1. **Wait-loop phase (mapped modes).** After a frame where the worker ran,
+   the native wait loop starts at another cycle than Original's, so the next
+   vblank interrupt is taken up to a cycle earlier or later and the next
+   update starts up to 5 CPU cycles (15 master clocks measured; 9 at most by
+   the loop's 10-cycle period plus the interrupt's entry) off. Interrupts
+   landing inside the worker or the NES unpack enter 1 cycle apart (pad read
+   9 clocks). It can change a frame only for an update ending, or a sound
+   command landing, within ~15 clocks of a vblank (the measured margins:
+   >= 5,772 clocks for the busiest 3-2 updates, >= 38,118 for load sound
+   commands, >= 166,590 for the e2e run's sound commands).
+2. **Fallback (mapped modes).** When an update queues more colours than the
+   idle time before the vblank can convert (2-2's area change queues all 512
+   43,000 clocks before the vblank; converting 512 needs about 107,000), the
+   old mapped upload runs: +2,500 clocks at that vblank and +16,400 at the
+   next (2-2 frames 793-795, 1660-1661; 5-2 and 5-3 likewise), and the
+   colours arrive a frame late. `palette_now` (1-1's and 2-2's area
+   backdrops, written to the VCE in the update) still maps in the main loop:
+   +1,600 clocks on 2-2's area-change update (which keeps 42,700 clocks of
+   slack). No frame was lost by either in the 11 runs.
+3. **Cinema entry (mapped modes).** The first cinema update with palette
+   work re-uploads all 512 colours in original (as before the fix, which did
+   it at the first cinema vblank): +21,000 clocks in one cinema vblank. No
+   update overruns (cinema updates are light; the next stage load starts
+   the music afresh).
+4. **Boot.** `palette_boot`/configure take the same cycles in every mode
+   (branch-free); against the pre-fix ORIGINAL the reset is longer, which
+   moved one title-screen sound command by 60 clocks in the e2e run (1-1's
+   commands and gameplay unchanged).
+5. **RAM claim.** `$37C0-$37FD` and `$3C00-$3FFF` passed the watch audit
+   above but not the ending, Continue/Game Over or unreplayed bosses.
