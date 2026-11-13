@@ -19,7 +19,9 @@ R, L, I, II, U, D = BITS['right'], BITS['left'], BITS['I'], BITS['II'], BITS['up
 ACTIONS = [0, R, L, R | I, L | I, I, R | II, L | II, II, R | I | II, L | I | II,
            # wall hops (clinging: a short press of I away, then toward the wall
            # regrabs it about 20 px higher; 4-frame chunks cannot express it)
-           ((2, L | I), (10, R)), ((2, R | I), (10, L)), ((3, L | I), (12, R)), ((3, R | I), (12, L))]
+           ((2, L | I), (10, R)), ((2, R | I), (10, L)), ((3, L | I), (12, R)), ((3, R | I), (12, L)),
+           # climbing a pipe or ladder while clinging (state 4: up held)
+           ((8, U),)]
 
 
 def buttons(m):
@@ -50,7 +52,7 @@ def _worker(conn, key_bytes):
             for pid in ids:
                 st = store[pid]
                 f.load(st)
-                clinging = f.ram[0xeaa] == 5
+                clinging = f.ram[0xeaa] in (4, 5)
                 for a in actions:
                     if isinstance(a, tuple) and not clinging:
                         continue      # wall hops only from a wall
