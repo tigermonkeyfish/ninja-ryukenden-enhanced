@@ -272,6 +272,7 @@ def load_timing(rom, stage, bits, vce_log=None):
         start_point(game, rom, seed_state(), True)
         x = game.read(0x100, 1)[0]
         game.write(0x100, bytes([(x & 0x47) | bits]))
+        configure(game, rom)
         # Let the mode settle (a mapped mode re-uploads every colour after
         # the change) before the load: 60 updates, stopping at the hook.
         game.call('set_breakpoint', {'address': '23f3', 'memory_area': 'rom', 'execute': True})
@@ -526,6 +527,29 @@ def event_run(runname, variant, out):
             frames.append(ev)
     Path(out).write_text(json.dumps(frames))
     return frames
+
+
+def configure(game, rom):
+    """Builds with palette timing (src/palette's configure at bank $46 $5B03,
+    since palette-lag): run it once from a RAM stub, as the menu and the reset
+    do after a change of $2100 bits 3-5, so a mode written by the debugger
+    gets its WAITR and ANIMR. Builds without it: nothing. Stops where it
+    started (the main-loop hook)."""
+    data = Path(rom).read_bytes()
+    if data[0x46 * 0x2000 + 0x1b03] != 0x4c:
+        return
+    cpu = game.call('get_huc6280_status')
+    pc = int(cpu['PC'], 16)
+    stub = bytes([0x43, 0x04, 0x48, 0xa9, 0x46, 0x53, 0x04, 0x20, 0x03, 0x5b, 0x68, 0x53, 0x04, 0x4c, pc & 0xff, pc >> 8])
+    game.write(0x3f00 - 0x2000, stub)
+    saved = {k: int(cpu[k], 16) for k in ('A', 'X', 'Y', 'P')}
+    game.reg('PC', 0x3f00)
+    game.call('set_breakpoint', {'address': f'{0x3f0d:x}', 'memory_area': 'cpu_addr', 'execute': True})
+    game.run_to('3F0D', polls=40000)
+    game.call('remove_breakpoint', {'address': f'{0x3f0d:x}', 'memory_area': 'cpu_addr'})
+    for k, v in saved.items():
+        game.reg(k, v)
+    game.reg('PC', pc)
 
 
 def updates(events):
