@@ -16,7 +16,10 @@ from fastemu import Fast, BITS, airborne
 
 NAMES = {v: k for k, v in BITS.items()}
 R, L, I, II, U, D = BITS['right'], BITS['left'], BITS['I'], BITS['II'], BITS['up'], BITS['down']
-ACTIONS = [0, R, L, R | I, L | I, I, R | II, L | II, II, R | I | II, L | I | II]
+ACTIONS = [0, R, L, R | I, L | I, I, R | II, L | II, II, R | I | II, L | I | II,
+           # wall hops (clinging: a short press of I away, then toward the wall
+           # regrabs it about 20 px higher; 4-frame chunks cannot express it)
+           ((2, L | I), (10, R)), ((2, R | I), (10, L)), ((3, L | I), (12, R)), ((3, R | I), (12, L))]
 
 
 def buttons(m):

@@ -50,8 +50,8 @@ for i, (area, lo, hi) in enumerate(spans):
         n = b - a + 1
         legs.append({'name': f'a{area}-{i}-{k}',
                      'beam': {'follow': {'path': pfile, 'from_frame': a, 'to_frame': b},
-                              'goal': goal, 'width': width, 'max_frames': max(600, 2 * n),
-                              'seconds': max(600, 2 * n)}})
+                              'goal': goal, 'width': width, 'max_frames': max(900, 3 * n),
+                              'seconds': max(900, 3 * n)}})
 plan = {'stage': stage,
         'notes': (f'The Level Select comparison run (research/comparison-runs/{stage}.json) is the guide: its path, '
                   'recorded on the original through Level Select (research/longplay/fast/runpath.py, '

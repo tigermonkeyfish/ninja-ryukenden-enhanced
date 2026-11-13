@@ -114,7 +114,10 @@ def main():
         else:
             if cfile.exists():
                 c = json.loads(cfile.read_text())
-                if c['state'] == h and c['spec'] == leg['beam']:
+                budget = ('max_frames', 'seconds', 'width', 'stall_frames', 'ywt')
+                same = lambda a, b: {k: v for k, v in a.items() if k not in budget} == \
+                    {k: v for k, v in b.items() if k not in budget}
+                if c['state'] == h and same(c['spec'], leg['beam']):
                     legsegs = c['segments']
             if legsegs is None:
                 b = dict(leg['beam'])
