@@ -1,0 +1,88 @@
+{
+ "stage": "2-1",
+ "notes": "Area 0 and area 1 up to the pit hop: the old route bot run (research/longplay/hand/2-1.bot-partial.json, first 1,742 frames; it includes the hand-found hop over the area 1 pit at x 516). Then beam search (research/longplay/fast) through waypoints read off the ROM collision map (stagemap.py): area 1 exits at its top right (door x 1218-1248, y 0-64), not up the left wall where the bot was trapped.",
+ "legs": [
+  {
+   "name": "a0-a1hop",
+   "file": "research/longplay/hand/2-1.bot-partial.json",
+   "frames": 1742
+  },
+  {
+   "name": "a1",
+   "beam": {
+    "waypoints": [
+     [
+      700,
+      104,
+      12
+     ],
+     [
+      790,
+      104,
+      10
+     ],
+     [
+      880,
+      152,
+      8
+     ],
+     [
+      1000,
+      101,
+      12
+     ],
+     [
+      1050,
+      69,
+      12
+     ],
+     [
+      1140,
+      69,
+      10
+     ],
+     [
+      1232,
+      30,
+      4
+     ]
+    ],
+    "goal": {
+     "area": 2
+    },
+    "width": 60,
+    "max_frames": 1500,
+    "seconds": 900
+   }
+  },
+  {
+   "name": "a2",
+   "beam": {
+    "waypoints": [
+     [
+      160,
+      106,
+      8
+     ],
+     [
+      186,
+      100,
+      12
+     ],
+     [
+      186,
+      20,
+      10
+     ]
+    ],
+    "goal": {
+     "area": 3
+    },
+    "width": 60,
+    "max_frames": 1200,
+    "seconds": 900,
+    "ywt": 1.0
+   }
+  }
+ ]
+}

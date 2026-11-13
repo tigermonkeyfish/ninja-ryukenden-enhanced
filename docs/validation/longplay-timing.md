@@ -115,3 +115,47 @@ bot plays it leftward; further, the way on is up.
   search from this extra file (`--extra research/longplay/hand/2-1.extra.json`).
   The last search (600 s limit) was started from it and killed at handover before
   any result.
+
+## Map decoder and fast search (2026-11-13, continuing)
+
+Emulator evidence only.
+
+- **Collision map in ROM (one decoder for every stage):** a CPU trace of one
+  2-1 frame (headless Geargrafx `set_trace_log`) shows bank 1 `$9299` mapping
+  bank 7 at `$6000` and calling `$6000`, which tests Ryu's box (copied to
+  `$2E91-$2E97`) against rectangles: bank 7 `$62F2 + 2*stage` -> stage table
+  (`+2*area`) -> page table (`+2*page`, page = high byte of x) -> 5-byte
+  records `[type, x0, y0, x1, y1]` until `$FF`. Types: `00` floor/platform,
+  `01` girder, `02` wall Ryu clings to, `03` solid block, `13` door-like
+  (some are the area exits, e.g. 2-1 area 1 top right x 1218-1248 y 0-64; a
+  poke scan confirms which). No map buffer in RAM.
+  `research/longplay/fast/stagemap.py STAGE` draws every area as ASCII
+  (coordinates only; nothing of the ROM is stored).
+- **Exit scan:** `research/longplay/fast/exitscan.py STATE` pokes Ryu's x/y
+  over a 16-px grid of the current area, steps 12 frames and marks where the
+  area or stage changes (diagnostic only; the recording never pokes).
+- **Ryu state bytes:** `$2EA7` vertical speed (signed), `$2EAA` motion state
+  (1 on ground walking, 3 airborne, 5 on arrival through a floor door), `$2EA5`
+  x speed, `$2EA6` sub-pixel accumulator (do not key on it).
+- **Fast core:** `research/longplay/fast/shim.cpp` + `Makefile` build
+  `libgx.so` from the same Geargrafx 78fc3d7 core sources as the headless
+  emulator (`-DGG_DISABLE_DISASSEMBLER`), driven in-process with ctypes
+  (`fastemu.py`). It loads the headless emulator's state files. Check: from
+  `entered.state` (1-1's first update, ORIGINAL), full.json's 10,136 frames end
+  with all 8 KiB of RAM identical to the headless replay. About 1,330 frames/s
+  per process; save/load of a state costs about 35 us.
+- **Beam search:** `research/longplay/fast/beam.py`: real button input in
+  4-frame chunks (none, left/right, with I and/or II), scored by waypoint
+  progress, distance to the next waypoint (y weighted 0.3 by default so jump
+  arcs survive), health; deduplicated by (waypoint, area, x/3, y/3, `$2EA7`,
+  `$2EAA`); the beam is shared between the top waypoint levels; 4 worker
+  processes own the states. 2-1 area 1 (the leg the old bot could not do)
+  took 93 s.
+- **Stage builder:** `research/longplay/fast/extend.py research/longplay/plans/STAGE.json`
+  replays full.json in the fast core, runs the plan's legs (fixed segments, a
+  prefix of a run file, or a beam leg with waypoints read off the map), caches
+  solved legs in `build/longplay/legs/`, idles to the next stage and appends
+  the stage to full.json.
+- **Cold-start check:** `scripts/longplay_check.py --mode MODE` (headless, one
+  fresh session from power-on, whole file, PASS/FAIL per stage start and at the
+  end record).
