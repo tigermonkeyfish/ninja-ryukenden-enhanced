@@ -32,7 +32,7 @@ def inputs(path=RECORDING):
 
 
 class T:
-    def __init__(self, rom):
+    def __init__(self, rom, load=True):
         L = self.lib = ctypes.CDLL(str(LIB))
         L.gx_init.argtypes = [ctypes.c_char_p]
         L.gx_load_state.argtypes = [ctypes.c_char_p, ctypes.c_size_t]
@@ -47,7 +47,7 @@ class T:
         L.gx_trace_frame.argtypes = [ctypes.c_void_p, ctypes.c_long]
         L.gx_run_watch.restype = ctypes.c_long
         L.gx_run_watch.argtypes = [ctypes.c_int, ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p, ctypes.c_long, ctypes.c_void_p]
-        if not L.gx_init(str(ROMS.get(rom, rom)).encode()):
+        if load and not L.gx_init(str(ROMS.get(rom, rom)).encode()):
             raise RuntimeError('load failed')
         self.ram = (ctypes.c_ubyte * 0x2000).from_address(ctypes.addressof(L.gx_wram().contents))
         self.size = None

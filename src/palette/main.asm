@@ -109,6 +109,8 @@ BORDER = $2281              ; written to colour $100 after each upload
 FADE_LEVEL = $2a8a          ; the native fade's brightness (below, "Fades")
 PALETTE_LOCK = $2283
 NATIVE_UPLOAD = $f3b5
+NATIVE_UPLOAD_END = $f421     ; its rts
+RAM_PALETTE = $2286
 QUEUE_ALL = $f394           ; native: queue colours 0-511, under the lock
 MAPPED_STATE = $80          ; PALETTE_STATE bit 7: the VCE holds mapped colours
 LEFTOVER = $20              ; bit 5: the queue's one entry was left over
@@ -158,6 +160,12 @@ W_DST = $22
 W_Y1 = $24
 W_ENTRY = $25
 W_MAP = $26
+RENT = $3740                ; RAM, $3740-$37BF: the vblank's palette upload ($3740-$37B4)
+RENT_SIZE = $74             ; bytes 0-$73 hold the routine; $74 is RENT_STOP
+RENT_STOP = $74             ; offset of an rts that configure routes the entry to
+RENT_ROUTE = RENT_STOP - 5  ; the beq's offset that reaches RENT_STOP
+RENT_BEQ = 3                ; offset of the entry's beq (the queue is empty)
+BOOT_PAD = 6                ; configure_body's delay: 6 x 6 cycles (palette_boot)
 WAIT_ENTRY = $5b00          ; fixed addresses: the boot trampoline (src/bram)
 CONFIGURE_ENTRY = $5b03     ; ... and the menu's set_palette (src/options)
 
@@ -166,9 +174,10 @@ CONFIGURE_ENTRY = $5b03     ; ... and the menu's set_palette (src/options)
  ; "Palette timing"), the same cycles in every mode.
  .org $e061
  jsr WAITR
- ; The vblank interrupt's palette upload (native: jsr $f3b5).
+ ; The vblank interrupt's palette upload (native: jsr $f3b5): RENT in RAM
+ ; (below, "Palette timing"), the native upload's cycles in every mode.
  .org $fd13
- jsr palette_upload
+ jsr RENT
  ; Fixed-bank trampoline: map the module's bank for the call and restore
  ; MPR2. palette_now (carry set; stage modules) writes colours X to X+Y-1 of
  ; the RAM palette to the VCE at once; palette_upload (carry clear; the
@@ -204,38 +213,40 @@ palette_upload_end:
 ;@mirror begin
  .org $5000
 palette_entry:
- ; Cycle counts below (HuC6280, no page-crossing penalties) are those of
- ; the paths before HELL: palette_now reaches its body in 4 (was a bcc not
- ; taken and a jmp: 6), the vblank in 2 + 2 (was a bcc taken: 4).
+ ; palette_now (carry set; stage modules), or the vblank from RENT's
+ ; dispatch (carry clear; see "Palette timing" at the end): RENT runs the
+ ; native upload itself in every case Original's cycles allow, and comes
+ ; here only when a mapped mode's queue holds colours the worker has not
+ ; converted (or the VCE holds mapped colours where original ones are due),
+ ; or right after the reset, before RENT is written.
  bcs palette_now_mapped
- nop
 palette_vblank:
- ; As the native upload: nothing happens while the palette is locked
- ; (13 cycles from palette_entry to the rts, as before).
+ ; A worker this vblank interrupted after its last check of $12 must not
+ ; arm RENT with its inc FASTOK (palette-lag review F2): $80 + 1 is not 1.
+ ; (MS stays disarmed until the worker's next stz/inc; MN, which needs 0,
+ ; never comes here once written: the worker's stz puts 0 back if it did.)
+ lda #$80
+ sta FASTOK
+ ; As the native upload: nothing happens while the palette is locked.
  lda PALETTE_LOCK
  bne entry_return
  ; LIVE (palette timing, 1.11-dev): zero in Original, NES-A/B and cinemas,
- ; $10 in a mapped mode's gameplay once the idle worker has seen it (see
- ; "Palette timing" at the end). Zero: the native upload, reached in 37
- ; cycles from palette_entry as before LIVE existed.
- lda LIVE                   ; 5
- beq vblank_plain           ; 4 taken
- ; Mapped gameplay. FASTOK = 1: the worker has converted every queued
- ; colour into SHADOW, so fast_upload (the native upload, reading SHADOW)
- ; runs, reached in 37 cycles as the native one is.
- dec FASTOK                 ; 7
- bne vblank_fallback        ; 2
- nop
- nop
- nop
- jmp fast_upload            ; 4: 37 cycles
+ ; $10 in a mapped mode's gameplay once the idle worker has seen it.
+ ; Mapped gameplay reaches here only when the worker has not converted the
+ ; queue: the fallback below.
+ lda LIVE
+ bne vblank_fallback
 vblank_plain:
- lda PALETTE_STATE          ; 5
- bmi plain_requeue          ; 2
- nop
- nop
- nop
- jmp NATIVE_UPLOAD          ; 4: 37 cycles
+ ; The reset leaves RENT as a jmp here (palette_boot; LIVE is 0 then): the
+ ; first unlocked vblank writes it, once (FASTOK 0 again), then uploads.
+ lda RENT
+ cmp #$4c
+ bne plain_written
+ jsr rent_install
+plain_written:
+ lda PALETTE_STATE
+ bmi plain_requeue
+ jmp NATIVE_UPLOAD
 plain_requeue:
  ; The VCE holds mapped colours (the mode just changed to Original or NES,
  ; or a cinema began in a mapped mode): queue all 512 colours first, as
@@ -246,27 +257,14 @@ plain_requeue:
  jmp NATIVE_UPLOAD
 vblank_fallback:
  ; The worker has not converted the queue (it did not run, or the vblank
- ; came first). An empty queue costs what the native upload's does (46
- ; cycles to its rts); otherwise the mapped upload below, as before.
- lda QUEUE_COUNT            ; 5
- bne fallback_work          ; 2
- stz FASTOK                 ; 5
- sax                        ; 3
- nop                        ; 2: 46 cycles
+ ; came first): the mapped upload below, as before palette-lag. (RENT
+ ; comes here only with colours queued; the test stays for the reset's
+ ; first vblank.)
+ lda QUEUE_COUNT
+ bne fallback_work
 entry_return:
  rts
 fallback_work:
- ; FASTOK = $80 (palette-lag review F2): a worker this vblank interrupted
- ; after its last check of $12 ends with inc FASTOK, which then gives $81,
- ; never 1, so the next vblank cannot take the fast upload for colours the
- ; worker did not convert (the next worker run starts from 0). The empty
- ; queue's exit above keeps stz: the worker runs only with work queued and
- ; only an upload empties the queue, so an empty queue never meets a worker
- ; under way (a second vblank inside one worker run would need it to
- ; outlast a frame after its $12 check). 0 and $80 act the same at the next
- ; dispatch (dec: not 0) and the worker starts from stz.
- lda #$80
- sta FASTOK
  lda OPTIONS
  and #DISPATCH_BITS
  cmp #PALETTE_GB
@@ -975,7 +973,8 @@ palette_far_end:
 ;@mirror end
 
  ; ---------------------------------------------------------------------
- ; Palette timing (1.11-dev, branch palette-lag; docs/validation/palette-lag.md).
+ ; Palette timing (1.11-dev, branches palette-lag and palette-exact;
+ ; docs/validation/palette-lag.md, docs/validation/palette-exact.md).
  ;
  ; The mapped modes (GB DMG, HELL, SMS) used to map every queued colour in
  ; the vblank interrupt: 3.6 times the native upload's time a colour, taken
@@ -986,37 +985,100 @@ palette_far_end:
  ; ($FD67-$FD6F), so those modes run exactly as before. In a mapped mode
  ; WAITR, after the same STZ $12, calls the worker when the queue holds
  ; work; the worker converts every queued colour from the RAM palette into
- ; SHADOW (the same layout, mapped) and sets FASTOK. At the vblank the
- ; upload then is fast_upload: the native upload ($F3B5-$F421) instruction
- ; for instruction, reading SHADOW instead of $2286 and the border from
- ; BORDER_MAP, reached in the same 37 cycles as the native one, so the
- ; vblank costs what Original's costs. If the worker did not finish before
- ; the vblank (no idle time, or no wait at all), the mapped upload of
- ; before runs (the fallback).
+ ; SHADOW (the same layout, mapped) and arms RENT (inc FASTOK). If the
+ ; worker did not finish before the vblank (no idle time, or no wait at
+ ; all), the mapped upload of before runs (the fallback).
+ ;
+ ; RENT (palette-exact): the vblank interrupt calls the upload in RAM
+ ; ($FD13 jsr RENT, native jsr $F3B5), so the upload costs exactly the
+ ; native upload's cycles in every mode (before, a trampoline and
+ ; palette_entry's dispatch added 76 cycles to every vblank in every mode,
+ ; enough to lose a frame in the act 3 story scene). What RENT holds is
+ ; decided outside the vblank, by configure and the worker:
+ ; - Original, NES-A, NES-B (bit 4 clear): N, the native upload $F3B5-$F421
+ ;   byte for byte (copied from bank 0).
+ ; - GB DMG, HELL, SMS: M (rent_m below), the native upload instruction for
+ ;   instruction with a gate: the queue and lock tests as the native ones,
+ ;   then a read-modify-write of FASTOK and a bne to the dispatcher
+ ;   (palette_upload, as $FD13 called before). The gate's 9 cycles are paid
+ ;   for by the native phx/plx (X is never changed by the upload) and the
+ ;   second lda #$04, so every path costs what the native one does:
+ ;   empty queue, locked, and an upload of the same queue.
+ ;   MS (gameplay): dec FASTOK; colours from SHADOW, the border from
+ ;   BORDER_MAP. The worker's inc arms it (FASTOK 1 -> 0: upload); a
+ ;   fallback leaves $80 and the dispatcher stores $80 again, so it stays
+ ;   disarmed until the worker's next stz/inc.
+ ;   MN (cinemas, the title, the ending, and a mapped mode before the
+ ;   worker has seen gameplay; the native upload as LIVE = 0 had it): lsr
+ ;   FASTOK with FASTOK 0, colours from the RAM palette and the border from
+ ;   BORDER, so every upload goes through at native cost. Entered only
+ ;   while the VCE holds original colours (PALETTE_STATE bit 7 clear);
+ ;   otherwise the dispatcher re-queues first (vblank_plain).
+ ;   The worker switches MS <-> MN when it sees MASTER_STATE change, in an
+ ;   order that is safe against the vblank at every step (rent_ms, rent_mn).
+ ; configure rewrites RENT behind an entry routed to an rts (rent_install);
+ ; the reset leaves a jmp to the trampoline that the first vblank replaces
+ ; (palette_boot), so the reset takes the cycles it took before RENT.
  ;
  ; With an empty queue WAITR spends 10 cycles (tst/bne) before the native
  ; loop: a multiple of the loop's 10, so the loop's exit after the vblank
  ; interrupt is at the same cycle as Original's (unless the vblank comes
  ; within those 10 cycles of the STZ).
  ;
- ; RAM: $37C0-$37E8 and SHADOW $3C00-$3FFF, never read or written by the
- ; original game or 1.11-dev before this (docs/validation/palette-lag.md,
- ; "RAM audit"). The RAM clear zeroes them; palette_boot writes WAITR before
- ; the main loop first runs.
+ ; RAM: $3740-$37E8 and SHADOW $3C00-$3FFF, never read or written by the
+ ; original game or 1.11-dev before this (docs/validation/palette-lag.md
+ ; and palette-exact.md, "RAM audit"). The RAM clear zeroes them;
+ ; palette_boot writes WAITR before the main loop first runs and RENT's
+ ; jmp before interrupts are enabled.
  .org $5b00
  jmp palette_boot           ; WAIT_ENTRY: src/bram's reset trampoline
  jmp palette_configure      ; CONFIGURE_ENTRY: src/options's set_palette
 
 palette_boot:
  ; The reset (interrupts off, MPR2 = this bank): the saved settings
- ; (src/bram, its entry $4B00), then WAITR for the mode loaded. A, X, Y
- ; and the flags as the settings loader left them.
+ ; (src/bram, its entry $4B00), then WAITR, ANIMR and LIVE for the mode
+ ; loaded, and RENT as a jmp to the trampoline's vblank entry (the first
+ ; vblank interrupt, at the reset's cli, writes the routine: palette_entry).
+ ; A, X, Y and the flags as the settings loader left them. Exactly as many
+ ; cycles as before RENT (configure_body's copy loops count down, 2 cycles
+ ; a byte less, which pays for the jmp; its BOOT_PAD delay makes up the
+ ; rest: measured, palette-exact.md), so the hardware timer, started later
+ ; in the reset, keeps its phase against the frame.
  jsr $4b00
+ php
+ pha
+ lda #$4c                   ; jmp palette_upload
+ sta RENT
+ lda #LOW(palette_upload)
+ sta RENT+1
+ lda #HIGH(palette_upload)
+ sta RENT+2
+ pla
+ plp
+ jsr configure_body
+ rts
 
- ; WAITR and LIVE for $2100's mode (bit 4: GB DMG, HELL, SMS). After any
- ; change of $2100 bits 3-5 (the menu's set_palette; the reset). A, X, Y
- ; and the flags are kept.
+ ; The menu's set_palette, after any change of $2100 bits 3-5: WAITR,
+ ; ANIMR, LIVE, PALETTE_STATE and RENT for the new mode. A, X, Y and the
+ ; flags are kept.
 palette_configure:
+ jsr configure_body
+ php
+ pha
+ phx
+ phy
+ jsr rent_install
+ ply
+ plx
+ pla
+ plp
+ rts
+
+ ; WAITR, LIVE and ANIMR for $2100's mode (bit 4: GB DMG, HELL, SMS);
+ ; PALETTE_STATE bit 7 cleared in Original and NES (the colours queued with
+ ; the change are uploaded unmapped by RENT, which has no requeue of its
+ ; own). A, X, Y and the flags are kept.
+configure_body:
  ; Branch-free, so it takes the same cycles in every mode (at the reset it
  ; sets where the timer starts against the frame: a mode-dependent length
  ; would move every timer interrupt for the whole session).
@@ -1031,18 +1093,20 @@ palette_configure:
  lsr a
  lsr a
  tay                        ; 0 / 1
- ldx wait_base,y            ; 0 / 30
+ ldx wait_base,y            ; 29 / 59: the last byte
  lda LIVE
  and live_keep,y            ; Original, NES: 0; mapped: as it is
  sta LIVE
- cly
+ lda PALETTE_STATE
+ and state_keep,y           ; Original, NES: VCE bit cleared
+ sta PALETTE_STATE
+ ldy #29
 configure_wait:
  lda wait_plain,x
  sta WAITR,y
- inx
- iny
- cpy #30
- bne configure_wait
+ dex
+ dey
+ bpl configure_wait
  stz FASTOK
  ; ANIMR: the animation set table for the mode (src/nes-palette's hook at
  ; bank 3 $CE98 calls it). 24 cycles to its rts in every mode and way.
@@ -1052,17 +1116,16 @@ configure_wait:
  lsr a
  lsr a
  tay                        ; 0 Original, 1 NES, 2 GB DMG, 3 HELL / SMS
- ldx anim_base,y            ; 0 / 20
+ ldx anim_base,y            ; 19 / 39: the last byte
  lda anim_target,y          ; NES: ANIMR + 6; else the unused tail
  sta W_LEFT
- cly
+ ldy #19
 configure_anim:
  lda anim_plain,x
  sta ANIMR,y
- inx
- iny
- cpy #20
- bne configure_anim
+ dex
+ dey
+ bpl configure_anim
  tma #3
  pha
  lda #3
@@ -1081,19 +1144,192 @@ configure_anim:
  sta ANIMR+2,x
  pla
  tam #3
+ ldx #BOOT_PAD              ; 6 n cycles: the reset's length as before RENT
+configure_pad:
+ dex
+ bne configure_pad
  ply
  plx
  pla
  plp
  rts
 wait_base:
- .db 0, wait_mapped - wait_plain
+ .db 29, wait_mapped - wait_plain + 29
 live_keep:
  .db $00, $ff
+state_keep:
+ .db $ff - MAPPED_STATE, $ff
 anim_base:
- .db 0, anim_nes - anim_plain, 0, 0
+ .db 19, anim_nes - anim_plain + 19, 19, 19
 anim_target:
  .db 16, 6, 16, 16          ; NES: the lda/ldy operands; else bytes 16-19 (after the rts)
+
+ ; RENT for $2100's mode and the module's state (configure; the first
+ ; vblank after the reset, from palette_entry). While it changes, the
+ ; entry's beq is a bra to RENT_STOP's rts: a vblank then uploads nothing
+ ; and the queue waits for the next one. Its first three bytes (lda $2260)
+ ; are the same in every form; they replace the reset's jmp. A, X, Y are
+ ; not kept.
+rent_install:
+ stz FASTOK                 ; MS: disarmed; MN: every upload goes
+ lda #$60                   ; rts
+ sta RENT+RENT_STOP
+ lda #RENT_ROUTE
+ sta RENT+RENT_BEQ+1
+ lda #$80                   ; bra
+ sta RENT+RENT_BEQ
+ ldy #RENT_BEQ+2
+ lda OPTIONS
+ and #$10
+ bne install_mapped
+install_native:
+ ; N: $F3BA-$F428 (the bytes after the routine are never reached).
+ lda NATIVE_UPLOAD,y
+ sta RENT,y
+ iny
+ cpy #RENT_SIZE
+ bne install_native
+ lda #NATIVE_UPLOAD_END - (NATIVE_UPLOAD + RENT_BEQ + 2)
+ bra install_entry
+install_mapped:
+ lda rent_m,y
+ sta RENT,y
+ iny
+ cpy #RENT_SIZE
+ bne install_mapped
+ ; MN while the native upload is due (LIVE 0) and the VCE holds original
+ ; colours (bit 7 clear); else MS.
+ lda PALETTE_STATE
+ and #MAPPED_STATE
+ ora LIVE
+ bne install_ms
+ jsr rent_mn
+install_ms:
+ lda #rent_m_rts - (rent_m + RENT_BEQ + 2)
+install_entry:
+ sta RENT+RENT_BEQ+1
+ lda #$ad                   ; lda $2260 (the reset left a jmp)
+ sta RENT
+ lda #LOW(QUEUE_COUNT)
+ sta RENT+1
+ lda #HIGH(QUEUE_COUNT)
+ sta RENT+2
+ lda #$f0                   ; beq: the routine is live
+ sta RENT+RENT_BEQ
+ rts
+
+ ; M's two forms (RENT holds M). MN: the RAM palette and BORDER, lsr
+ ; FASTOK (0: always through). MS: SHADOW and BORDER_MAP, dec FASTOK (an
+ ; upload per inc). Each changes its gate last (rent_mn: from MS, where
+ ; FASTOK 0 is disarmed, so the source bytes change while vblanks use the
+ ; dispatcher) or first (rent_ms: from MN to dec with FASTOK 0, disarmed).
+ ; A is not kept.
+rent_mn:
+ lda #LOW(RAM_PALETTE)
+ sta RENT+RENT_SRC_LO
+ lda #HIGH(RAM_PALETTE)
+ sta RENT+RENT_SRC_HI
+ lda #LOW(BORDER)
+ sta RENT+RENT_BORDER_LO
+ lda #HIGH(BORDER)
+ sta RENT+RENT_BORDER_LO+1
+ lda #LOW(BORDER+1)
+ sta RENT+RENT_BORDER_HI
+ lda #HIGH(BORDER+1)
+ sta RENT+RENT_BORDER_HI+1
+ stz FASTOK
+ lda #$4e                   ; lsr abs
+ sta RENT+RENT_GATE
+ rts
+rent_ms:
+ lda #$ce                   ; dec abs
+ sta RENT+RENT_GATE
+ lda #LOW(SHADOW)
+ sta RENT+RENT_SRC_LO
+ lda #HIGH(SHADOW)
+ sta RENT+RENT_SRC_HI
+ lda #LOW(BORDER_MAP)
+ sta RENT+RENT_BORDER_LO
+ lda #HIGH(BORDER_MAP)
+ sta RENT+RENT_BORDER_LO+1
+ lda #LOW(BORDER_MAP+1)
+ sta RENT+RENT_BORDER_HI
+ lda #HIGH(BORDER_MAP+1)
+ sta RENT+RENT_BORDER_HI+1
+ rts
+
+ ; M as it stands in RENT in MS form (assembled here, run at RENT: only
+ ; relative branches and fixed addresses). Cycles against the native
+ ; upload ($F3B5): the same to the gate; gate dec (7) + bne (2) for phx
+ ; (3) and the second lda #$04 (2); ply without plx (4 less): the same
+ ; total on every path (verified by trace: palette-exact.md).
+rent_m:
+ lda QUEUE_COUNT            ; +$00
+ .db $80, RENT_ROUTE        ; +$03 beq rent_m_rts (rent_install writes it last)
+ lda PALETTE_LOCK           ; +$05
+ bne rent_m_rts             ; +$08
+rent_m_gate:
+ dec FASTOK                 ; +$0A: MS dec, MN lsr
+ bne rent_m_dispatch
+ phy
+ lda #$04
+ sta $2208
+ sta $2209
+ cly
+rent_m_entry:
+ lda QUEUE_INDEX_LO,y
+ sta $0402
+ asl a
+ sta $2284
+ lda QUEUE_INDEX_HI,y
+ sta $0403
+ rol a
+ sta $2285
+ lda $2284
+ clc
+ adc #LOW(SHADOW)
+rent_m_src_lo = * - 1
+ sta $2206
+ lda $2285
+ adc #HIGH(SHADOW)
+rent_m_src_hi = * - 1
+ sta $2207
+ lda QUEUE_BYTES_LO,y
+ sta $220a
+ lda QUEUE_BYTES_HI,y
+ sta $220b
+ lda #$e3
+ sta $2205
+ jsr $2205
+ iny
+ dec QUEUE_COUNT
+ bne rent_m_entry
+ stz $0402
+ lda #$01
+ sta $0403
+ lda BORDER_MAP
+rent_m_border_lo = * - 2
+ sta $0404
+ lda BORDER_MAP+1
+rent_m_border_hi = * - 2
+ sta $0405
+ ply
+rent_m_rts:
+ rts
+rent_m_dispatch:
+ jmp palette_upload
+rent_m_end:                 ; (rent_install copies RENT_SIZE bytes: the rest is never run)
+RENT_GATE = rent_m_gate - rent_m
+RENT_SRC_LO = rent_m_src_lo - rent_m
+RENT_SRC_HI = rent_m_src_hi - rent_m
+RENT_BORDER_LO = rent_m_border_lo - rent_m
+RENT_BORDER_HI = rent_m_border_hi - rent_m
+ .if (rent_m_end - rent_m > RENT_SIZE)
+ .fail
+ .endif
+ .if (RENT + RENT_STOP + 1 > $37c0)
+ .fail
+ .endif
 
 anim_plain:
  .db $a9, LOW(ANIM_TABLE)   ; lda #<$CF32   2
@@ -1156,77 +1392,38 @@ wait_mapped_end:
  .fail
  .endif
 
- ; The native upload ($F3B5-$F421) instruction for instruction, reading
- ; the colours from SHADOW and the border from BORDER_MAP: the same cycles
- ; for the same queue. Reached from palette_entry in 37 cycles, as $F3B5.
-fast_upload:
- lda QUEUE_COUNT
- beq fast_return
- lda PALETTE_LOCK
- bne fast_return
- phx
- phy
- lda #$04
- sta $2208
- lda #$04
- sta $2209
- cly
-fast_entry:
- lda QUEUE_INDEX_LO,y
- sta $0402
- asl a
- sta $2284
- lda QUEUE_INDEX_HI,y
- sta $0403
- rol a
- sta $2285
- lda $2284
- clc
- adc #LOW(SHADOW)
- sta $2206
- lda $2285
- adc #HIGH(SHADOW)
- sta $2207
- lda QUEUE_BYTES_LO,y
- sta $220a
- lda QUEUE_BYTES_HI,y
- sta $220b
- lda #$e3
- sta $2205
- jsr $2205
- iny
- dec QUEUE_COUNT
- bne fast_entry
- stz $0402
- lda #$01
- sta $0403
- lda BORDER_MAP
- sta $0404
- lda BORDER_MAP+1
- sta $0405
- ply
- plx
-fast_return:
- rts
-
  ; The worker: from WAITR (main loop, interrupts on, MPR2 = this bank) when
  ; the queue holds work, after the update. Sets LIVE (0 in a cinema, $10 in
- ; gameplay) and, when it converts every queued colour before the vblank
- ; comes ($12 is checked before each colour), FASTOK = 1 (inc from the 0
- ; it starts with; a vblank's fallback in between leaves it at $81). X and Y are kept;
+ ; gameplay) and RENT's form (MN in a cinema once the VCE holds original
+ ; colours, MS in gameplay) and, when it converts every queued colour
+ ; before the vblank comes ($12 is checked before each colour), FASTOK = 1
+ ; (inc from the 0 it starts with; a vblank's fallback in between leaves it
+ ; at $81). X and Y are kept;
  ; the zero page it borrows and MPR3 are put back. Exit latency when the
  ; vblank comes in the middle: the colour under way, then the restores.
 worker:
  phx
  phy
- stz FASTOK
+ stz FASTOK                 ; MS: disarmed; MN: as it must be
  lda MASTER_STATE
  beq worker_gameplay
  stz LIVE                   ; cinema, title, ending: the native upload
+ lda PALETTE_STATE
+ bmi worker_cinema_done     ; VCE mapped: the dispatcher re-queues first
+ lda RENT+RENT_GATE
+ cmp #$4e
+ beq worker_cinema_done     ; MN already
+ jsr rent_mn
+worker_cinema_done:
  ply
  plx
  rts
 worker_gameplay:
+ lda RENT+RENT_GATE
+ cmp #$ce
+ beq worker_ms              ; MS already
+ jsr rent_ms
+worker_ms:
  lda #$10
  sta LIVE
  lda PALETTE_LOCK
