@@ -1,6 +1,6 @@
 {
  "stage": "5-3",
- "notes": "The Level Select comparison run (research/comparison-runs/5-3.json) is the guide: its path, recorded on the original through Level Select (research/longplay/fast/runpath.py, research/longplay/paths/5-3.json), gives beam waypoints (standing/walking/clinging points about every 40 frames), one leg per area, long areas in chunks of about 500 path frames. Area 0: fixed input = the beam's route to the pipe's right face (stalled there) + a second beam from that state (under the pipe, cling to the block's right face, jump to the pipe's left face, climb with up held: the door x 101-127 is touched only from the left, poke x 104, y < 24). Area 2: climb the entry pipe 80 frames with up held (to y 110) and jump left (I+left 4 frames, then left): lower, the jump falls short of the floor x 512-603. Found by a grid, fixed segment leg a2-pipe. Area 5: up the block x 34-63 and the column x 101-127 (top y 107), onto the girder x 167-379 (top y 74), into the door x 325-351 at the top (hand points).",
+ "notes": "The Level Select comparison run (research/comparison-runs/5-3.json) is the guide: its path, recorded on the original through Level Select (research/longplay/fast/runpath.py, research/longplay/paths/5-3.json), gives beam waypoints (standing/walking/clinging points about every 40 frames), one leg per area, long areas in chunks of about 500 path frames. Area 0: fixed input = the beam's route to the pipe's right face (stalled there) + a second beam from that state (under the pipe, cling to the block's right face, jump to the pipe's left face, climb with up held: the door x 101-127 is touched only from the left, poke x 104, y < 24). Area 2: climb the entry pipe 80 frames with up held (to y 110) and jump left (I+left 4 frames, then left): lower, the jump falls short of the floor x 512-603. Found by a grid, fixed segment leg a2-pipe. Area 5: up the block x 34-63 and the column x 101-127 (top y 107), onto the girder x 167-379 (top y 74), into the door x 325-351 at the top (hand points). The jump from the column top onto the girder is a grid-found fixed segment (run right 4 frames, I+right 8, right until landing).",
  "legs": [
   {
    "name": "a0-fixed",
@@ -596,29 +596,125 @@
    }
   },
   {
-   "name": "a5-5-0",
+   "name": "a5-girder",
+   "segments": [
+    [
+     4,
+     []
+    ],
+    [
+     3,
+     [
+      "I",
+      "left"
+     ]
+    ],
+    [
+     12,
+     [
+      "right"
+     ]
+    ],
+    [
+     8,
+     [
+      "up"
+     ]
+    ],
+    [
+     4,
+     [
+      "I",
+      "left"
+     ]
+    ],
+    [
+     4,
+     [
+      "left"
+     ]
+    ],
+    [
+     4,
+     [
+      "II",
+      "left"
+     ]
+    ],
+    [
+     4,
+     [
+      "I"
+     ]
+    ],
+    [
+     4,
+     [
+      "left"
+     ]
+    ],
+    [
+     4,
+     [
+      "I",
+      "right"
+     ]
+    ],
+    [
+     2,
+     [
+      "I",
+      "left"
+     ]
+    ],
+    [
+     14,
+     [
+      "right"
+     ]
+    ],
+    [
+     3,
+     [
+      "I",
+      "left"
+     ]
+    ],
+    [
+     20,
+     [
+      "right"
+     ]
+    ],
+    [
+     4,
+     [
+      "right"
+     ]
+    ],
+    [
+     8,
+     [
+      "I",
+      "right"
+     ]
+    ],
+    [
+     32,
+     [
+      "right"
+     ]
+    ]
+   ]
+  },
+  {
+   "name": "a5-5-0b",
    "beam": {
     "follow": {
      "path": "research/longplay/paths/5-3.json",
-     "from_frame": 6194,
+     "from_frame": 6385,
      "to_frame": 6488,
      "add_points": [
-      [
-       6345,
-       112,
-       107,
-       10,
-       3,
-       1
-      ],
-      [
-       6385,
-       200,
-       74,
-       30,
-       3,
-       1
-      ],
       [
        6487,
        330,
