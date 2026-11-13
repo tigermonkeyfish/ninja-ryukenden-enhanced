@@ -398,7 +398,11 @@ a mapped mode before the worker has seen gameplay); the gate's 9 cycles take
 the place of the native `phx`/`plx` (X is never changed) and the second
 `lda #$04`, so an empty queue, a locked one and an upload of the same queue
 cost exactly the native cycles in every mode. The worker switches MS and MN
-when it sees `MASTER_STATE` change; configure rewrites `RENT` for a new mode
+when it sees `MASTER_STATE` change (at a cinema's start it first re-queues
+all 512 colours, but not while the lock `$2283` is held: the game may clear
+the queue under it, `$F345`; the first unlocked worker run or vblank with
+colours queued re-queues instead: [cinema-lock](validation/cinema-lock.md));
+configure rewrites `RENT` for a new mode
 behind an entry routed to an `rts`. If the worker did not finish before the
 vblank (no idle time, no wait), the gate sends the vblank to the dispatcher
 (`$FEC0` -> `palette_entry`) and the mapped upload of before is the
