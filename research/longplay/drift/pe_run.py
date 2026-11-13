@@ -6,7 +6,7 @@ input list. Per frame: update counter, master flags, stage, area, boss health, C
 fingerprints (scripts/longplay_six.py's, WIDE also without RENT $3740-$37BF); clocks of the
 main-loop update ($E06C), its wait call ($E061), the vblank handler's path ($FCEC) and its palette
 upload call ($FD13 to $FD16); and every
-write into the watched RAM range with the writer's PC and bank.
+write (--reads: and read) of the watched RAM range with the accessing PC and bank.
 
     python3 pe_run.py TAG ROM MODE RECORDING OUTDIR [--frames N] [--watch 0x1740 0x17C0]
 """
@@ -41,19 +41,20 @@ def main():
     ap.add_argument('out', type=Path)
     ap.add_argument('--frames', type=int)
     ap.add_argument('--watch', nargs=2, default=['0x1740', '0x17c0'])
+    ap.add_argument('--reads', action='store_true', help='record reads too (not on a build that runs code there)')
     a = ap.parse_args()
     inp = inputs(a.recording)
     n = a.frames or len(inp)
     t = W(a.rom, None if a.mode == 'none' else a.mode)
     lo, hi = int(a.watch[0], 0), int(a.watch[1], 0)
-    t.watch_range(lo, hi)
+    t.watch_range(lo, hi, not a.reads)
     keys = [(b << 16) | p for b, p in KEYS]
     acc0, h0 = t.run_w(0)   # nothing; keeps the API exercised
     t0 = time.time()
     boot_acc = []
     # the boot, with the watch on (frame numbers negative: -boot_frames .. -1)
     t.frame = 0
-    t.lib.gx_watch_range(lo, hi, 1)
+    t.lib.gx_watch_range(lo, hi, 0 if a.reads else 1)
     # W.boot steps with gx_run; repeat it here with run_w to watch it
     from pe import BITS
     previous, since, presses, pressed, title = None, 0, [200], False, False

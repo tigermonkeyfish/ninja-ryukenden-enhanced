@@ -48,8 +48,8 @@ CORE = [(0x000, 0x001), (0x240, 0x242), (0x20f, 0x211), (0x237, 0x238), (0xe5f, 
 #   $2100-$21FF (options byte $2100, palette state $2104, save status $2105, stack
 #   and its margin: depth/contents differ with the palette worker's code path),
 #   $2260-$2283 palette upload queue/border/lock, $2286-$2A85 RAM palette + backup,
-#   $37C0-$37FD WAITR + palette timing + worker scratch, $3C00-$3FFF SHADOW.
-EXCLUDED = [(0x100, 0x200), (0x260, 0x284), (0x286, 0xa86), (0x17c0, 0x17fe), (0x1c00, 0x2000)]
+#   $3740-$37FD RENT (palette-exact) + WAITR + palette timing + worker scratch, $3C00-$3FFF SHADOW.
+EXCLUDED = [(0x100, 0x200), (0x260, 0x284), (0x286, 0xa86), (0x1740, 0x17fe), (0x1c00, 0x2000)]
 WIDE = []
 _p = 0
 for a, b in EXCLUDED:

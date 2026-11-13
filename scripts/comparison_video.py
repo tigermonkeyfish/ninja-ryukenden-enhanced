@@ -218,6 +218,12 @@ def start_point(game, rom, seed, enhanced=False):
         game.write(0x17ea, bytes.fromhex('a932a0cf0828eaeaea60') + b'\xea' * 6
                    + bytes([pointer[0], 0xea, pointer[1], 0xea]))
         game.write(0x17e4, b'\x10')      # configure's scratch: ANIMR's pointer offset
+        # The vblank's palette upload (src/palette RENT, $3740, since 1.11-dev
+        # palette-exact) as the reset leaves it for Original once the first
+        # vblank has written it: the native upload $F3B5 onward (bytes 0-$73;
+        # those after its rts at $6C are never run) and an rts at $74. Unused
+        # RAM in older builds.
+        game.write(0x1740, data[0x13b5:0x13b5 + 0x74] + b'\x60')
 
 
 def start_stage(game, stage):
