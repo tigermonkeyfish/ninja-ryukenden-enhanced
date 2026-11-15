@@ -1,4 +1,13 @@
 # Start here when resuming development
+- **timing-cleanup** (2026-11-15): D4+D5 (`src/dispatch/main.asm`), D3 Option
+  2A-1 (`src/stage22/main.asm`), and D2 Option A (`src/palette/main.asm`)
+  fixed on `align-combined` (code commit `846e0b9`), plus D6/D7/D11/D13 and
+  60 outside-window investigations; ROM `ea176297…3ace1` (`1.11-dev`,
+  `/workspace/roms/Ninja Ryukenden - Enhanced v1.11-dev (apocalypse, reset 2,
+  palette timing 3, original load timing, 2-2 start, cinema lock, timing
+  cleanup).pce`, plus both BPS patches). Record:
+  [validation/timing-cleanup.md](validation/timing-cleanup.md) and
+  [DEFICIENCIES.md](DEFICIENCIES.md) (emulator only).
 - **align-combined** (2026-11-13): `start-pos` + `cinema-lock` + `exit-frames`
   in one ROM, `2f134a80...8880` (`1.11-dev`, `/workspace/roms/` file with the
   suffix `2-2 start, cinema lock`, plus both BPS patches). Gates, the
