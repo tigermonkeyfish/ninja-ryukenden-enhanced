@@ -149,7 +149,7 @@ FASTOK = $37e1              ; RAM: 1 = every queued colour is in SHADOW (0: not 
                             ; $80/$81: a fallback upload with work ran since)
 BORDER_MAP = $37e2          ; RAM, 2 bytes: the border colour as the mode shows it
 W_LEFT = $37e4              ; RAM, 2 bytes: the worker's bytes left in an entry
-W_OVR = $37e6               ; RAM: nonzero = HELL's override applies (stage)
+W_OVR = $37e6               ; RAM: bit 7 = HELL, bit 0 = override stage
 W_INDEX = $37e7             ; RAM, 2 bytes: SHADOW byte offset of the chunk
 ANIMR = $37ea               ; RAM, 20 bytes: the animation table choice (src/nes-palette)
 ANIM_TABLE = $cf32          ; bank 3: the original animation set pointers
@@ -157,9 +157,8 @@ ANIM_POINTERS = $7400       ; bank 3 $D400 in MPR3: NES-A's, NES-B's table
 SHADOW = $3c00              ; RAM, 1 KiB: the mapped colours, as $2286 is laid out
 W_SRC = $20                 ; zero page borrowed by the worker (saved, restored)
 W_DST = $22
-W_Y1 = $24
-W_ENTRY = $25
-W_MAP = $26
+W_SRC_HI = $24              ; W_SRC + 1 (even W_SRC: same high byte, low | 1)
+W_ENTRY = $26
 RENT = $3740                ; RAM, $3740-$37BF: the vblank's palette upload ($3740-$37B4)
 RENT_SIZE = $74             ; bytes 0-$73 hold the routine; $74 is RENT_STOP
 RENT_STOP = $74             ; offset of an rts that configure routes the entry to
@@ -1531,17 +1530,17 @@ worker_convert:
  pha
  lda <W_DST+1
  pha
- lda <W_Y1
+ lda <W_SRC_HI
+ pha
+ lda <W_SRC_HI+1
  pha
  lda <W_ENTRY
- pha
- lda <W_MAP
  pha
  tma #3
  pha
  ; The table in MPR3 ($7400: GB DMG's bank $46 $5400 or SMS's bank $3B
- ; $5400; $7C00: HELL's bank $43 $7C00) and W_MAP = 0 GB DMG / SMS, 1 HELL.
- stz <W_MAP
+ ; $5400; $7C00: HELL's bank $43 $7C00). W_OVR bit 7 = HELL, bit 0 =
+ ; HELL_OVERRIDE_STAGE (0 in GB DMG and SMS).
  stz W_OVR
  lda OPTIONS
  and #DISPATCH_BITS
@@ -1551,11 +1550,13 @@ worker_convert:
  bmi worker_sms
  lda #HELL_BANK
  tam #3
- inc <W_MAP
- lda VISIBLE_STAGE
- cmp #HELL_OVERRIDE_STAGE
- bne worker_entries
- inc W_OVR
+ lda #$80
+ ldx VISIBLE_STAGE
+ cpx #HELL_OVERRIDE_STAGE
+ bne worker_hell_set
+ inc a
+worker_hell_set:
+ sta W_OVR
  bra worker_entries
 worker_sms:
  lda #SMS_BANK
@@ -1586,113 +1587,153 @@ worker_entry_go:
  sta W_LEFT
  lda QUEUE_BYTES_HI,x
  sta W_LEFT+1
- ; clamp: W_LEFT <= 1024 - W_INDEX
- lda #LOW(1024)
+ ; clamp: W_LEFT <= 1024 - W_INDEX (W_SRC is scratch until worker_setup).
+ cla
  sec
  sbc W_INDEX
- sta <W_Y1
+ sta <W_SRC
  lda #HIGH(1024)
  sbc W_INDEX+1
+ tax
  cmp W_LEFT+1
  bcc worker_clamp
  bne worker_chunk
- lda <W_Y1
+ lda <W_SRC
  cmp W_LEFT
  bcs worker_chunk
 worker_clamp:
- lda <W_Y1
+ lda <W_SRC
  sta W_LEFT
- lda #HIGH(1024)
- sec
- sbc W_INDEX+1
- sta W_LEFT+1
- lda W_INDEX
- beq worker_chunk
- dec W_LEFT+1
+ stx W_LEFT+1
 worker_chunk:
- ; One chunk of at most 256 bytes: Y from 0 to W_Y1 (0 = 256).
+ ; One chunk of at most 256 bytes: W_SRC = chunk (0 = 256).
  lda W_LEFT
  ora W_LEFT+1
  bne worker_chunk_go
  inc <W_ENTRY
  bra worker_entry
 worker_chunk_go:
- lda W_INDEX
- clc
- adc #$86
- sta <W_SRC
- lda W_INDEX+1
- adc #$22
- sta <W_SRC+1
- lda W_INDEX
- sta <W_DST
- lda W_INDEX+1
- clc
- adc #HIGH(SHADOW)
- sta <W_DST+1
  lda W_LEFT+1
  beq worker_short
- stz <W_Y1                  ; 256 bytes
+ cla                        ; 256 bytes (0 mod 256)
  bra worker_sized
 worker_short:
  lda W_LEFT
- sta <W_Y1
 worker_sized:
- cly
- lda <W_MAP
- bne worker_hell
- jsr convert_table
- bcs worker_abort
- bra worker_advance
-worker_hell:
- jsr convert_hell
- bcs worker_abort
-worker_advance:
- ; W_INDEX += chunk, W_LEFT -= chunk (chunk = W_Y1, 0 = 256).
- lda <W_Y1
- beq worker_advance_page
+ sta <W_SRC
+ clx                        ; X = 0: mapped / table
+ bit W_OVR
+ bpl worker_setup
+ ; HELL: mapped below 2 * HELL_MAPPED, raw from there on (X = 1).
+ lda #LOW(2 * HELL_MAPPED)
+ sec
+ sbc W_INDEX
+ tay
+ lda #HIGH(2 * HELL_MAPPED)
+ sbc W_INDEX+1
+ bcc worker_is_raw          ; W_INDEX > 2 * HELL_MAPPED
+ bne worker_setup           ; rem >= 256 >= chunk
+ cpy #0
+ beq worker_is_raw          ; W_INDEX == 2 * HELL_MAPPED
+ lda <W_SRC
+ beq worker_cap             ; chunk = 256 > rem (1..255)
+ cpy <W_SRC
+ bcs worker_setup
+worker_cap:
+ sty <W_SRC
+ bra worker_setup
+worker_is_raw:
+ inx
+worker_setup:
+ ; Y = (256 - chunk) & $FF; advance W_INDEX += chunk and W_LEFT -= chunk,
+ ; then point W_SRC to $2186 + W_INDEX, W_SRC_HI to W_SRC + 1 (W_SRC is
+ ; even), and W_DST to SHADOW - $100 + W_INDEX.
+ cla
+ sec
+ sbc <W_SRC
+ tay
+ lda <W_SRC
+ beq worker_page
  clc
  adc W_INDEX
  sta W_INDEX
- bcc worker_advance_index
+ bcc worker_sub_left
  inc W_INDEX+1
-worker_advance_index:
+worker_sub_left:
  lda W_LEFT
  sec
- sbc <W_Y1
+ sbc <W_SRC
  sta W_LEFT
- bcs worker_chunk
+ bcs worker_ptrs
  dec W_LEFT+1
- bra worker_chunk
-worker_advance_page:
+ bra worker_ptrs
+worker_page:
  inc W_INDEX+1
  dec W_LEFT+1
+worker_ptrs:
+ lda W_INDEX
+ sta <W_DST
+ clc
+ adc #$86
+ sta <W_SRC
+ ora #1
+ sta <W_SRC_HI
+ lda W_INDEX+1
+ adc #$21
+ sta <W_SRC+1
+ sta <W_SRC_HI+1
+ lda W_INDEX+1
+ clc
+ adc #HIGH(SHADOW) - 1
+ sta <W_DST+1
+ lda W_OVR
+ bmi worker_hell_kind
+ jsr convert_table
+ jmp worker_chunk
+worker_hell_kind:
+ cpx #0
+ bne worker_do_raw
+ lsr a
+ bcs worker_do_ovr
+ jsr convert_hell_mapped
+ bra worker_next_chunk
+worker_do_ovr:
+ jsr convert_hell_ovr
+ bra worker_next_chunk
+worker_do_raw:
+ lda <$12
+ bne worker_abort
+ lda [W_SRC],y
+ sta [W_DST],y
+ iny
+ lda [W_SRC],y
+ sta [W_DST],y
+ iny
+ bne worker_do_raw
+worker_next_chunk:
  jmp worker_chunk
 worker_border:
  ; The border colour (entry $100): mapped in GB DMG and SMS, as the
  ; mapped upload writes it; HELL keeps it (a sprite-palette entry).
- lda <W_MAP
- bne worker_border_raw
+ lda W_OVR
+ bmi worker_border_raw
  ldx BORDER
  lda BORDER+1
  lsr a
  bcs worker_border_high
  lda $7400,x
- sta BORDER_MAP
- lda $7500,x
- sta BORDER_MAP+1
- bra worker_done
+ ldy $7500,x
+ bra worker_border_set
 worker_border_high:
  lda $7600,x
- sta BORDER_MAP
- lda $7700,x
- sta BORDER_MAP+1
- bra worker_done
+ ldy $7700,x
+ bra worker_border_set
 worker_border_raw:
  lda BORDER
+ ldy BORDER+1
+worker_border_set:
  sta BORDER_MAP
- lda BORDER+1
- sta BORDER_MAP+1
+ sty BORDER_MAP+1
 worker_done:
  ; One instruction (palette-lag review F2): 0 -> 1 when no vblank came
  ; since the worker's stz; after a fallback ($80) it gives $81.
@@ -1701,11 +1742,11 @@ worker_abort:
  pla
  tam #3
  pla
- sta <W_MAP
- pla
  sta <W_ENTRY
  pla
- sta <W_Y1
+ sta <W_SRC_HI+1
+ pla
+ sta <W_SRC_HI
  pla
  sta <W_DST+1
  pla
@@ -1718,115 +1759,98 @@ worker_abort:
  plx
  rts
 
- ; Convert bytes Y..W_Y1 (0 = 256) of [W_SRC] into [W_DST] through the
- ; table in MPR3 at $7400. Carry set: the vblank came ($12 nonzero) and it
- ; stopped before a colour.
+ ; Convert bytes Y..255 (256 - Y bytes) of [W_SRC] into [W_DST] through the
+ ; table in MPR3 at $7400. If the vblank came ($12 nonzero) before a colour,
+ ; discard the return address and abort.
 convert_table:
  lda <$12
  bne convert_stop
  lda [W_SRC],y
  tax
- iny
- lda [W_SRC],y
+ lda [W_SRC_HI],y
  lsr a
  bcs convert_table_high
- lda $7500,x
- sta [W_DST],y
- dey
  lda $7400,x
  sta [W_DST],y
  iny
+ lda $7500,x
+ sta [W_DST],y
  iny
- cpy <W_Y1
  bne convert_table
- clc
  rts
 convert_table_high:
- lda $7700,x
- sta [W_DST],y
- dey
  lda $7600,x
  sta [W_DST],y
  iny
+ lda $7700,x
+ sta [W_DST],y
  iny
- cpy <W_Y1
  bne convert_table
- clc
  rts
 convert_stop:
- sec
- rts
+ pla
+ pla
+ bra worker_abort
 
- ; HELL: bytes below SHADOW offset 2 x HELL_MAPPED through the table at
- ; $7C00 (with the stage override), the rest copied.
-convert_hell:
+ ; HELL mapped chunk (W_OVR bit 0 = 0): table at $7C00, no override check.
+convert_hell_mapped:
  lda <$12
  bne convert_stop
- ; this colour's SHADOW offset: W_INDEX + Y, mapped below 2 x HELL_MAPPED
- tya
- clc
- adc W_INDEX
- sta <W_MAP+0               ; scratch (W_MAP is 1 here; restored below)
- lda W_INDEX+1
- adc #0
- cmp #HIGH(2 * HELL_MAPPED)
- bcc convert_hell_mapped
- bne convert_hell_raw
- lda <W_MAP
- cmp #LOW(2 * HELL_MAPPED)
- bcc convert_hell_mapped
-convert_hell_raw:
- lda #1
- sta <W_MAP
- lda [W_SRC],y
- sta [W_DST],y
- iny
- lda [W_SRC],y
- sta [W_DST],y
- iny
- cpy <W_Y1
- bne convert_hell
- clc
- rts
-convert_hell_mapped:
- lda #1
- sta <W_MAP
  lda [W_SRC],y
  tax
- iny
- lda [W_SRC],y
+ lda [W_SRC_HI],y
  lsr a
  bcs convert_hell_high
- lda W_OVR
- beq convert_hell_low
- cpx #HELL_OVERRIDE_KEY
- bne convert_hell_low
- lda #HELL_OVERRIDE_HI
- sta [W_DST],y
- dey
- lda #HELL_OVERRIDE_LO
- sta [W_DST],y
- bra convert_hell_next
-convert_hell_low:
- lda $7d00,x
- sta [W_DST],y
- dey
  lda $7c00,x
  sta [W_DST],y
- bra convert_hell_next
-convert_hell_high:
- lda $7f00,x
+ iny
+ lda $7d00,x
  sta [W_DST],y
- dey
+ iny
+ bne convert_hell_mapped
+ rts
+convert_hell_high:
  lda $7e00,x
  sta [W_DST],y
-convert_hell_next:
  iny
+ lda $7f00,x
+ sta [W_DST],y
  iny
- cpy <W_Y1
- bne convert_hell
- clc
+ bne convert_hell_mapped
  rts
+
+ ; HELL mapped chunk on HELL_OVERRIDE_STAGE (W_OVR bit 0 = 1).
+convert_hell_ovr:
+ lda <$12
+ bne convert_stop
+ lda [W_SRC],y
+ tax
+ lda [W_SRC_HI],y
+ lsr a
+ bcs convert_ovr_high
+ cpx #HELL_OVERRIDE_KEY
+ beq convert_ovr_hit
+ lda $7c00,x
+ sta [W_DST],y
+ iny
+ lda $7d00,x
+convert_ovr_store:
+ sta [W_DST],y
+ iny
+ bne convert_hell_ovr
+ rts
+convert_ovr_hit:
+ lda #HELL_OVERRIDE_LO
+ sta [W_DST],y
+ iny
+ lda #HELL_OVERRIDE_HI
+ bra convert_ovr_store
+convert_ovr_high:
+ lda $7e00,x
+ sta [W_DST],y
+ iny
+ lda $7f00,x
+ bra convert_ovr_store
 timing_end:
  .if (timing_end > $6000)
  .fail

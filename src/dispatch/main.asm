@@ -193,14 +193,14 @@ deferred_draw:
  ; byte, marks an area change's pending draw; the renderers initialize on $FF.
  ; $FD / $FC: a stage load's draw, which the renderer (2-2, 5-2, the castle)
  ; left for the entry's black frames (load-exact): the renderer runs and
- ; picks its updates itself. A camera high byte (0/1) costs what it did.
+ ; picks its updates itself. $00..$08 and $FF become $01..$09 and $00
+ ; (N=0, 11 cycles); $FC..$FE become $FD..$FF (N=1), leaving A = $FF for
+ ; $FE's store back to $2258.
  lda $2258
- cmp #$fc
- bcc draw_done
- cmp #$fe
- bcc draw
- bne draw_done
  inc a
+ bpl draw_done
+ cmp #$ff
+ bcc draw
  sta $2258
 draw_now:
  ; 6-1 opens on the native picture, which Enhanced's matches: its first

@@ -476,9 +476,10 @@ draw_all:
  lda $2100
  and #$10
  beq drawn
+ jsr cache
  ldx #208
  ldy #32
- jsr $febe
+ jmp $febe
 drawn:
  jmp cache
 load_palette:
