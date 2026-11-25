@@ -40,4 +40,4 @@ for path in archives:
     hashes.append(f'{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}')
 (dist / f'SHA256SUMS-v{version}.txt').write_text('\n'.join(hashes) + '\n')
 print('\n'.join(str(p) for p in archives))
-print('Local packages only. Complete docs/PUBLISHING.md before making a public release.')
+print('Local packages written to dist/.')

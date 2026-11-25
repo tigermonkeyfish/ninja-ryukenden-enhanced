@@ -35,7 +35,7 @@ PROFILE = 7
 ROWS = range(14, 23)
 SKY_ROWS = range(N.CASTLE_SKY_ROWS)
 # Native castle backdrop tiles that are loaded but unreferenced in Enhanced
-# 5-3, 5-4 and 6-1 (VRAM audit, docs/ARCHITECTURE.md): map bytes $38-$3D,
+# 5-3, 5-4 and 6-1 (unused backdrop tile range): map bytes $38-$3D,
 # then $40-$57 ($23E/$23F and $258/$259 belong to 6-1 and 5-3 foregrounds).
 # $238-$23C come first: the native 6-1 picture, shown until 6-1's first
 # gameplay update draws, uses $23D, $243, $245-$247, $24C-$24F and $252.

@@ -1,4 +1,4 @@
-# Reproducing and modifying v1.10
+# Reproducing and modifying v1.11
 
 ## Apply the release
 
@@ -7,7 +7,7 @@ Only Python 3.10+ and one of the original ROMs listed in the README
 
 ```sh
 python3 scripts/project.py apply --rom "/path/to/original.pce"
-python3 scripts/project.py verify "dist/Ninja Ryukenden - Enhanced v1.10.pce"
+python3 scripts/project.py verify "dist/Ninja Ryukenden - Enhanced v1.11.pce"
 ```
 
 The script identifies the original's format, picks the matching patch and
@@ -27,9 +27,9 @@ python3 scripts/project.py build --rom "/path/to/original.pce" \
   --assembler "/path/to/pceas" --verify-release
 ```
 
-This reproduces the 1.10 ROM hash in `release/current.json` exactly, from
-either original format. After `VERSION` changes for new work the build is a
-different ROM, so the check fails by design.
+This reproduces the 1.11 ROM hash in `release/current.json` exactly, from
+either original format. After `VERSION` changes for new work (such as
+`1.12-dev`) the build is a different ROM, so the check fails by design.
 The default build filename remains `dist/Ninja Ryukenden - development.pce`;
 `--verify-release` verifies its contents. `apply` writes the versioned release
 filename. For intentional changes, omit `--verify-release` and use a separate
@@ -66,11 +66,23 @@ all equal (`uniform_rows`). `scripts/native_seams.py` is the development tool th
 chose each loop; the build does not run it.
 
 The in-game menu's text is also generated: `src/options/menu.txt` lays out
-its four rows as they appear (`#` runs are the value fields), `VERSION`
-fills `{version}`, and `scripts/menu_text.py` encodes the rows in the HUD
-font. Characters outside the HUD font, lines over 32 columns, text in the
-item box (columns 13-14 of the middle rows) and wrong value fields fail the
-build.
+the popup window as it appears (11 lines of 25 columns; `#` runs are the
+value fields), the band line under the HUD (`{version}` from `VERSION`,
+`{credit}` with `GITHUB.COM/` only when the line fits 32 columns) and each
+option's values (`@` lines: draft bits, then `value=TEXT` choices), and
+`scripts/menu_text.py` encodes them in the HUD font. Characters outside the
+HUD font, window lines of the wrong width, a band line over 32 columns, a
+STAGE field not 5 wide, values wider than their field or outside their
+bits, and overlapping bits fail the build.
+
+The NES palette mode's colours are editable data too:
+`src/nes-palette/stages/*.json` and `shared.json` hold roles (NES palette
+codes) and per-entry role names; `scripts/nes_palette.py` resolves them,
+checks the files' original colours against the original ROM and writes the
+packed tables (`nes-palette` prepare step) and the NES versions of the 1-1
+and 2-2 merged palettes. After editing a role, run
+`python3 scripts/nes_palette.py resolve` to refresh the stored results the
+build checks; `python3 scripts/nes_palette.py check` shows stale ones.
 
 This is a **source rebuild from the original game**: no byte comes from a
 release patch.
@@ -86,13 +98,12 @@ python3 scripts/project.py build --rom "/path/to/original.pce" \
   --bps-output "dist/ninja-ryukenden-enhanced-development.bps"
 ```
 
-Omit `--verify-release` for intentional changes. A successful assembly is not
-gameplay validation. Follow [VALIDATION.md](VALIDATION.md), record the exact
-output hash, and never change the published patches or `release/current.json`.
+Omit `--verify-release` for intentional changes. Record the exact
+output hash and never change published patches or `release/current.json`.
 Bump `VERSION` for new work; the version shown in the in-game menu follows it.
 
-When changing a backdrop loop, edit `native_gfx.LOOPS` (and run
-`scripts/native_seams.py` to compare seams); the build regenerates the data.
+When changing a backdrop loop, edit `native_gfx.LOOPS`; the build regenerates
+the data from the original ROM.
 
 ## ROM-free checks
 

@@ -19,8 +19,8 @@ PROFILES = {
     'stage22': {'prefix': 'p3', 'bank': 0x56, 'rows': 16, 'bins': 15,
                 'loops': [32] * 6 + [25] * 10, 'spill': lambda index: None,
                 # Tiles $80-$FF and $6C0-$72F (cleared again at cinema entry), then
-                # native 2-2 backdrop tiles that no foreground cell or sprite uses
-                # (docs/ARCHITECTURE.md); the next stage reloads that VRAM.
+                # native 2-2 backdrop tiles that no foreground cell or sprite uses;
+                # the next stage reloads that VRAM.
                 'slots': [*range(0x80, 0x100), *range(0x6c0, 0x730), *range(0x140, 0x14c),
                           *range(0x150, 0x15c), *range(0x160, 0x16c), *range(0x180, 0x18c),
                           *range(0x190, 0x19c), *range(0x1a0, 0x1ac), *range(0x1c0, 0x1cc),

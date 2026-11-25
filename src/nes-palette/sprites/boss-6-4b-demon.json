@@ -1,0 +1,33 @@
+{
+  "name": "The demon statue (6-4B)",
+  "nes": "NES demon (Jashin, stage $6D 19, room 45): head and body background art 05 14 24 34 (magenta), orb sprites 16 26 30",
+  "roles": {
+    "outline": {"ramp": ["0F"]},
+    "body": {"ramp": ["14", "05", "24", "34"], "note": "NES demon magenta: the PC Engine blue statue"},
+    "red": {"ramp": ["16", "06", "26"], "note": "NES orb red: the PC Engine red eye and flame"}
+  },
+  "notes": ["PC Engine 108: 030 and 020 red, 08E / 047 / 044 / 003 blues, 000 outline."],
+  "palettes": [
+    {
+      "palette": 108, "name": "demon statue",
+      "entries": [
+        {"entry": 0, "pce": "0DB", "role": "unused", "nes": "00", "out": "092"},
+        {"entry": 1, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 2, "pce": "030", "role": "red", "nes": "26", "out": "0FB"},
+        {"entry": 3, "pce": "08E", "role": "body", "nes": "24", "out": "0B7"},
+        {"entry": 4, "pce": "003", "role": "body", "nes": "03", "out": "00C"},
+        {"entry": 5, "pce": "044", "role": "body", "nes": "04", "out": "013"},
+        {"entry": 6, "pce": "047", "role": "body", "nes": "14", "out": "025"},
+        {"entry": 7, "pce": "020", "role": "red", "nes": "16", "out": "060"},
+        {"entry": 8, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 9, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 10, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 11, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 12, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 13, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 14, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 15, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"}
+      ]
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "name": "Barbarian (1-2)",
+  "nes": "NES Barbarian (stage $6D 1, room 1): body and armour 23 (violet), skin 36 (peach), weapon/helmet highlights 10 30, outline 0F (sub-palettes 0F 0F 23 36 and 0F 0F 10 30)",
+  "roles": {
+    "outline": {"ramp": ["0F"], "note": "NES outline"},
+    "armour": {"ramp": ["23", "13", "03"], "note": "NES Barbarian body 23; the PC Engine teal-green clothes and dark shading"},
+    "skin": {"ramp": ["36", "26"], "note": "NES Barbarian skin 36"},
+    "metal": {"ramp": ["10", "30", "00"], "note": "NES weapon/helmet 10 30"},
+    "hair": {"ramp": ["16", "26"], "note": "the PC Engine red hair/tattoo: NES red (the boss has none; 16 is the NES sprite red)"}
+  },
+  "notes": ["PC Engine 102: 0E2 tan and 12C pale skin, 10B teal-green and 08A dark teal clothes, 099 brown, 028 red, 000 outline. NES Barbarian is black/violet with peach skin and grey/white metal."],
+  "palettes": [
+    {
+      "palette": 102, "name": "Barbarian",
+      "entries": [
+        {"entry": 0, "pce": "0DB", "role": "unused", "nes": "00", "out": "092"},
+        {"entry": 1, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 2, "pce": "0E2", "role": "skin", "nes": "26", "out": "0FB", "override": "26"},
+        {"entry": 3, "pce": "12C", "role": "skin", "nes": "36", "out": "17E", "override": "36"},
+        {"entry": 4, "pce": "10B", "role": "armour", "nes": "23", "out": "0EF", "override": "23"},
+        {"entry": 5, "pce": "099", "role": "metal", "nes": "00", "out": "092", "override": "00"},
+        {"entry": 6, "pce": "08A", "role": "armour", "nes": "13", "out": "01F", "override": "13"},
+        {"entry": 7, "pce": "028", "role": "hair", "nes": "16", "out": "060", "override": "16"},
+        {"entry": 8, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 9, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 10, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 11, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 12, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 13, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 14, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 15, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"}
+      ]
+    }
+  ]
+}

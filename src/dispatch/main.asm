@@ -180,6 +180,9 @@ area_background:
 init_background:
  ; Stage load (bank 1 $82CD). Neither caller reads A or the flags $80AB
  ; returns: the load path loads A next, the area path calls $85B7.
+ ; $2257 = $FF tells the renderers a load from an area change (where the
+ ; native $80AB leaves the bank it saved there): at a load they draw nothing
+ ; yet and mark $2258 = $FD (load-exact; deferred_draw).
  jsr $80ab
  lda #$ff
  sta $2257
@@ -188,10 +191,16 @@ init_background:
 deferred_draw:
  ; Main loop, every frame (selector hook). $FE, an impossible camera high
  ; byte, marks an area change's pending draw; the renderers initialize on $FF.
+ ; $FD / $FC: a stage load's draw, which the renderer (2-2, 5-2, the castle)
+ ; left for the entry's black frames (load-exact): the renderer runs and
+ ; picks its updates itself. $00..$08 and $FF become $01..$09 and $00
+ ; (N=0, 11 cycles); $FC..$FE become $FD..$FF (N=1), leaving A = $FF for
+ ; $FE's store back to $2258.
  lda $2258
- cmp #$fe
- bne draw_done
  inc a
+ bpl draw_done
+ cmp #$ff
+ bcc draw
  sta $2258
 draw_now:
  ; 6-1 opens on the native picture, which Enhanced's matches: its first
@@ -211,3 +220,6 @@ draw:
 draw_done:
  rts
 init_hook_end:
+ .if (init_hook_end > $ff70)
+ .fail
+ .endif

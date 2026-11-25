@@ -9,7 +9,7 @@ assignees: ""
 **Patch version / ROM SHA-256:**
 **Emulator and version, or hardware/flash cart:**
 **Stage/subarea and visual landmark:**
-**Parallax / No Damage / language settings:**
+**Smooth parallax / No Damage / NES Firewheel / Palette / Language settings:**
 
 **Steps from a fresh boot:**
 

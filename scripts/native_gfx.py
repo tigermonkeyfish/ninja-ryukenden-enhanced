@@ -18,9 +18,9 @@ Palettes. The table at bank `$37:$6000` (ROM `0x6E000`) holds (address,
 colour count) per palette set; `$F211` unpacks a set into the RAM palette:
 per 8 colours one byte of bit-8 values (MSB first), then the 8 low bytes.
 
-Everything below is pinned by SHA-256 of what it decodes to, and was checked
-word for word against the original's VRAM and VCE in the emulator
-(docs/validation). No capture or frozen patch data is read.
+Everything below is pinned by SHA-256 of what it decodes to, and was verified
+word for word against the original's VRAM and VCE in the emulator.
+No capture or frozen patch data is read.
 """
 import hashlib
 import struct
@@ -75,9 +75,9 @@ PROFILES = {
 # (they are screen-locked), so it has no designed loop. Each loop keeps the
 # native picture in order, as far as round starts show it (columns 0-31 when
 # every round with backdrop opens at camera 0, 0-32 when some open later),
-# then repeats native columns chosen by scripts/native_seams.py (fewest 16x8
+# then repeats native columns chosen for minimal seams (fewest 16x8
 # windows that the original never shows in that row) before wrapping to
-# column 0. docs/validation records the review of each loop.
+# column 0.
 LOOPS = {
     0: list(range(32)) + [18, 19, 20],
     1: list(range(33)),

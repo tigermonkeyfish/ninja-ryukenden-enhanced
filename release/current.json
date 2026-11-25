@@ -1,7 +1,7 @@
 {
-  "version": "1.10",
+  "version": "1.11",
   "title": "Ninja Ryukenden Enhanced",
-  "release_date": "2026-10-30",
+  "release_date": "2026-11-24",
   "source": {
     "size": 524800,
     "sha256": "1b3f411dd7d11b1d26fdac199308f77b14144dd2291e417aeb478ad2b8061a89",
@@ -11,8 +11,8 @@
     "title": "Ninja Ryukenden (Japan), PC Engine"
   },
   "patch": {
-    "path": "patches/ninja-ryukenden-enhanced-v1.10.bps",
-    "sha256": "9c71f4045f1f0b526d2c8e2c81145261b8cd571351d68b198258ff35deca1e4d"
+    "path": "patches/ninja-ryukenden-enhanced-v1.11.bps",
+    "sha256": "3ffa1367a8402ea02c484f1208c7070a8f0da57a44baab160fce05ef449024b2"
   },
   "headerless": {
     "source": {
@@ -23,21 +23,23 @@
       "filename_reference": "Ninja Ryuuken Den (Japan) (En,Ja,Zh).pce"
     },
     "patch": {
-      "path": "patches/ninja-ryukenden-enhanced-v1.10-headerless.bps",
-      "sha256": "1c19fd36625b9e6c5fb18087e7b7b344c8f2da38a4f231d73f37aea3c997f469"
+      "path": "patches/ninja-ryukenden-enhanced-v1.11-headerless.bps",
+      "sha256": "cfcdb6b616c1cbbcc72f9c2bfcd4527e75f7b1d5220a668297da6fc4aa6a5c1a"
     }
   },
   "target": {
     "size": 1048576,
-    "sha256": "3d5c05dfa6fb6a9ea6c04209cbc36d8e952caa6666ea5fcb724864ff4923bbf6",
+    "sha256": "e62ce8591c2aa75229fddec4c4ade8d6e732b68a3b1fbefbc9d16839f75c47d2",
     "header_bytes": 0,
-    "crc32": "7CEB52BC"
+    "crc32": "6F28B771"
   },
   "defaults": {
     "language": "English",
     "parallax": "ON (Enhanced)",
     "enhanced_divisor": 8,
-    "no_damage": false
+    "no_damage": false,
+    "nes_firewheel": false,
+    "palette": "Original"
   },
   "tools": {
     "pceas": {
@@ -48,11 +50,14 @@
   "build_model": "Assemble the runtime modules over the original ROM; every Enhanced backdrop is generated at build time from the original ROM's own tiles, maps and palettes. Nothing is read from an earlier release.",
   "license": "MIT for original project contributions; see docs/LICENSING.md",
   "hardware_validation": {
-    "platform": "NEC PC Engine Duo-RX",
+    "platform": "NEC PC Engine Duo-RX and TurboGrafx-16",
     "flash_cartridge": "Krikzz Turbo EverDrive PRO",
-    "tested_rom_sha256": "3d5c05dfa6fb6a9ea6c04209cbc36d8e952caa6666ea5fcb724864ff4923bbf6",
+    "tested_rom_sha256": "e62ce8591c2aa75229fddec4c4ade8d6e732b68a3b1fbefbc9d16839f75c47d2",
     "exact_release_bytes_tested": true,
-    "report": "Maintainer checked the in-game menu on the release bytes (2026-10-29), then played 1.10 from each release patch (2026-10-31): 1-1 and 1-2, a warp to 2-2, No Damage on, a warp to the final boss, the boss beaten and the ending cinema started. Completion of the ending not stated; no full playthrough."
-  },
-  "emulator_validation": "docs/validation/background-fidelity.md"
+    "tested_date": "2026-11-24",
+    "scope": "The maintainer tested the exact 1.11 release ROM bytes (SHA-256 e62ce8591c2aa75229fddec4c4ade8d6e732b68a3b1fbefbc9d16839f75c47d2) on both an NEC PC Engine Duo-RX and a TurboGrafx-16 with a Krikzz Turbo EverDrive PRO.",
+    "not_claimed": [
+      "Exhaustive real-hardware play-through of every damage, death and Continue path"
+    ]
+  }
 }

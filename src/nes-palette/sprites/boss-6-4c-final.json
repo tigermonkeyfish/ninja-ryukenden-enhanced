@@ -1,0 +1,77 @@
+{
+  "name": "The final demon (6-4C): 110 body, 111 its other frames, 112 the rings it fires",
+  "nes": "No third NES form was reached in the NES captures (after the orb the NES run went on to 6-1). Matched by role to the NES demon: magenta 05 14 24 34 body, red 06 16 26 flesh, orb/spark 16 26 30 for the rings",
+  "roles": {
+    "outline": {"ramp": ["0F"]},
+    "body": {"ramp": ["14", "24", "04", "34"], "note": "NES demon magenta/violet: the PC Engine green and olive body"},
+    "flesh": {"ramp": ["16", "06", "26"], "note": "NES red: the PC Engine red flesh"},
+    "shine": {"ramp": ["30", "36"], "note": "white"},
+    "ring": {"ramp": ["16", "26", "30"], "note": "NES spark/orb 16 26 30: the PC Engine cyan rings"}
+  },
+  "notes": ["PC Engine 110: 080 / 060 green, 11A / 123 beige, 091 olive, 010 / 070 red, 1FF white; 111 the same with 16C and 038; 112 1C7 / 145 / 104 / 0C3 / 082 cyan and 1FF white rings."],
+  "palettes": [
+    {
+      "palette": 110, "name": "final demon",
+      "entries": [
+        {"entry": 0, "pce": "080", "role": "unused", "nes": "09", "out": "080"},
+        {"entry": 1, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 2, "pce": "11A", "role": "body", "nes": "25", "out": "0BD", "override": "25"},
+        {"entry": 3, "pce": "010", "role": "flesh", "nes": "06", "out": "010", "override": "06"},
+        {"entry": 4, "pce": "091", "role": "body", "nes": "15", "out": "02A", "override": "15"},
+        {"entry": 5, "pce": "060", "role": "body", "nes": "05", "out": "019", "override": "05"},
+        {"entry": 6, "pce": "123", "role": "body", "nes": "35", "out": "17F", "override": "35"},
+        {"entry": 7, "pce": "070", "role": "flesh", "nes": "16", "out": "060", "override": "16"},
+        {"entry": 8, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 9, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 10, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 11, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 12, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 13, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 14, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 15, "pce": "1FF", "role": "shine", "nes": "30", "out": "1FF"}
+      ]
+    },
+    {
+      "palette": 111, "name": "final demon (other frames)",
+      "entries": [
+        {"entry": 0, "pce": "000", "role": "unused", "nes": "0F", "out": "000"},
+        {"entry": 1, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 2, "pce": "11A", "role": "body", "nes": "25", "out": "0BD", "override": "25"},
+        {"entry": 3, "pce": "010", "role": "flesh", "nes": "06", "out": "010", "override": "06"},
+        {"entry": 4, "pce": "091", "role": "body", "nes": "15", "out": "02A", "override": "15"},
+        {"entry": 5, "pce": "16C", "role": "body", "nes": "3C", "out": "1AE", "override": "3C"},
+        {"entry": 6, "pce": "123", "role": "body", "nes": "35", "out": "17F", "override": "35"},
+        {"entry": 7, "pce": "038", "role": "flesh", "nes": "26", "out": "0FB", "override": "26"},
+        {"entry": 8, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 9, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 10, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 11, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 12, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 13, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 14, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 15, "pce": "1FF", "role": "shine", "nes": "30", "out": "1FF"}
+      ]
+    },
+    {
+      "palette": 112, "name": "rings",
+      "entries": [
+        {"entry": 0, "pce": "000", "role": "unused", "nes": "0F", "out": "000"},
+        {"entry": 1, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 2, "pce": "1C7", "role": "ring", "nes": "30", "out": "1FF", "override": "30"},
+        {"entry": 3, "pce": "145", "role": "ring", "nes": "26", "out": "0FB", "override": "26"},
+        {"entry": 4, "pce": "104", "role": "ring", "nes": "16", "out": "060", "override": "16"},
+        {"entry": 5, "pce": "0C3", "role": "ring", "nes": "06", "out": "010", "override": "06"},
+        {"entry": 6, "pce": "082", "role": "ring", "nes": "05", "out": "019", "override": "05"},
+        {"entry": 7, "pce": "1FF", "role": "ring", "nes": "3C", "out": "1AE"},
+        {"entry": 8, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 9, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 10, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 11, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 12, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 13, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 14, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 15, "pce": "1FF", "role": "ring", "nes": "3C", "out": "1AE"}
+      ]
+    }
+  ]
+}

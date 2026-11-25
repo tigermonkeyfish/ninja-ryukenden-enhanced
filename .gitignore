@@ -1,7 +1,11 @@
 # Local inputs, build outputs, emulator data and tools never belong in Git.
+/AGENTS.md
+/.claude/
 /build/
 /dist/
 /local/
+/roms/
+/socials/
 /tools/
 /captures/
 *.pce
@@ -13,6 +17,7 @@
 *.sav
 *.vram
 *.pal
+*.zip
 *.sym
 *.lst
 __pycache__/

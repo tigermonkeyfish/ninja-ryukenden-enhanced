@@ -1,0 +1,270 @@
+{
+  "name": "Item lanterns/birds/containers (row 14) and row 13 effects",
+  "nes": "NES item lanterns use the enemy palettes",
+  "roles": {
+    "grey": {"ramp": ["00", "10", "30"]},
+    "green": {"ramp": ["1A", "2A", "0A"]},
+    "yellow": {"ramp": ["28", "38", "18"]},
+    "cyan": {"ramp": ["1C", "2C", "3C"]},
+    "blue": {"ramp": ["02", "12", "22"]},
+    "brown": {"ramp": ["07", "17", "27"]},
+    "skin": {"ramp": ["27", "37", "17"], "note": "NES enemy skin (27/37 with 17 shading)"},
+    "red": {"ramp": ["16", "26"]},
+    "purple": {"ramp": ["04", "14", "24"]}
+  },
+  "notes": ["Draft: roles by the PC Engine colour's hue class."],
+  "palettes": [
+    {
+      "palette": 109, "name": "Item lanterns/birds/containers",
+      "entries": [
+        {"entry": 0, "pce": "0DB", "role": "unused", "nes": "00", "out": "092"},
+        {"entry": 1, "pce": "1B6", "role": "grey", "nes": "30", "out": "1FF"},
+        {"entry": 2, "pce": "16D", "role": "grey", "nes": "3C", "out": "1AE"},
+        {"entry": 3, "pce": "16D", "role": "grey", "nes": "3C", "out": "1AE"},
+        {"entry": 4, "pce": "124", "role": "grey", "nes": "10", "out": "16D"},
+        {"entry": 5, "pce": "124", "role": "grey", "nes": "10", "out": "16D"},
+        {"entry": 6, "pce": "124", "role": "grey", "nes": "10", "out": "16D"},
+        {"entry": 7, "pce": "124", "role": "grey", "nes": "10", "out": "16D"},
+        {"entry": 8, "pce": "1C0", "role": "green", "nes": "2A", "out": "190"},
+        {"entry": 9, "pce": "1C0", "role": "green", "nes": "2A", "out": "190"},
+        {"entry": 10, "pce": "1C0", "role": "green", "nes": "2A", "out": "190"},
+        {"entry": 11, "pce": "1C0", "role": "green", "nes": "2A", "out": "190"},
+        {"entry": 12, "pce": "1C0", "role": "green", "nes": "2A", "out": "190"},
+        {"entry": 13, "pce": "1C0", "role": "green", "nes": "2A", "out": "190"},
+        {"entry": 14, "pce": "1C0", "role": "green", "nes": "2A", "out": "190"},
+        {"entry": 15, "pce": "16D", "role": "grey", "nes": "3C", "out": "1AE"}
+      ]
+    },
+    {
+      "palette": 113, "name": "Item lanterns/birds/containers",
+      "entries": [
+        {"entry": 0, "pce": "115", "role": "unused", "nes": "1C", "out": "0C4"},
+        {"entry": 1, "pce": "128", "role": "yellow", "nes": "28", "out": "168"},
+        {"entry": 2, "pce": "049", "role": "grey", "nes": "0C", "out": "042"},
+        {"entry": 3, "pce": "0E0", "role": "yellow", "nes": "18", "out": "090"},
+        {"entry": 4, "pce": "0CB", "role": "cyan", "nes": "1C", "out": "0C4"},
+        {"entry": 5, "pce": "1B9", "role": "yellow", "nes": "38", "out": "1B4"},
+        {"entry": 6, "pce": "08A", "role": "cyan", "nes": "00", "out": "092"},
+        {"entry": 7, "pce": "04A", "role": "blue", "nes": "02", "out": "005"},
+        {"entry": 8, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 9, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 10, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 11, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 12, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 13, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 14, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 15, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"}
+      ]
+    },
+    {
+      "palette": 114, "name": "Item lanterns/birds/containers",
+      "entries": [
+        {"entry": 0, "pce": "0DB", "role": "unused", "nes": "00", "out": "092"},
+        {"entry": 1, "pce": "128", "role": "yellow", "nes": "28", "out": "168"},
+        {"entry": 2, "pce": "049", "role": "grey", "nes": "0C", "out": "042"},
+        {"entry": 3, "pce": "0E0", "role": "yellow", "nes": "18", "out": "090"},
+        {"entry": 4, "pce": "0D1", "role": "green", "nes": "1A", "out": "100"},
+        {"entry": 5, "pce": "1B9", "role": "yellow", "nes": "38", "out": "1B4"},
+        {"entry": 6, "pce": "081", "role": "green", "nes": "0A", "out": "080"},
+        {"entry": 7, "pce": "04A", "role": "blue", "nes": "00", "out": "092"},
+        {"entry": 8, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 9, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 10, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 11, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 12, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 13, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 14, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 15, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"}
+      ]
+    },
+    {
+      "palette": 115, "name": "Item lanterns/birds/containers",
+      "entries": [
+        {"entry": 0, "pce": "0DB", "role": "unused", "nes": "00", "out": "092"},
+        {"entry": 1, "pce": "081", "role": "green", "nes": "0A", "out": "080"},
+        {"entry": 2, "pce": "069", "role": "brown", "nes": "17", "out": "0A0"},
+        {"entry": 3, "pce": "049", "role": "grey", "nes": "00", "out": "092"},
+        {"entry": 4, "pce": "0C9", "role": "green", "nes": "1B", "out": "0C1"},
+        {"entry": 5, "pce": "18F", "role": "cyan", "nes": "3C", "out": "1AE"},
+        {"entry": 6, "pce": "098", "role": "brown", "nes": "18", "out": "090"},
+        {"entry": 7, "pce": "020", "role": "brown", "nes": "07", "out": "010"},
+        {"entry": 8, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 9, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 10, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 11, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 12, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 13, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 14, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 15, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"}
+      ]
+    },
+    {
+      "palette": 116, "name": "Item lanterns/birds/containers",
+      "entries": [
+        {"entry": 0, "pce": "0DB", "role": "unused", "nes": "00", "out": "092"},
+        {"entry": 1, "pce": "081", "role": "green", "nes": "0A", "out": "080"},
+        {"entry": 2, "pce": "069", "role": "brown", "nes": "17", "out": "0A0"},
+        {"entry": 3, "pce": "049", "role": "grey", "nes": "00", "out": "092"},
+        {"entry": 4, "pce": "0E9", "role": "skin", "nes": "27", "out": "130"},
+        {"entry": 5, "pce": "06A", "role": "red", "nes": "15", "out": "02A"},
+        {"entry": 6, "pce": "098", "role": "brown", "nes": "18", "out": "090"},
+        {"entry": 7, "pce": "020", "role": "brown", "nes": "07", "out": "010"},
+        {"entry": 8, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 9, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 10, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 11, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 12, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 13, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 14, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 15, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"}
+      ]
+    },
+    {
+      "palette": 117, "name": "Item lanterns/birds/containers",
+      "entries": [
+        {"entry": 0, "pce": "0DB", "role": "unused", "nes": "00", "out": "092"},
+        {"entry": 1, "pce": "0C8", "role": "green", "nes": "19", "out": "0C8"},
+        {"entry": 2, "pce": "089", "role": "green", "nes": "1B", "out": "0C1"},
+        {"entry": 3, "pce": "049", "role": "grey", "nes": "00", "out": "092"},
+        {"entry": 4, "pce": "081", "role": "green", "nes": "0A", "out": "080"},
+        {"entry": 5, "pce": "0EB", "role": "red", "nes": "26", "out": "0FB"},
+        {"entry": 6, "pce": "0E0", "role": "yellow", "nes": "18", "out": "090"},
+        {"entry": 7, "pce": "108", "role": "green", "nes": "1A", "out": "100"},
+        {"entry": 8, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 9, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 10, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 11, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 12, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 13, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 14, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 15, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"}
+      ]
+    },
+    {
+      "palette": 118, "name": "Item lanterns/birds/containers",
+      "entries": [
+        {"entry": 0, "pce": "0DB", "role": "unused", "nes": "00", "out": "092"},
+        {"entry": 1, "pce": "128", "role": "yellow", "nes": "28", "out": "168"},
+        {"entry": 2, "pce": "051", "role": "red", "nes": "06", "out": "010"},
+        {"entry": 3, "pce": "0E0", "role": "yellow", "nes": "18", "out": "090"},
+        {"entry": 4, "pce": "049", "role": "grey", "nes": "0C", "out": "042"},
+        {"entry": 5, "pce": "1B9", "role": "yellow", "nes": "38", "out": "1B4"},
+        {"entry": 6, "pce": "081", "role": "green", "nes": "0A", "out": "080"},
+        {"entry": 7, "pce": "04A", "role": "blue", "nes": "00", "out": "092"},
+        {"entry": 8, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 9, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 10, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 11, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 12, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 13, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 14, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 15, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"}
+      ]
+    },
+    {
+      "palette": 119, "name": "Item lanterns/birds/containers",
+      "entries": [
+        {"entry": 0, "pce": "0DB", "role": "unused", "nes": "00", "out": "092"},
+        {"entry": 1, "pce": "128", "role": "yellow", "nes": "28", "out": "168"},
+        {"entry": 2, "pce": "049", "role": "grey", "nes": "0C", "out": "042"},
+        {"entry": 3, "pce": "0E0", "role": "yellow", "nes": "18", "out": "090"},
+        {"entry": 4, "pce": "061", "role": "brown", "nes": "17", "out": "0A0"},
+        {"entry": 5, "pce": "1B9", "role": "yellow", "nes": "38", "out": "1B4"},
+        {"entry": 6, "pce": "051", "role": "red", "nes": "06", "out": "010"},
+        {"entry": 7, "pce": "04A", "role": "blue", "nes": "00", "out": "092"},
+        {"entry": 8, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 9, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 10, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 11, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 12, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 13, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 14, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 15, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"}
+      ]
+    },
+    {
+      "palette": 120, "name": "Item lanterns/birds/containers",
+      "entries": [
+        {"entry": 0, "pce": "0DB", "role": "unused", "nes": "00", "out": "092"},
+        {"entry": 1, "pce": "110", "role": "green", "nes": "1A", "out": "100"},
+        {"entry": 2, "pce": "049", "role": "grey", "nes": "0C", "out": "042"},
+        {"entry": 3, "pce": "0C8", "role": "green", "nes": "19", "out": "0C8"},
+        {"entry": 4, "pce": "0A2", "role": "red", "nes": "16", "out": "060"},
+        {"entry": 5, "pce": "191", "role": "green", "nes": "2A", "out": "190"},
+        {"entry": 6, "pce": "059", "role": "brown", "nes": "07", "out": "010"},
+        {"entry": 7, "pce": "04A", "role": "blue", "nes": "00", "out": "092"},
+        {"entry": 8, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 9, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 10, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 11, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 12, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 13, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 14, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 15, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"}
+      ]
+    },
+    {
+      "palette": 121, "name": "Item lanterns/birds/containers",
+      "entries": [
+        {"entry": 0, "pce": "0DB", "role": "unused", "nes": "00", "out": "092"},
+        {"entry": 1, "pce": "110", "role": "green", "nes": "1A", "out": "100"},
+        {"entry": 2, "pce": "049", "role": "grey", "nes": "0C", "out": "042"},
+        {"entry": 3, "pce": "0C8", "role": "green", "nes": "19", "out": "0C8"},
+        {"entry": 4, "pce": "0E1", "role": "yellow", "nes": "18", "out": "090"},
+        {"entry": 5, "pce": "191", "role": "green", "nes": "2A", "out": "190"},
+        {"entry": 6, "pce": "098", "role": "brown", "nes": "17", "out": "0A0"},
+        {"entry": 7, "pce": "04A", "role": "blue", "nes": "00", "out": "092"},
+        {"entry": 8, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 9, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 10, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 11, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 12, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 13, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 14, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 15, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"}
+      ]
+    },
+    {
+      "palette": 150, "name": "Item lanterns/birds/containers",
+      "entries": [
+        {"entry": 0, "pce": "000", "role": "unused", "nes": "0F", "out": "000"},
+        {"entry": 1, "pce": "0C5", "role": "blue", "nes": "22", "out": "0DF"},
+        {"entry": 2, "pce": "107", "role": "blue", "nes": "21", "out": "117"},
+        {"entry": 3, "pce": "147", "role": "blue", "nes": "32", "out": "1B7"},
+        {"entry": 4, "pce": "083", "role": "blue", "nes": "00", "out": "092"},
+        {"entry": 5, "pce": "1C0", "role": "green", "nes": "2A", "out": "190"},
+        {"entry": 6, "pce": "1C3", "role": "green", "nes": "3A", "out": "1EC"},
+        {"entry": 7, "pce": "1C7", "role": "cyan", "nes": "3C", "out": "1AE"},
+        {"entry": 8, "pce": "0C7", "role": "blue", "nes": "23", "out": "0EF"},
+        {"entry": 9, "pce": "007", "role": "purple", "nes": "14", "out": "025"},
+        {"entry": 10, "pce": "01F", "role": "purple", "nes": "13", "out": "01F"},
+        {"entry": 11, "pce": "03F", "role": "purple", "nes": "24", "out": "0B7"},
+        {"entry": 12, "pce": "03B", "role": "red", "nes": "26", "out": "0FB"},
+        {"entry": 13, "pce": "092", "role": "grey", "nes": "00", "out": "092"},
+        {"entry": 14, "pce": "124", "role": "grey", "nes": "10", "out": "16D"},
+        {"entry": 15, "pce": "1FF", "role": "grey", "nes": "30", "out": "1FF"}
+      ]
+    },
+    {
+      "palette": 151, "name": "Item lanterns/birds/containers",
+      "entries": [
+        {"entry": 0, "pce": "000", "role": "unused", "nes": "0F", "out": "000"},
+        {"entry": 1, "pce": "142", "role": "green", "nes": "1A", "out": "100"},
+        {"entry": 2, "pce": "1C3", "role": "green", "nes": "3A", "out": "1EC"},
+        {"entry": 3, "pce": "183", "role": "green", "nes": "29", "out": "158"},
+        {"entry": 4, "pce": "0C1", "role": "green", "nes": "1B", "out": "0C1"},
+        {"entry": 5, "pce": "1C0", "role": "green", "nes": "2A", "out": "190"},
+        {"entry": 6, "pce": "1C3", "role": "green", "nes": "3A", "out": "1EC"},
+        {"entry": 7, "pce": "1C7", "role": "cyan", "nes": "3C", "out": "1AE"},
+        {"entry": 8, "pce": "0C7", "role": "blue", "nes": "22", "out": "0DF"},
+        {"entry": 9, "pce": "007", "role": "purple", "nes": "14", "out": "025"},
+        {"entry": 10, "pce": "01F", "role": "purple", "nes": "13", "out": "01F"},
+        {"entry": 11, "pce": "03F", "role": "purple", "nes": "24", "out": "0B7"},
+        {"entry": 12, "pce": "03B", "role": "red", "nes": "26", "out": "0FB"},
+        {"entry": 13, "pce": "092", "role": "grey", "nes": "00", "out": "092"},
+        {"entry": 14, "pce": "124", "role": "grey", "nes": "10", "out": "16D"},
+        {"entry": 15, "pce": "1FF", "role": "grey", "nes": "30", "out": "1FF"}
+      ]
+    }
+  ]
+}

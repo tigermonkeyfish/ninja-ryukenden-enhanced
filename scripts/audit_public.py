@@ -3,15 +3,16 @@
 from pathlib import Path, PurePosixPath
 import re
 import subprocess
+import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-TOP = {'README.md', 'AGENTS.md', 'CONTRIBUTING.md', 'CHANGELOG.md', 'CREDITS.md',
+TOP = {'README.md', 'CONTRIBUTING.md', 'CHANGELOG.md', 'CREDITS.md',
        'LICENSE', 'VERSION', '.gitignore', '.gitattributes'}
-DIRECTORIES = {'docs', 'src', 'scripts', 'tests', 'patches', 'release', 'research', '.github'}
+DIRECTORIES = {'docs', 'src', 'scripts', 'tests', 'patches', 'release', '.github'}
 FORBIDDEN = {'.pce', '.nes', '.sms', '.rom', '.bin', '.state', '.sav', '.vram', '.pal',
              '.png', '.jpg', '.zip', '.sym', '.lst', '.pyc'}
-# The only images allowed: the how-to screenshots in docs/OPTIONS.md, made by
-# scripts/guide_screenshots.py. Captures and frames stay out of the repository.
+BAD_HISTORY_DIRS = ('local/', '.local/', 'build/', 'captures/', 'dist/', 'roms/', 'socials/', 'research/')
+# The only images allowed: the how-to screenshots in docs/OPTIONS.md.
 GUIDE_IMAGES = {f'docs/images/options/{name}.png' for name in
                 ('title-languages', 'menu', 'menu-stage', 'menu-parallax', 'menu-no-damage')}
 GUIDE_IMAGE_LIMIT = 100 * 1024
@@ -56,7 +57,37 @@ def audit():
     return paths
 
 
+def audit_history(rev_range=''):
+    args = ['git', 'rev-list', '--objects', rev_range] if rev_range else ['git', 'rev-list', '--objects', '--all']
+    run = subprocess.run(args, cwd=ROOT, capture_output=True, text=True, check=True)
+    problems = []
+    seen = set()
+    for line in run.stdout.splitlines():
+        parts = line.split(' ', 1)
+        if len(parts) != 2:
+            continue
+        oid, name = parts
+        if oid in seen:
+            continue
+        seen.add(oid)
+        norm = name.replace('\\', '/')
+        p = PurePosixPath(norm)
+        if any(norm.startswith(d) or f'/{d}' in norm for d in BAD_HISTORY_DIRS):
+            problems.append(f'Excluded history directory ({oid[:8]}): {norm}')
+            continue
+        if norm not in GUIDE_IMAGES and p.suffix.lower() in FORBIDDEN:
+            problems.append(f'Excluded history artifact ({oid[:8]}): {norm}')
+    if problems:
+        raise ValueError('\n'.join(problems))
+    return len(seen)
+
+
 if __name__ == '__main__':
-    paths = audit()
-    print(f'Publication file audit passed: {len(paths)} files; no ROMs, states, captures or tool binaries.')
-    print('This file audit does not replace license/provenance review.')
+    if len(sys.argv) > 1 and sys.argv[1] == '--history':
+        rev_range = sys.argv[2] if len(sys.argv) > 2 else ''
+        count = audit_history(rev_range)
+        print(f'History audit passed: {count} blobs clean ({rev_range or "all"}).')
+    else:
+        paths = audit()
+        print(f'Publication file audit passed: {len(paths)} files; no ROMs, states, captures or tool binaries.')
+        print('This file audit does not replace license/provenance review.')

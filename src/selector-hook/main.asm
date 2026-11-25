@@ -17,9 +17,10 @@ selector_hook:
  phy
  tma #2
  pha
- lda #$45
+ lda #$46
  tam #2
- jsr $4000
+ jsr $4400
+ ; the menu (src/options, MENU_ENTRY in bank $46)
  tax
  pla
  tam #2

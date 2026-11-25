@@ -147,7 +147,7 @@ STAGE61_CAMERAS = [2048]
 def opening(length, cameras):
     """Per-round loop offsets so each round opens on the original's columns.
 
-    Measured against the original's first frames (docs/validation): a round
+    Measured against the original's first frames: a round
     entered at camera 0 shows native column 0 at the left edge; one entered at
     camera C > 0 (a multiple of 16) shows native column 1 there, while the
     shared coordinate puts loop entry C/16 there (D = C/2 at entry).
@@ -159,8 +159,7 @@ def opening(length, cameras):
 # (row, phase within bank) seeks VRAM and copies the row's new pairs with
 # 32-byte TIA blocks, a NOP between blocks. The renderer still runs when the
 # playfield split interrupt (raster line ~70) fires, and back-to-back blocks
-# held that interrupt off for two blocks, over a line (5-2 and 6-3 showed the
-# playfield one line low); see docs/pc-engine/LESSONS.md.
+# avoid holding that interrupt off across scanlines.
 TIA = {
     'stage52': {'profile': 1, 'bank': 0x73, 'prefix': 'p1', 'data_banks': 4},
     'stage63': {'profile': 8, 'bank': 0x78, 'prefix': 'p8', 'data_banks': 2},

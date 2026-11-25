@@ -1,0 +1,56 @@
+{
+  "name": "Bloody Malth (5-4)",
+  "nes": "NES Bloody Malth (stage $6D 15, room 34): head/hair/arms 16 (red) and 36 (pale), coat/legs 08 (dark brown) and 36, lightning 16 26 30, outline 0F",
+  "roles": {
+    "outline": {"ramp": ["0F"]},
+    "armour": {"ramp": ["08", "18", "28"], "note": "NES coat 08: the PC Engine bronze armour"},
+    "pale": {"ramp": ["36"], "note": "NES pale 36"},
+    "cape": {"ramp": ["16", "06", "26"], "note": "NES red 16: the PC Engine blue cape/shield"},
+    "bolt": {"ramp": ["16", "26", "30"], "note": "NES lightning 16 26 30"}
+  },
+  "notes": ["PC Engine 106: 0E2 tan, 0A0 / 099 / 058 bronze-browns, 0DE and 094 blue, 000 outline. 101 (row 4, loaded with 106; like Ryu's 98): the lightning."],
+  "palettes": [
+    {
+      "palette": 106, "name": "Bloody Malth",
+      "entries": [
+        {"entry": 0, "pce": "0DB", "role": "unused", "nes": "00", "out": "092"},
+        {"entry": 1, "pce": "000", "role": "outline", "nes": "0F", "out": "000"},
+        {"entry": 2, "pce": "0E2", "role": "pale", "nes": "36", "out": "17E", "override": "36"},
+        {"entry": 3, "pce": "0DE", "role": "cape", "nes": "26", "out": "0FB", "override": "26"},
+        {"entry": 4, "pce": "0A0", "role": "armour", "nes": "18", "out": "090", "override": "18"},
+        {"entry": 5, "pce": "099", "role": "armour", "nes": "17", "out": "0A0", "override": "17"},
+        {"entry": 6, "pce": "058", "role": "armour", "nes": "08", "out": "040", "override": "08"},
+        {"entry": 7, "pce": "094", "role": "cape", "nes": "16", "out": "060", "override": "16"},
+        {"entry": 8, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 9, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 10, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 11, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 12, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 13, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 14, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 15, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"}
+      ]
+    },
+    {
+      "palette": 101, "name": "Bloody Malth lightning",
+      "entries": [
+        {"entry": 0, "pce": "0DB", "role": "unused", "nes": "00", "out": "092"},
+        {"entry": 1, "pce": "0E3", "role": "bolt", "nes": "16", "out": "060"},
+        {"entry": 2, "pce": "1B6", "role": "bolt", "nes": "30", "out": "1FF"},
+        {"entry": 3, "pce": "002", "role": "bolt", "nes": "06", "out": "010"},
+        {"entry": 4, "pce": "046", "role": "bolt", "nes": "00", "out": "092"},
+        {"entry": 5, "pce": "0C7", "role": "bolt", "nes": "25", "out": "0BD"},
+        {"entry": 6, "pce": "130", "role": "bolt", "nes": "27", "out": "130"},
+        {"entry": 7, "pce": "184", "role": "bolt", "nes": "10", "out": "16D"},
+        {"entry": 8, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 9, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 10, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 11, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 12, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 13, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 14, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"},
+        {"entry": 15, "pce": "1C0", "role": "unused", "nes": "2A", "out": "190"}
+      ]
+    }
+  ]
+}

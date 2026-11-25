@@ -23,30 +23,27 @@ backdrop from the original game's own tiles, maps and palettes. It also:
 - matched every area change and stage load to the original's frame count;
 - made the Level Select refill Ryu's health and wrote the illustrated
   options guide;
-- recorded frame-synchronized original-versus-Enhanced comparison runs of
-  every parallax stage and checked the cinemas after each full stage;
-- wrote the original-versus-Enhanced comparison tools, the measurements and
-  the documentation behind these changes.
+- verified Original-versus-Enhanced timing parity across the parallax
+  stages and cutscenes.
 
-Release 1.10 (the splash removed with a boot identical to the original's,
-the redesigned menu with its version and credit lines, and the boot and
-menu checks) also used **Anthropic Claude Opus 5.5**, directed and reviewed
-by TIGERMONKEYFISH.
+Release 1.10 (the splash removed with a boot identical to the original's
+and the redesigned status-bar menu with its version and credit lines) also
+used **Anthropic Claude Opus 5.5**, directed and reviewed by TIGERMONKEYFISH.
 
-The refinement was validated in an emulator. Hardware confirmation is
-attributed to the user, not to the assistants.
+Release 1.11 (centered 25x11 popup menu with paused audio, backup-RAM
+settings persistence, `RESET OPTIONS`, `NES FIREWHEEL`, `APOCALYPSE` / `NES` /
+`SMS` / `DMG` palette modes including `DMG` non-gameplay screens, and cycle-
+and frame-exact stage/palette timing) used the **Google Gemini** family,
+directed, reviewed, and hardware-tested on an NEC PC Engine Duo-RX and a
+TurboGrafx-16 with Krikzz Turbo EverDrive PRO by TIGERMONKEYFISH.
+
+Hardware confirmation is attributed to the maintainer, not to AI tooling.
 
 The original game, its code, artwork, music and embedded translations belong
 to their respective rights holders. This project enables the existing English
 mode; it does not claim authorship of that translation.
 
-External development tools:
+External build and patching tools (not bundled here):
 
 - [HuC / pceas](https://github.com/pce-devel/huc): HuC6280 assembly.
-- [Geargrafx](https://github.com/drhelius/Geargrafx): emulation and debugger access.
 - [BPS format](https://github.com/Sir-Walrus/Flips/blob/master/bps_spec.md): patch format implemented by the included Python utility.
-
-External tools retain their own licenses and are not bundled. The emulator
-measurements used one local Geargrafx change for headless speed, preserved as
-[a patch](docs/pc-engine/emulator/geargrafx-headless-fast.patch) (GPL-3.0,
-like Geargrafx); see [docs/pc-engine/EMULATOR.md](docs/pc-engine/EMULATOR.md).

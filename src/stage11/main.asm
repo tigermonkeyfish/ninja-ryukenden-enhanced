@@ -95,19 +95,46 @@ new_left:
  bra cache
 initialize:
  ; Palette 1 is exclusively scenery. Preserve the original foreground palette 2.
- lda #16
- sta $0402
- stz $0403
+ ; The merged palette goes into the RAM palette ($2286 + 16 colours), so
+ ; fades and full re-queues keep it, and to the VCE at once, as the display
+ ; shows the new backdrop in this frame (src/palette, palette_now at $FEBE,
+ ; in the active palette mode's colours). The NES palette mode ($2100 bits
+ ; 3-4 = 01, src/nes-palette) has its own version (extra_palette_nes in
+ ; nes-enhanced.inc).
  clx
+ lda $2100
+ and #$18
+ cmp #$08
+ beq nes_palette
 palette_loop:
  lda extra_palette,x
- sta $0404
- inx
- lda extra_palette,x
- sta $0405
+ sta $22a6,x
  inx
  cpx #32
  bne palette_loop
+ bra palette_written
+nes_palette:
+ ; Palette timing (palette-lag): NES reaches here 2 cycles after
+ ; Original's beq, and Original's bra takes 4 at the end (+2 net):
+ ; one colour byte copied unrolled (10 cycles vs 18 in the loop) plus
+ ; ldx #1 (2) and 8 cycles of pad reach palette_written at cycle 580.
+ lda extra_palette_nes
+ sta $22a6
+ nop
+ nop
+ nop
+ nop
+ ldx #1
+nes_palette_loop:
+ lda extra_palette_nes,x
+ sta $22a6,x
+ inx
+ cpx #32
+ bne nes_palette_loop
+palette_written:
+ ldx #16
+ ldy #16
+ jsr $febe
 cache:
  lda $2e4b
  sta $2257
@@ -296,8 +323,11 @@ set_ports:
  rts
 copy_dispatch:
  jmp [$2029]
+ ; The NES palette mode's merged palette 1 (scripts/nes_palette.py).
+ .include "nes-enhanced.inc"
 renderer_end:
- .if (renderer_end > $4800)
+ ; Room for generated.inc's tables (about 240 bytes) before map_data at $4800.
+ .if (renderer_end > $4700)
  .fail
  .endif
  .include "generated.inc"

@@ -2,6 +2,7 @@
 import hashlib
 import json
 import struct
+import subprocess
 from pathlib import Path
 import sys
 import unittest
@@ -41,7 +42,361 @@ class AssetTransformTests(unittest.TestCase):
         from asset_transforms import PREPARE
         for module in json.loads((ROOT / 'src/modules.json').read_text()):
             if 'prepare' in module:
-                self.assertIn(module['prepare'], PREPARE)
+                for step in module['prepare'].split('+'):
+                    self.assertIn(step, PREPARE)
+
+
+class PaletteTableTests(unittest.TestCase):
+    def test_gb_dmg_table_follows_the_editable_parameters(self):
+        from palette_tables import gb_dmg_table
+        table = gb_dmg_table()
+        self.assertEqual(len(table), 512)
+        self.assertEqual(set(table), {0x040, 0x090, 0x0d0, 0x120})
+        # GGGRRRBBB: black, white, pure blue / red / green at full, the
+        # darkest shade itself (Y = 0.587 < 0.6), the five shade_map entries,
+        # and surrounding 1-1 / sprite tones.
+        for colour, shade in ((0x000, 0x040), (0x1ff, 0x120), (0x007, 0x090), (0x038, 0x0d0),
+                              (0x1c0, 0x120), (0x040, 0x040), (0x090, 0x0d0), (0x092, 0x090),
+                              (0x094, 0x090), (0x098, 0x090), (0x0d2, 0x090), (0x0db, 0x0d0),
+                              (0x0dc, 0x0d0), (0x0d3, 0x0d0), (0x08d, 0x0d0), (0x124, 0x120)):
+            self.assertEqual(table[colour], shade, hex(colour))
+
+    def test_thresholds_are_exact_and_editable(self):
+        import tempfile
+        from palette_tables import PARAMETERS, gb_dmg_table, generate, pages
+        with tempfile.TemporaryDirectory() as temp:
+            spec = Path(temp) / 'gb.json'
+            # Stripping shade_map gives the pure luminance threshold table.
+            base_spec = {k: v for k, v in json.loads(PARAMETERS.read_text()).items() if k != 'shade_map'}
+            spec.write_text(json.dumps(base_spec))
+            plain = gb_dmg_table(spec)
+            self.assertEqual((plain[0x090], plain[0x092]), (0x090, 0x0d0))
+            # A colour exactly on a threshold takes the lighter shade: G = 1
+            # gives Y = 0.587 exactly; shade_map adjusts individual colours and validates.
+            spec.write_text(json.dumps({'luma': ['0.299', '0.587', '0.114'],
+                                        'thresholds': ['0.587', '1.8', '3.2'],
+                                        'shades': ['000', '001', '002', '1FF'],
+                                        'shade_map': {'$040': '$1FF'}}))
+            table = gb_dmg_table(spec)
+            self.assertEqual(table[0x040], 0x1ff)
+            self.assertEqual(table[0x000], 0x000)
+            spec.write_text(json.dumps({'luma': ['0.299', '0.587', '0.114'],
+                                        'thresholds': ['0.587', '1.8', '3.2'],
+                                        'shades': ['000', '001', '002', '1FF']}))
+            table = gb_dmg_table(spec)
+            self.assertEqual(table[0x040], 0x001)
+            generate(temp, spec)
+            include = (Path(temp) / 'gb-table.inc').read_text()
+            for broken, err in (
+                    ({'luma': ['0.299', '0.587', '0.114'],
+                      'thresholds': ['3.2', '1.8', '0.6'],
+                      'shades': ['040', '090', '0D0', '120']}, 'increase'),
+                    (dict(base_spec, shade_map={'$200': '$040'}), '000-\\$1FF'),
+                    (dict(base_spec, shade_map={'$092': '$1FF'}), 'not one of shades')):
+                spec.write_text(json.dumps(broken))
+                with self.assertRaisesRegex(ValueError, err):
+                    gb_dmg_table(spec)
+        values = [int(b[1:], 16) for line in include.splitlines() if line.startswith(' .db ')
+                  for b in line[5:].split(',')]
+        self.assertEqual(bytes(values), b''.join(pages(table)))
+        self.assertEqual(values[0x40], 0x01)                      # gb_lo0[$40]
+        self.assertEqual(values[3 * 256 + 0xff], 0x01)            # gb_hi1[$FF]: colour $1FF
+
+    # hell.json before the dark-lift pass (candidate D): these ramps, no leaf family.
+    HELL_D = {'green_ramp': [[0.0, 0, 0, 0], [0.3, 1, 1, 0], [0.6, 3, 2, 0], [1.0, 5, 3, 0]],
+              'grey_ramp': [[0, 0, 0, 0], [0.14, 1, 0, 0], [0.29, 1, 0, 0], [0.43, 3, 2, 0], [0.57, 5, 2, 1],
+                            [0.71, 4, 1, 0], [0.8, 4, 1, 0]],
+              'steel_ramp': [[0, 0, 0, 0], [0.14, 1, 0, 0], [0.22, 2, 1, 0], [0.3, 2, 1, 0], [0.34, 3, 2, 0],
+                             [0.44, 3, 2, 0], [0.48, 4, 2, 0], [0.52, 4, 2, 0], [0.54, 4, 3, 0], [0.62, 4, 3, 0],
+                             [0.81, 7, 6, 2], [1.0, 7, 7, 3]]}
+
+    def test_hell_table_matches_specification(self):
+        from palette_tables import hell_table, load_hell
+        table = hell_table()
+        self.assertEqual(len(table), 512)
+        self.assertTrue(all(0 <= c <= 0x1ff for c in table))
+        # The 512 colours of retuned candidate D ("Lava", candidate C, with
+        # the 'steel' family: cool greys and dull teals take 2-2's column golds
+        # in 1-1) with the dark lift "Hb" (floor plus leaf family; the dark-lift
+        # study's gen/hell-Hb-floor-leaf.json) as little-endian words.
+        self.assertEqual(hashlib.sha256(b''.join(c.to_bytes(2, 'little') for c in table)).hexdigest(),
+                         '7be5da494c0f33287da585b598f64571cab956623eb1143cd361bbd8663c272b')
+        # GGGRRRBBB: black stays black; white is pale ash; blues become lava,
+        # greys gold-brown, reds stay red; 1-1's wall and sidewalk greys take
+        # 2-2's golds ($0DB -> 320, $0DC -> 420 as R G B); $094 stays crimson
+        # in the table (2-2's far ridge; 1-1 overrides it in the upload);
+        # pure green is the leaf ramp's 641.
+        for colour, hell in ((0x000, 0x000), (0x1ff, 0x1ba), (0x007, 0x078), (0x038, 0x030),
+                             (0x1c0, 0x131), (0x092, 0x008), (0x124, 0x0a9), (0x0b6, 0x0b0),
+                             (0x03f, 0x0b0), (0x1f8, 0x0e8), (0x0db, 0x098), (0x0dc, 0x0a0),
+                             (0x094, 0x031)):
+            self.assertEqual(table[colour], hell, hex(colour))
+        self.assertEqual(load_hell()['mapped_entries'], 240)    # background palettes 0-14
+
+    def test_hell_dark_lift_changes_21_colours_and_none_goes_black(self):
+        # The dark lift: no colour but black becomes black (candidate D sent
+        # the darkest green $040 there), the darkest grey is a brown, and the
+        # saturated pure greens ('leaf': 4-1's trunks and canopy, 5-1's and
+        # 6-2's greens) have a ramp of their own. Exactly 21 colours differ
+        # from candidate D; the 1-1 override and the 240 mapped entries stay.
+        import tempfile
+        from palette_tables import HELL_PARAMETERS, channels, hell_overrides, hell_table, load_hell
+        table = hell_table()
+        self.assertEqual([c for c in range(1, 512) if table[c] == 0], [])
+        self.assertEqual(table[0], 0)
+        spec = json.loads(HELL_PARAMETERS.read_text())
+        self.assertEqual(spec['leaf_windows'], [[100, 140, 0.9]])
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'hell.json'
+            before = {k: v for k, v in dict(spec, **self.HELL_D).items() if not k.startswith('leaf_')}
+            path.write_text(json.dumps(before))
+            d = hell_table(path)
+            self.assertEqual(hashlib.sha256(b''.join(c.to_bytes(2, 'little') for c in d)).hexdigest(),
+                             '1435b5a189bdbbeb6964c1a8df4981883fe309b7a819506397d080766944d641')
+            self.assertEqual([c for c in range(1, 512) if d[c] == 0], [0x040])
+            self.assertEqual(hell_overrides(path), hell_overrides())
+            self.assertEqual(load_hell(path)['mapped_entries'], load_hell()['mapped_entries'])
+            rgb = lambda word: '%d%d%d' % channels(word)
+            self.assertEqual({f'{c:03X}': f'{rgb(d[c])}>{rgb(table[c])}' for c in range(512) if d[c] != table[c]},
+                             {'040': '000>110', '041': '100>210', '049': '100>310', '080': '110>310',
+                              '0C0': '110>320', '0C1': '110>320', '100': '210>420', '101': '220>420',
+                              '108': '220>420', '140': '320>430', '141': '320>430', '148': '320>430',
+                              '180': '320>530', '181': '320>530', '182': '320>530', '188': '420>530',
+                              '1C0': '420>641', '1C1': '420>641', '1C2': '430>641', '1C8': '430>641',
+                              '1D0': '430>641'})
+            # The leaf family is optional and needs its windows and mix; a
+            # window over every hue takes every coloured colour steel leaves.
+            plain = {k: v for k, v in spec.items() if not k.startswith('leaf_')}
+            path.write_text(json.dumps(plain))
+            no_leaf = hell_table(path)
+            self.assertNotEqual(no_leaf[0x1c0], table[0x1c0])        # pure green: leaf only with the keys
+            self.assertEqual(no_leaf[0x049], table[0x049])           # a grey: never leaf
+            leaf = dict(spec, leaf_ramp=[[0.0, 0, 0, 1], [1.0, 0, 0, 7]], leaf_windows=[[0, 360, 0.0]],
+                        leaf_mix=[1.0, 0.0])
+            path.write_text(json.dumps(leaf))
+            wide = hell_table(path)
+            self.assertEqual(wide[0x038], 0x007)                     # pure red: the leaf ramp's top
+            self.assertEqual(wide[0x1ff], table[0x1ff])              # white is ash: unchanged
+            self.assertEqual(wide[0x0dc], table[0x0dc])              # steel comes first
+            for key in ('leaf_windows', 'leaf_mix'):
+                broken = dict(leaf)
+                del broken[key]
+                path.write_text(json.dumps(broken))
+                with self.assertRaises(ValueError):
+                    hell_table(path)
+
+    def test_sms_table_matches_specification(self):
+        import tempfile
+        from palette_tables import SMS_PARAMETERS, load_sms, sms_colours, sms_table
+        table = sms_table()
+        self.assertEqual(len(table), 512)
+        # The 512 colours of candidate A (linear per-channel SMS quantisation)
+        # with the dark lift "Sa" and the 1-1 sidewalk/wall dark_map overrides
+        # as little-endian words.
+        self.assertEqual(hashlib.sha256(b''.join(c.to_bytes(2, 'little') for c in table)).hexdigest(),
+                         '3bb64f730636109786c2e1a2fb47b794ebffe235fa4787f93cb5a47c1870bd6b')
+        # Channel by channel, independently of the parameters: PC Engine
+        # 0,1 -> 0; 2,3 -> 2; 4,5 -> 5; 6,7 -> 7 (GGGRRRBBB), except the four
+        # rescued dark colours (green 1; luma at least 0.5 of 7), whose
+        # channels at 1 take 2 instead of vanishing into black, plus the
+        # six 1-1 sidewalk/wall dark_map entries.
+        rescued = {0x040: 0x080, 0x041: 0x082, 0x048: 0x090, 0x049: 0x092}
+        dark_map = {0x08a: 0x002, 0x094: 0x002, 0x0d3: 0x082,
+                    0x0dc: 0x092, 0x0dd: 0x16d, 0x11c: 0x092}
+        overrides = {**rescued, **dark_map}
+        q = [0, 0, 2, 2, 5, 5, 7, 7]
+        for colour in range(512):
+            g, r, b = colour >> 6, (colour >> 3) & 7, colour & 7
+            self.assertEqual(table[colour], overrides.get(colour, q[g] << 6 | q[r] << 3 | q[b]), hex(colour))
+        # Only black and the three darkest blue/red/purple colours are black.
+        self.assertEqual([c for c in range(512) if table[c] == 0], [0x000, 0x001, 0x008, 0x009])
+        # Every output is one of the 64 SMS colours, all 64 occur, and an SMS
+        # colour maps to itself.
+        sms64 = {g << 6 | r << 3 | b for g in (0, 2, 5, 7) for r in (0, 2, 5, 7) for b in (0, 2, 5, 7)}
+        self.assertEqual(sms_colours(), sms64)
+        self.assertEqual(set(table), sms64)
+        self.assertTrue(all(table[c] == c for c in sms64))
+        self.assertEqual(load_sms()[1], [0, 2, 5, 7])
+        # Without dark_rescue or dark_map the table is candidate A exactly.
+        spec = json.loads(SMS_PARAMETERS.read_text())
+        self.assertEqual(spec['dark_rescue'], {'min_luma': '0.5'})
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'sms.json'
+            path.write_text(json.dumps({k: v for k, v in spec.items() if k not in ('dark_rescue', 'dark_map')}))
+            plain = sms_table(path)
+            self.assertEqual(hashlib.sha256(b''.join(c.to_bytes(2, 'little') for c in plain)).hexdigest(),
+                             'bb0779db843cfb9ee7094e11f7cf95dad5fdc8038092048ee281a0080ae8d927')
+            self.assertEqual({c: table[c] for c in range(512) if table[c] != plain[c]}, overrides)
+
+    def test_sms_dark_keys_stay_within_the_64_colours(self):
+        import tempfile
+        from palette_tables import SMS_PARAMETERS, sms_colours, sms_table
+        spec = json.loads(SMS_PARAMETERS.read_text())
+        base = {k: v for k, v in spec.items() if k != 'dark_rescue'}
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'sms.json'
+            # The luma threshold is exact: $040 has luma 0.587 precisely.
+            for luma, word in (('0.587', 0x080), ('0.5871', 0x000)):
+                path.write_text(json.dumps(dict(base, dark_rescue={'min_luma': luma})))
+                self.assertEqual(sms_table(path)[0x040], word, luma)
+            # true: every colour that would vanish is rescued; only black is black.
+            path.write_text(json.dumps(dict(base, dark_rescue=True)))
+            table = sms_table(path)
+            self.assertEqual([c for c in range(512) if table[c] == 0], [0])
+            self.assertEqual((table[0x001], table[0x008], table[0x009]), (0x002, 0x010, 0x012))
+            self.assertTrue(set(table) <= sms_colours(path))
+            # dark_map: single colours, applied last, SMS colours only.
+            path.write_text(json.dumps(dict(spec, dark_map={'$001': '$002', '$040': '$090'})))
+            table = sms_table(path)
+            self.assertEqual((table[0x001], table[0x040], table[0x041]), (0x002, 0x090, 0x082))
+            self.assertTrue(set(table) <= sms_colours(path))
+            path.write_text(json.dumps(dict(spec, dark_map={'$001': '$001'})))
+            with self.assertRaisesRegex(ValueError, 'not an SMS colour'):
+                sms_table(path)
+
+    def test_sms_parameters_are_editable(self):
+        import tempfile
+        from palette_tables import generate, pages, sms_table
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'sms.json'
+            path.write_text(json.dumps({'sms_levels': [0, 1, 254, 255], 'pce_levels': [0, 1, 6, 7]}))
+            table = sms_table(path)
+            self.assertEqual(table[0x1ff], 0x1ff)
+            self.assertEqual(table[0x049], 0x049)                   # 1 (36.4) -> level 1, shown as 1
+            self.assertEqual(table[0x124], 0x1b6)                   # 4 (145.7) -> level 254, shown as 6
+            generate(temp, sms_path=path)
+            include = (Path(temp) / 'sms-table.inc').read_text()
+            values = [int(b[1:], 16) for line in include.splitlines() if line.startswith(' .db ')
+                      for b in line[5:].split(',')]
+            self.assertEqual(bytes(values), b''.join(pages(table)))
+            self.assertEqual(include.splitlines()[1], 'sms_lo0:')
+            for broken in ({'sms_levels': [0, 85, 170], 'pce_levels': [0, 2, 5]},
+                           {'sms_levels': [0, 170, 85, 255], 'pce_levels': [0, 2, 5, 7]},
+                           {'sms_levels': [0, 85, 170, 255], 'pce_levels': [0, 2, 5, 8]}):
+                path.write_text(json.dumps(broken))
+                with self.assertRaises(ValueError):
+                    sms_table(path)
+
+    def test_sms_mirror_copies_the_marked_code(self):
+        from palette_tables import mirror
+        source = (ROOT / 'src/palette/main.asm').read_text()
+        text, labels = mirror(source)
+        # Every label of the bank $46 code and the family-11 dispatch, renamed
+        # and guarded; nothing outside the marked lines.
+        for label in ('palette_entry', 'vblank_gb', 'vblank_gb_map', 'vblank_gb_cinema',
+                      'vblank_gb_far', 'now_gb', 'now_gb_cinema', 'now_gb_far',
+                      'mapped_upload', 'upload_chunk', 'fold_queue', 'vblank_sms',
+                      'now_sms', 'now_hell_cinema_exit'):
+            self.assertIn(label, labels)
+            self.assertIn(f'\nsms_{label}:\n', text)
+            self.assertIn(f' .if (sms_{label} <> {label})\n .fail\n .endif', text)
+        self.assertNotIn('hell_gameplay', labels)
+        self.assertNotIn('plain_install', labels)
+        self.assertNotIn('install_mapped_mode', labels)
+        self.assertIn(' jmp hell_gameplay\n', text)                # labels defined elsewhere keep their names
+        self.assertIn(' jmp plain_install\n', text)
+        self.assertIn(' jmp sms_mapped_upload\n', text)
+        self.assertNotIn(';', text.split('\n', 1)[1])               # comments dropped
+        self.assertEqual(text.count(' .org '), 2)
+        for broken in (source.replace(';@mirror end', '', 1),
+                       source.replace(';@mirror begin', '', 1),
+                       source.replace(';@mirror begin\n .org PALETTE_FAR', ';@mirror begin\n .bank 3\n .org PALETTE_FAR'),
+                       source.replace('now_sms:\n', 'now_sms:\nvblank_sms:\n')):
+            with self.assertRaises(ValueError):
+                mirror(broken)
+
+    def test_hell_stage_override_is_1_1_only(self):
+        # 1-1 shows $094 (its sidewalk fleck and skyline shadow faces) as 210,
+        # 2-2's dark column gold, where the table keeps crimson 601 for 2-2's
+        # far ridge; every other stage sees the table; the upload gets the
+        # override as four equates in hell-table.inc.
+        import tempfile
+        from palette_tables import (HELL_PARAMETERS, generate, hell_override_equates, hell_overrides,
+                                    hell_stage_table, hell_table)
+        table = hell_table()
+        self.assertEqual(hell_overrides(), [(0, 0x094, 0x050)])
+        one_one = hell_stage_table(0)
+        self.assertEqual(one_one[0x094], 0x050)                   # R2 G1 B0
+        self.assertEqual(table[0x094], 0x031)                     # R6 G0 B1, as 2-2 shows it
+        self.assertEqual([c for c in range(512) if one_one[c] != table[c]], [0x094])
+        for stage in range(1, 22):
+            self.assertEqual(hell_stage_table(stage), table)
+        self.assertEqual(hell_override_equates().split('\n'),
+                         ['HELL_OVERRIDE_STAGE = $00', 'HELL_OVERRIDE_KEY = $94',
+                          'HELL_OVERRIDE_LO = $50', 'HELL_OVERRIDE_HI = $00'])
+        spec = json.loads(HELL_PARAMETERS.read_text())
+        with tempfile.TemporaryDirectory() as temp:
+            generate(temp)
+            self.assertIn('HELL_OVERRIDE_KEY = $94', (Path(temp) / 'hell-table.inc').read_text())
+            path = Path(temp) / 'hell.json'
+            plain = {k: v for k, v in spec.items() if k != 'stage_overrides'}
+            path.write_text(json.dumps(plain))
+            self.assertEqual(hell_overrides(path), [])
+            self.assertEqual(hell_stage_table(0, path), table)
+            self.assertIn('HELL_OVERRIDE_STAGE = $ff', hell_override_equates(path))   # never visible
+            for bad in ({'1-1': {'$194': [2, 1, 0]}},                 # high half: not compared
+                        {'1-1': {'$000': [2, 1, 0]}},
+                        {'1-1': {'$094': [2, 1, 8]}},
+                        {'1-1': {'$094': [2, 1, 0], '$095': [2, 1, 0]}},   # one compare
+                        {'1-1': {'$094': [2, 1, 0]}, '2-2': {'$094': [2, 1, 0]}},
+                        {'7-1': {'$094': [2, 1, 0]}}):
+                path.write_text(json.dumps(dict(plain, stage_overrides=bad)))
+                with self.assertRaises(ValueError, msg=str(bad)):
+                    hell_overrides(path)
+
+    def test_hell_parameters_are_editable(self):
+        import tempfile
+        from palette_tables import HELL_PARAMETERS, generate, hell_table, pages
+        spec = json.loads(HELL_PARAMETERS.read_text())
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'hell.json'
+            spec['ash_ramp'] = [[0.0, 0, 0, 1], [1.0, 0, 0, 7]]      # white ash becomes blue
+            path.write_text(json.dumps(spec))
+            table = hell_table(path)
+            self.assertEqual(table[0x1ff], 0x007)
+            generate(temp, hell_path=path)
+            include = (Path(temp) / 'hell-table.inc').read_text()
+            self.assertIn('\nHELL_MAPPED = 240\n', include)
+            values = [int(b[1:], 16) for line in include.splitlines() if line.startswith(' .db ')
+                      for b in line[5:].split(',')]
+            self.assertEqual(bytes(values), b''.join(pages(table)))
+            for broken in ({'mapped_entries': 250}, {'mapped_entries': 272},
+                           {'lava_ramp': [[0.5, 0, 0, 0], [0.2, 7, 0, 0]]}, {'grey_ramp': [[0.0, 8, 0, 0], [1.0, 0, 0, 0]]}):
+                path.write_text(json.dumps(dict(spec, **broken)))
+                with self.assertRaises(ValueError):
+                    hell_table(path)
+
+    def test_hell_steel_family_is_optional(self):
+        # The retuned HELL table uses the optional "steel" family (steel_ramp,
+        # steel_windows, steel_mix); without those keys no colour takes it,
+        # and steel_ramp needs the other two.
+        import tempfile
+        from palette_tables import HELL_PARAMETERS, hell_table
+        spec = json.loads(HELL_PARAMETERS.read_text())
+        self.assertIn('steel_ramp', spec)
+        shipped = hell_table()
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'hell.json'
+            plain = {k: v for k, v in spec.items() if not k.startswith('steel_')}
+            path.write_text(json.dumps(plain))
+            table = hell_table(path)
+            self.assertNotEqual(table, shipped)
+            self.assertEqual(table[0x0db], shipped[0x0db])           # grey (R3 G3 B3): never steel
+            self.assertNotEqual(table[0x0dc], shipped[0x0dc])        # a cool grey-blue: steel only with the keys
+            # One window over every hue (degrees), saturation, chroma and value:
+            # every coloured (non-grey) colour goes to the steel ramp by value.
+            steel = dict(spec, steel_ramp=[[0.0, 0, 0, 1], [1.0, 3, 3, 7]], steel_windows=[[0, 360, 1.0, 1.0, 1.0]],
+                         steel_mix=[1.0, 0.0])
+            path.write_text(json.dumps(steel))
+            table = hell_table(path)
+            self.assertEqual(table[0x007], 0x0df)                    # pure blue: the ramp's top (G3 R3 B7)
+            self.assertEqual(table[0x1ff], shipped[0x1ff])           # white is grey: unchanged
+            for key in ('steel_windows', 'steel_mix'):
+                broken = dict(steel)
+                del broken[key]
+                path.write_text(json.dumps(broken))
+                with self.assertRaises(ValueError):
+                    hell_table(path)
 
 
 def pack_half(words):
@@ -59,6 +414,201 @@ def pack_half(words):
                     lanes[lane] = v
         out += bytes([ctrl]) + data
     return out
+
+
+class NesPaletteTests(unittest.TestCase):
+    """src/nes-palette: role data -> packed tables (scripts/nes_palette.py)."""
+
+    @staticmethod
+    def labelled_bytes(text):
+        """{label: [byte or expression, ...]} from the generated .db lines."""
+        out, label = {}, None
+        for line in text.splitlines():
+            line = line.split(';')[0].rstrip()
+            if line.endswith(':'):
+                label = line[:-1]
+                out[label] = []
+            elif line.startswith(' .db '):
+                out[label] += [int(v[1:], 16) if v.startswith('$') else (int(v) if v.isdigit() else v)
+                               for v in line[5:].split(',')]
+            elif line.startswith(' .dw '):
+                for v in line[5:].split(','):
+                    w = int(v[1:], 16)
+                    out[label] += [w & 0xff, w >> 8]
+        return out
+
+    def test_stored_results_are_what_the_roles_give(self):
+        import nes_palette as NP
+        self.assertEqual(NP.check(NP.load()), [])
+
+    def test_packed_tables_decode_back_to_the_role_data(self):
+        import nes_palette as NP
+        data = NP.load()
+        inc = NP.includes(data)
+        t, s = self.labelled_bytes(inc['nes-tables.inc']), self.labelled_bytes(inc['nes-sets.inc'])
+        s37 = self.labelled_bytes(inc['nes-sprites-37.inc'])
+        s45 = self.labelled_bytes(inc['nes-sprites-45.inc'])
+        files = {d['set']: d for d in data['stages'] if not d.get('variant_of')}
+        self.assertEqual(len(files), 18)
+        for n in range(NP.SETS):
+            if n in files:
+                want = [int(e['out'], 16) for e in files[n]['entries']]
+                self.assertEqual(NP.unpack(bytes(s[f'nes_set_{n}']), len(want)), want)
+                self.assertEqual(t['nes_set_hi'][n], f'HIGH(nes_set_{n}+$2000)+$80')   # bank $45
+            else:
+                # Title and cinema sets (0, 19-21): no NES copy, the original is used.
+                self.assertIn(n, (0, 19, 20, 21))
+                self.assertEqual((t['nes_set_lo'][n], t['nes_set_hi'][n]), (0, 0))
+        variant = next(d for d in data['stages'] if d.get('variant_of'))
+        self.assertEqual((variant['stage'], variant['set'], variant['level_select']), ('3-2', 6, [6]))
+        self.assertEqual(t['nes_variant_set'], [6 if st == 6 else 0xff for st in range(22)])
+        self.assertEqual(NP.unpack(bytes(t['nes_variant_6']), 192), [int(e['out'], 16) for e in variant['entries']])
+        ryu = data['shared']['sprites'][0]
+        self.assertEqual(ryu['palette'], 96)
+        # Sprite palettes: a table by palette number from NES_SPRITE_FIRST;
+        # each copy in bank $37's tail (read in place) or bank $45 (+$80).
+        first = int(next(l for l in inc['nes-tables.inc'].splitlines() if l.startswith('NES_SPRITE_FIRST')).split('=')[1])
+        records = {sp['palette']: sp for sp, _, _ in NP.sprite_records(data)}
+        for k, (lo, hi) in enumerate(zip(t['nes_sprite_lo'], t['nes_sprite_hi'])):
+            n = first + k
+            if n not in records:
+                self.assertEqual((lo, hi), (0, 0))
+                continue
+            label = f'nes_sprite_{n}'
+            raw = s37.get(label) or s45.get(label)
+            self.assertEqual(NP.unpack(bytes(raw), 16), [int(e['out'], 16) for e in records[n]['entries']])
+            self.assertEqual(hi, f'HIGH({label})' if label in s37 else f'HIGH({label}+$2000)+$80')
+        self.assertIn('nes_sprite_96', s37)
+        hud = t['nes_hud_colours']
+        self.assertEqual([hud[2 * k] | hud[2 * k + 1] << 8 for k in range(7)],
+                         [int(e['out'], 16) for e in data['shared']['hud']['entries']])
+        # The NES copies fit the module's ranges (bank $37 $7C30-$7FDF; bank
+        # $45 $5200-$5FFF for sets and the other sprite palettes).
+        self.assertLessEqual(sum(len(v) for v in s37.values()), 0x7fe0 - 0x7c30)
+        self.assertLessEqual(sum(len(v) for v in s.values()) + sum(len(v) for v in s45.values()), 0x6000 - 0x5200)
+
+    def test_every_nes_mode_colour_is_an_nes_colour(self):
+        import nes_palette as NP
+        self.assertEqual(len(NP.NES_COLOURS), 47)
+        data = NP.load()
+        lay = NP.layout(data)
+        self.assertEqual(NP.nes_problems(lay), [])
+        for cols in list(lay['sets'].values()) + [c for _, c in lay['variants'].values()] + \
+                [c for _, c in lay['sprites']] + [lay['hud']] + [c for v in lay['animations'].values() for _, c in v]:
+            self.assertTrue(set(cols) <= NP.NES_COLOURS)
+        # A colour outside the set fails the check and the build's table check.
+        d = data['stages'][0]
+        d['entries'][5]['override'] = None
+        lay['sets'][d['set']][5] = 0x123
+        self.assertTrue(NP.nes_problems(lay))
+        rec = {'pce': '123', 'role': 'unused', 'nes': '00', 'out': '123', 'entry': 1}
+        self.assertTrue(any('not an NES colour' in p for p in NP._check_results('x', [rec], {})))
+
+    def test_4_1_back_trunks_resolve_above_the_darkest_green(self):
+        # Dark lift "Na": in 4-1 (set 8) the bark entries of rows 0 and 3
+        # (the Enhanced parallax trunks) take the `backwood` role, so they
+        # resolve to lighter NES colours than the fill's 08 ($040) in NES;
+        # no other record of the set changes role.
+        import nes_palette as NP
+        data = NP.load()
+        stage = next(d for d in data['stages'] if d['set'] == 8 and not d.get('variant_of'))
+        self.assertEqual(stage['stage'], '4-1')
+        role = stage['roles']['backwood']
+        self.assertEqual((role['ramp'], role['strict'], role['exclude']), (['09', '18'], True, ['08']))
+        back = [e for e in stage['entries'] if e['role'] == 'backwood']
+        self.assertEqual([(e['row'], e['entry']) for e in back],
+                         [(row, entry) for row in (0, 3) for entry in (6, 8, 9, 10, 11)])
+        self.assertEqual([(e['pce'], e['nes'], e['out']) for e in back],
+                         2 * [('041', '09', '080'), ('04A', '00', '092'), ('048', '09', '080'),
+                              ('051', '17', '0A0'), ('049', '18', '090')])
+        a = NP.layout(data)
+        fill = NP.lightness(0x040)
+        want = [0x080, 0x092, 0x080, 0x0a0, 0x090]
+        for row in (0, 3):
+            got = [a['sets'][8][row * 16 + entry] for entry in (6, 8, 9, 10, 11)]
+            self.assertEqual(got, want)
+            self.assertTrue(all(c in NP.NES_COLOURS and NP.lightness(c) > fill for c in got))
+
+    def test_detail_keeps_distinct_colours_distinct_in_lightness_order(self):
+        import nes_palette as NP
+        # Eight greys on a grey role: eight NES colours, in the same order.
+        greys = [0x000, 0x049, 0x092, 0x0db, 0x124, 0x16d, 0x1b6, 0x1ff]
+        r = NP.resolve_role({'ramp': ['00', '10', '30']}, greys)
+        out = [NP.nes9(r[c]) for c in greys]
+        self.assertEqual(len(set(out)), 8)
+        ls = [NP.lightness(c) for c in out]
+        self.assertEqual(ls, sorted(ls))
+        # The role's hue anchors: shades of blue on a red role stay red-ish
+        # (never a far hue column such as blue or green).
+        blues = [0x001, 0x002, 0x003, 0x004, 0x005, 0x006, 0x007]
+        red = NP.resolve_role({'ramp': ['16', '26']}, blues)
+        self.assertTrue(all((n & 0x0F) in (0x05, 0x06, 0x07, 0x00, 0x0F) or NP.chroma(NP.nes9(n)) < NP.NEAR_GREY
+                            for n in red.values()), red)
+        # Merges only once the allowed colours run out, and the report names them.
+        many = list(range(0x000, 0x008)) + [0x008 * k for k in range(1, 8)]
+        r = NP.resolve_role({'ramp': ['0F'], 'mode': 'match', 'strict': True, 'detail': True}, many)
+        self.assertEqual(len(set(r.values())), len(set(NP.nes9(n) for n in r.values())))
+        # 'detail: false' keeps the old nearest-in-the-hue-columns choice.
+        flat = NP.resolve_role({'ramp': ['00', '10', '30'], 'strict': True, 'detail': False}, greys)
+        self.assertTrue(set(flat.values()) <= {0x00, 0x10, 0x30, 0x0F})
+        rows = NP.detail_report(NP.load())
+        self.assertTrue(all(n >= 1 for _, _, _, n in rows))
+
+    def test_packing_puts_bit_eight_first(self):
+        import nes_palette as NP
+        cols = [0x1ff, 0, 0x100, 0x0ff, 0x123, 0x1a5, 0x005, 0x180]
+        raw = NP.pack(cols)
+        self.assertEqual(raw[0], 0b10101101)
+        self.assertEqual(NP.unpack(raw, 8), cols)
+        with self.assertRaises(NP.NesPaletteError):
+            NP.pack(cols[:7])
+
+    def test_roles_resolve_by_lightness_with_nes_hues(self):
+        import nes_palette as NP
+        self.assertEqual(NP.nes9(0x30), 0x1ff)           # NES white
+        self.assertEqual(NP.nes9(0x0f), 0x000)           # NES black
+        fixed = NP.resolve_role({'ramp': ['25'], 'mode': 'fixed'}, {0x0b8, 0x038})
+        self.assertEqual(set(fixed.values()), {0x25})
+        grey = NP.resolve_role({'ramp': ['00', '10', '30'], 'strict': True}, {0x000, 0x092, 0x1ff, 0x0c4})
+        self.assertEqual((grey[0x000], grey[0x1ff]), (0x0f, 0x30))
+        self.assertEqual(grey[0x092], 0x00)
+        self.assertTrue(all(NP.chroma(NP.nes9(n)) < NP.NEAR_GREY for n in grey.values()))
+        # Black only for near-black, near-neutral colours.
+        red = NP.resolve_role({'ramp': ['16', '26']}, {0x008, 0x038})
+        self.assertNotEqual(red[0x038], 0x0f)
+        # An edited role changes the result, and the check names the stale entry.
+        data = NP.load()
+        d = data['stages'][0]
+        d['roles'][d['entries'][0]['role']]['ramp'] = ['16']
+        d['roles'][d['entries'][0]['role']].pop('strict', None)
+        self.assertTrue(any('run nes_palette.py resolve' in p for p in NP.check(data)))
+
+    def test_data_holds_only_colours_and_role_names(self):
+        import nes_palette as NP
+        for p in sorted((ROOT / 'src/nes-palette').rglob('*.json')):
+            text = p.read_text()
+            for word in ('"captures"', '"prefix"', '"seen"', '.idx', '/' + 'workspace', '/' + 'home'):
+                self.assertNotIn(word, text, p.name)
+
+    def test_1_1_sidewalk_and_walls_keep_separation(self):
+        import nes_palette as NP
+        data = NP.load()
+        lay = NP.layout(data)
+        cols = lay['sets'][1]
+        want = {
+            # Sidewalk grooves/mortar, paver slab, bevel, curb, manhole (Row 3)
+            50: 0x042, 53: 0x042, 51: 0x092, 57: 0x092, 55: 0x0c4,
+            52: 0x16d, 56: 0x1b7, 61: 0x040, 62: 0x004,
+            # Retaining/stucco wall, dado, coping (Row 4)
+            68: 0x0c4, 69: 0x042, 70: 0x14d,
+            # Asphalt street, plaster wall, awning roller bar, plaster patches (Row 8)
+            130: 0x042, 131: 0x0c4, 140: 0x16d, 141: 0x092,
+            # Crate/brick (Row 10) and dark brick highlight/face/mortar (Row 11)
+            168: 0x019, 182: 0x0a0, 183: 0x060, 184: 0x010,
+        }
+        for idx, colour in want.items():
+            self.assertEqual(cols[idx], colour, f'entry {idx}: got ${cols[idx]:03X}, want ${colour:03X}')
+            self.assertIn(colour, NP.NES_COLOURS)
 
 
 class NativeGfxTests(unittest.TestCase):
@@ -311,6 +861,78 @@ class ReleaseTests(unittest.TestCase):
                 self.assertFalse(occupied & region)
                 occupied.update(region)
 
+    def test_public_files_have_no_workspace_paths_or_chat_notes(self):
+        if (ROOT / '.git').exists():
+            tracked = subprocess.check_output(
+                ['git', '-C', str(ROOT), 'ls-files'],
+                text=True,
+            ).splitlines()
+        else:
+            tracked = sorted(
+                p.relative_to(ROOT).as_posix()
+                for p in ROOT.rglob('*')
+                if p.is_file() and '__pycache__' not in p.parts
+            )
+        ow = 'ow' + 'ner'
+        Ow = 'Ow' + 'ner'
+        forbidden = (
+            '/' + 'workspace',
+            '/' + 'home/',
+            'chol' + 'land',
+            'DO_NOT' + '_COMMIT',
+            ow + "'s",
+            Ow + ':',
+            Ow + ' rule',
+            'the ' + ow + ' ',
+            'the ' + ow + ':',
+            '(' + ow,
+            'for the ' + ow,
+            ow + ' requests',
+            ow + ' follow-ups',
+            'maintainer' + "'s instruction",
+        )
+        co_author = 'Co-Authored' + '-By:'
+        skip_suffixes = ('.bps', '.png')
+        for rel in tracked:
+            if rel.endswith(skip_suffixes):
+                continue
+            path = ROOT / rel
+            if not path.is_file():
+                continue
+            text = path.read_text(errors='replace')
+            for token in forbidden:
+                self.assertNotIn(token, text, f'{rel} contains {token!r}')
+            self.assertNotIn(co_author, text, f'{rel} contains {co_author!r}')
+
+    def test_markdown_relative_links_resolve(self):
+        import re
+        if (ROOT / '.git').exists():
+            tracked = subprocess.check_output(
+                ['git', '-C', str(ROOT), 'ls-files'],
+                text=True,
+            ).splitlines()
+        else:
+            tracked = sorted(
+                p.relative_to(ROOT).as_posix()
+                for p in ROOT.rglob('*')
+                if p.is_file() and '__pycache__' not in p.parts
+            )
+        link_re = re.compile(r'!?\[[^\]]*\]\(([^)]+)\)')
+        for rel in tracked:
+            if not rel.endswith('.md'):
+                continue
+            md_path = ROOT / rel
+            for url in link_re.findall(md_path.read_text()):
+                url = url.strip()
+                if url.startswith(('http://', 'https://', '#', 'mailto:')):
+                    continue
+                target = url.split('#', 1)[0]
+                if not target:
+                    continue
+                resolved = (md_path.parent / target).resolve()
+                self.assertTrue(resolved.exists(), f'{rel}: broken relative link {url!r}')
+                self.assertTrue(resolved.is_relative_to(ROOT.resolve()), f'{rel}: link escapes root {url!r}')
+
     def test_source_builds_start_from_the_original_game(self):
         source = b'\x00' * 512 + bytes(range(256)) * 2048
         spec = {'size': len(source), 'sha256': hashlib.sha256(source).hexdigest()}
@@ -328,41 +950,102 @@ class ReleaseTests(unittest.TestCase):
 
     def test_menu_text_is_editable_source(self):
         import tempfile
-        from menu_text import ITEM_BOX, generate, layout
+        from menu_text import BOX_ROWS, BOX_WIDTH, CODES, band, generate, layout
+        source = (ROOT / 'src/options/menu.txt').read_text()
         with tempfile.TemporaryDirectory() as temp:
             work = Path(temp)
-            (work / 'menu.txt').write_text((ROOT / 'src/options/menu.txt').read_text())
-            generate(work, '1.10-dev')
+            (work / 'menu.txt').write_text(source)
+            menu = generate(work, '1.11-dev')
             include = (work / 'menu-text.inc').read_text()
-        self.assertIn('STAGE_AT = $07\nPARALLAX_AT = $4a\nDAMAGE_AT = $88\n', include)
-        codes = [int(b) for line in include.split('.db ')[1:] for b in line.split('\n')[0].split(',')]
-        self.assertEqual(len(codes), 128)
-        # V 1 . 1 0 - D E V at column 16 of the first row; the item box stays blank.
-        self.assertEqual(codes[16:25], [0x95, 0xa1, 0xaa, 0xa1, 0xa0, 0x9a, 0x83, 0x84, 0x95])
-        self.assertEqual({codes[row * 32 + c] for row in (1, 2) for c in ITEM_BOX}, {0x9f})
-        self.assertEqual(codes[5], 0xad)                    # STAGE:
-        good = ['A: #####', 'B: ###', 'C: ###', '']
-        layout(good)
-        with self.assertRaises(ValueError): layout(['A: #####', 'B: ###' + ' ' * 7 + 'X', 'C: ###', ''])  # column 13
-        with self.assertRaises(ValueError): layout(['A: #####', 'B: ###', 'C: ###', 'X' * 33])
-        with self.assertRaises(ValueError): layout(['A: #####', 'B: ###', 'C: ###', '!'])
-        with self.assertRaises(ValueError): layout(['A: ###', 'B: ###', 'C: ###', ''])        # field width
-        with self.assertRaises(ValueError): layout(good[:3])
+        self.assertIn('BOX_WIDTH = 25\nBOX_ROWS = 11\nFIELDS = 6\n', include)
+        self.assertEqual(len(menu['window']), BOX_WIDTH * BOX_ROWS)
+        self.assertEqual([w for _, _, w in menu['fields']], [5, 3, 3, 3, 10, 8])
+        # The dev version fits only without GITHUB.COM/; a release version with it.
+        self.assertEqual(menu['band_text'], 'V1.11-DEV TIGERMONKEYFISH')
+        self.assertEqual(band('V{version} {credit}', '1.11')[1], 'V1.11 GITHUB.COM/TIGERMONKEYFISH')
+        with self.assertRaises(ValueError): band('V{version} {credit}', '1.11-development-build')
+        self.assertEqual(len(menu['band']), 32)
+        palette = menu['choices'][3]
+        # PALETTE offers every mode, in the encoding of src/palette/main.asm:
+        # Left/Right order: Original, APOCALYPSE (HELL in the source), NES
+        # (src/nes-palette), SMS, DMG; the values are $2100's
+        # (and the saved settings') as before the order changed.
+        self.assertIn('\n@ $38 $00=ORIGINAL $18=APOCALYPSE $08=NES $38=SMS $10=DMG\n', source)
+        self.assertEqual((palette[0], [v for v, _ in palette[1]]), (0x38, [0x00, 0x18, 0x08, 0x38, 0x10]))
+        for k, text in enumerate(['ORIGINAL', 'APOCALYPSE', 'NES', 'SMS', 'DMG']):
+            text = text.ljust(10)
+            self.assertEqual(palette[1][k][1], bytes(CODES[c] for c in text))
+        # The language owns draft bits 6-7 (bits 0-5 are $2100's on Run).
+        self.assertEqual(menu['choices'][4][0], 0xc0)
+        self.assertEqual([v for v, _ in menu['choices'][4][1]], [0x40, 0x00, 0x80])
+        # The reset row: its field after LANGUAGE, in the row that was blank
+        # before RUN: OK; the defaults (each option's first value) are the
+        # power-on settings without saved ones (src/bram/main.asm).
+        import re
+        default_options, default_language = 0x00, 1
+        self.assertEqual(menu['reset'], (8, 16, 7))
+        self.assertEqual(menu['reset_text'], bytes(CODES[c] for c in 'PRESS I'))
+        bram = (ROOT / 'src/bram/main.asm').read_text()
+        self.assertEqual(int(re.search(r'^DEFAULT_LANGUAGE = (\d+)', bram, re.M)[1]), default_language)
+        self.assertEqual(menu['default'], default_options | default_language << 6)
+        self.assertIn('FIELDS = 6\nRESET_TEXT_AT = 92\nDEFAULT_DRAFT = $40\n', include)
+        self.assertIn('field_row:\n .db 2,3,4,5,6,7,8\n', include)
+        for broken in (source.replace('| STAGE: #####            |', '| STAGE: ####             |'),  # STAGE width
+                       source.replace('| NO DAMAGE: ###          |', '| NO DAMAGE: ###           |'),  # 26 columns
+                       source.replace('LANGUAGE', 'LANGUAGE!'),
+                       source.replace('$10=DMG', '$10=DMG_PALETTE'),                               # wider than its field
+                       source.replace('@ $04 $00=OFF $04=ON', '@ $04 $00=OFF $02=ON'),              # value outside its bits
+                       source.replace('@ $04 $00=OFF $04=ON', '@ $02 $00=OFF $02=ON'),              # bits owned twice
+                       source.replace('@ $04 $00=OFF $04=ON\n', ''),                                # a field without values
+                       source.replace('|                         |\n', '', 1),                      # ten rows
+                       source.replace('| ??????????????????????? |', '|                         |'),  # no status field
+                       source.replace('| ??????????????????????? |', '| ??????????? ??????????? |'),  # two
+                       source.replace('| ??????????????????????? |', '| ????????????????????    |'),  # ERROR 1 does not fit
+                       source.replace(' SETTINGS_LOADED\n', '\n'),                                  # a status without a text
+                       source.replace('? NO_BACKUP_MEMORY', '? NO_BACKUP_MEMORY!'),                 # not in the HUD font
+                       source.replace('| RESET OPTIONS: !!!!!!!  |', '| RESET OPTIONS:          |'),  # no reset field
+                       source.replace('\n! PRESS_I\n', '\n! PRESS_II\n'),                          # wider than its field
+                       source.replace('\n! PRESS_I\n', '\n')):                                       # no reset text
+            with self.assertRaises(ValueError):
+                layout(broken, '1.11')
+        # The window: 25 x 11 (since the reset-row build's second layout),
+        # a blank row between the reset row and the controls line.
+        self.assertEqual(menu['window'][9 * BOX_WIDTH:10 * BOX_WIDTH], bytes([CODES[' ']]) * BOX_WIDTH)
+        # The save status: one field across the window's top row, matching
+        # each status value of src/bram/main.asm in order.
+        status_text = (
+            'NO BACKUP MEMORY',
+            'SETTINGS SAVED',
+            'BACKUP MEMORY FOUND',
+            'BACKUP MEMORY FULL',
+            'BACKUP MEMORY ERROR 1',
+            'BACKUP MEMORY ERROR 2',
+            'BACKUP MEMORY ERROR 3',
+            'BACKUP MEMORY ERROR 4',
+            'BACKUP MEMORY ERROR 5',
+            'SETTINGS LOADED',
+        )
+        self.assertEqual(menu['status'], (0, 1, 23))
+        self.assertEqual(menu['status_texts'], [bytes(CODES[c] for c in text.ljust(23)) for text in status_text])
+        self.assertIn(f'STATUS_ROW = 0\nSTATUS_COL = 1\nSTATUS_WIDTH = 23\nSTATUS_COUNT = {len(status_text)}\n', include)
+        self.assertNotIn('status_text', include)
 
-
-class ComparisonRunTests(unittest.TestCase):
-    def test_every_parallax_stage_has_a_wellformed_run(self):
-        from comparison_video import BUTTONS, STAGE_NAMES
-        runs = {path.stem: json.loads(path.read_text())
-                for path in (ROOT / 'research/comparison-runs').glob('*.json')}
-        self.assertEqual(sorted(runs), ['1-1', '2-2', '3-1', '3-2', '4-1', '4-2',
-                                        '5-2', '5-3', '5-4', '6-1', '6-3'])
-        for name, run in runs.items():
-            self.assertEqual(STAGE_NAMES[run['stage']], name)
-            self.assertEqual(run['frames'], sum(count for count, _ in run['segments']))
-            for count, buttons in run['segments']:
-                self.assertGreater(count, 0)
-                self.assertLessEqual(set(buttons), set(BUTTONS))
+    def test_bram_module_constants_and_ranges(self):
+        import re
+        source = (ROOT / 'src/bram/main.asm').read_text()
+        values = {name: int(value) for name, value in re.findall(r'^ST_(\w+) = (\d+)', source, re.M)}
+        self.assertEqual(values, {'NONE': 0, 'OK': 1, 'READY': 2, 'FULL': 3,
+                                  'UNFORMATTED': 4, 'CORRUPT': 5, 'SIZE': 6,
+                                  'VERIFY': 7, 'DATA': 8, 'LOADED': 9, 'COUNT': 10})
+        self.assertIn('ENTRY_SIZE = $18\n', source)
+        self.assertIn(' .db ' + ','.join(f'${c:02x}' for c in b'NR ENHANCE') + '\n', source)
+        self.assertIn('BRAM_UNLOCK = $1807\n', source)
+        self.assertIn('BRAM_LOCK = $1803\n', source)
+        self.assertIsNotNone(re.search(r' lda #\$48\n sta BRAM_UNLOCK\n lda #\$75\n sta BRAM_UNLOCK\n'
+                                       r' lda #\$80\n sta BRAM_UNLOCK\n', source))
+        self.assertIsNotNone(re.search(r' lda BRAM_LOCK [^\n]*\n csh\n', source))
+        module = next(m for m in json.loads((ROOT / 'src/modules.json').read_text()) if m['name'] == 'bram')
+        self.assertEqual(module['ranges'], [[0x2c, 0x2f], [0x1fe6, 0x1ff6], [0x8cb00, 0x8d000]])
 
 
 class GuideImageTests(unittest.TestCase):

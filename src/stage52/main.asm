@@ -50,8 +50,8 @@ low_half:
  ; Only $2257-$225A (old renderer's bank saves and cursor) may be reused.
  stz <$2d
  lda $2258
- cmp #$ff
- beq phase_changed
+ cmp #$fc                   ; $FF, or a stage load's pending draw ($FD, $FC)
+ bcs phase_changed
  lda $2259
  and #7
  cmp <$27
@@ -64,8 +64,8 @@ same_phase:
  lda <$25
  sta <$2f
  lda $2258
- cmp #$ff
- beq initialize
+ cmp #$fc
+ bcs initialize
  lda $2259
  lsr a
  lsr a
@@ -96,6 +96,42 @@ new_left:
  inc <$30
  bra cache
 initialize:
+ ; $2258: $FF draws at once: an area change's draw ($2257 holds the bank the
+ ; native $80AB saved there) or the gameplay fallback. A stage load
+ ; (init_background: $2257 = $FF) leaves the drawing to the entry's black
+ ; frames (load-exact): two pieces in the entry's short updates while every
+ ; colour is black. $2E63 counts the entry's updates down from $3A ($82D0);
+ ; $FD at $38 uploads the tiles (fixed and phase), $FC at $37 writes the
+ ; tile map and the real cache. Outside the entry ($2E63 = 0; not expected)
+ ; everything is drawn at once.
+ lda $2258
+ cmp #$ff
+ bne load_piece
+ lda $2257
+ cmp #$ff
+ bne draw_all
+ lda #$fd
+ sta $2258
+ rts
+load_piece:
+ ldx $2e63
+ beq draw_all
+ cmp #$fd
+ bne piece_two
+ cpx #$38
+ bne piece_wait
+ stz <$30
+ jsr cache
+ lda #$fc
+ sta $2258
+piece_wait:
+ rts
+piece_two:
+ cpx #$37
+ bne piece_wait
+ stz <$2d
+ bra cache
+draw_all:
 cache:
  lda $2e4b
  sta $2257

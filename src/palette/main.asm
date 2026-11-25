@@ -1,0 +1,2558 @@
+; Palette modes: $2100 bits 3-5 (1.11-dev). Bits 3-4 are the upload family,
+; bit 5 the variant within it:
+;   $00 Original (the shipped colours; zero is the default)
+;   $08 NES: other palette data loaded into the RAM palette
+;       (the nes-palette branch; uploaded here as Original)
+;   $10 GB DMG
+;   $18 HELL
+;   $38 SMS (stored with bit 7 set: $B8, below)
+;   $20, $28, $30: unassigned (uploaded as Original and as GB DMG)
+; $2100 bit 7 is set exactly when bits 3-5 are SMS ($38): a copy that lets
+; the upload tell SMS from HELL at no cost. The dispatch masks $2100 with
+; DISPATCH_BITS ($98: bits 3, 4 and 7) and compares with $10 as before:
+; equal is GB DMG; below (carry clear) the native upload (bits 3-4 = 00 or
+; 01, whatever bit 5); above (carry set) family 11, HELL ($18 - $10: N clear)
+; or SMS ($98 - $10: N set). Whoever writes bits 3-5 writes bit 7 with them
+; (the menu does); a stray bit 7 without bits 3-5 = 111 shows SMS colours
+; for HELL and HELL's for $20/$28 (no other harm). The menu's PALETTE row
+; offers the modes (src/options/menu.txt).
+;
+; The native game keeps its live palette in RAM ($2286, 512 words) and queues
+; ranges to upload ($F350; up to 8 entries at $2260-$2280). The vblank
+; interrupt uploads the queue with a TIA ($F3B5, called from $FD13), then
+; writes the border colour $2281/$2282 to entry $100; a lock ($2283) holds
+; it off. In GB DMG mode this module uploads the same queue
+; with every colour looked up in the mode's table across all screens
+; (gameplay, cinemas, the title and the ending), so the RAM palette always
+; holds the original colours and fades map every step. HELL does the same
+; for VCE entries 0 to HELL_MAPPED-1 (background palettes 0-14) in gameplay
+; only: the HUD palette, the sprite palettes and the border (entry $100)
+; keep their colours, written by a TIA at the native rate. SMS is GB DMG
+; with the SMS table in gameplay: the very same code runs from a copy of
+; this bank's $5000-$57FF in bank SMS_BANK, whose $5400-$57FF holds the SMS
+; table instead of the GB DMG one (see "SMS" at the end). In HELL and SMS,
+; cinemas, the title and the ending ($2240 = 1 or 2) keep the native upload.
+;
+; PALETTE_STATE ($2104, bits 5-7; in $2100 bits 5-7 before SMS) is this
+; module's state, not an option. Bit 7 is set while the VCE holds mapped
+; colours (GB DMG, HELL or SMS). Whenever the colours due (mapped in GB DMG,
+; mapped in HELL/SMS gameplay, original otherwise) differ from that state,
+; the vblank upload queues all 512 colours ($F394) and flips the bit, so a
+; change between Original (or NES) and a mapped mode, or a cinema starting
+; or ending in HELL or SMS, re-uploads everything by itself. The bit does
+; not say which table the VCE holds: whoever changes bits 3-5 while a mapped
+; the VCE holds: whoever changes bits 3-5 while a mapped mode is live must
+; also queue all 512 colours ($F394; the menu's preview and cancel do).
+; Clearing bit 7 costs at most one needless full re-upload. $2104 is the
+; byte above $2100-$2103 at the bottom of the stack page (the watched stack
+; margin is $2105-$213F since 1.11-dev; docs/validation/sms-palette.md).
+;
+; The Original and GB DMG paths take exactly the cycles they took before HELL
+; existed (the HELL and SMS tests ride on branches those paths already took;
+; PALETTE_STATE is read and written with the same absolute instructions as
+; $2100 was), so their timing, and that of every interrupt after them, is
+; unchanged. HELL's paths take exactly the cycles they took before SMS (see
+; vblank_hell, hell_cinema, now_hell_far and now_hell).
+;
+; The mapped upload costs about 3.5 times the native TIA per colour, so it
+; uploads at most PALETTE_CAP colours per vblank, less ENTRY_COST for each
+; queue entry after the first (it must end before the display starts), and
+; leaves the rest queued: what is left of the entry it stopped in and the
+; entries it did not reach become one entry that starts there and runs on,
+; past colour 511 to 0 if need be, so the producers keep seven free entries. A
+; queue found full (8 entries) may have lost an entry ($F350 drops when full),
+; so it is replaced by all 512 colours. In HELL an unmapped colour costs
+; about a quarter of a mapped one (RAW_* below), so those entries take about
+; the native upload's time.
+;
+; Fades. The native fade ($F49A, a main-loop tick) recomputes its range of
+; the RAM palette from the backup at a brightness FADE_LEVEL ($2A8A) and
+; queues the range, every 7 ticks: a fade-in from level 0 up to 7 (then the
+; byte is 8), a fade-out from 7 down to 0, all black (then the byte is $FF:
+; $F4B6 adds $2A8F = $FF to it after the last step). The stage-end fade-out
+; (bank 1 $8510, the only one in gameplay) is followed 8 ticks after its
+; last step by the next stage's load, which holds the lock and, starting
+; its fade-in ($F436), empties the queue ($F345). With LEFTOVER_CAP colours
+; a vblank the last step's 512 colours were still on their way then: the
+; load dropped the left-over entry, and the VCE kept the step before black
+; in those entries (a hundred of them in 6-2's exit) while the new stage's
+; tiles were drawn, until the fade-in's first step reached them. Since the
+; dark lift SMS shows that step's greens and greys (6-3's floor, grey on
+; the black screen for 7 frames); before, the modes' tables happened to
+; show them as their black. So while FADE_LEVEL is $FF (bit 7: a fade-out
+; has ended on black and no fade has begun since) a left-over entry gets
+; FADE_CAP colours a vblank, still only with the main loop idle at this
+; vblank and the last one with work. FADE_CAP is what a fade step's 512
+; colours get in their first vblank (0.266 x 512), so in GB DMG and SMS
+; those vblanks are no longer than every fade step's first already is (in
+; HELL, where the budget also buys unmapped colours, up to 0.4 line longer:
+; 19.75 lines after the interrupt at the worst); with that first vblank
+; (130 or 136 colours) three more complete the black, at the fourth vblank
+; after the step, four ticks before the load (BUDGET_MIN + 4 x FADE_CAP is
+; more than 512: the fifth at the latest; docs/validation/dark-lift.md).
+; The main loop does nothing but count those ticks. The colours still come
+; from the RAM palette through the table: the fade's state changes the
+; pace only.
+
+OPTIONS = $2100
+DISPATCH_BITS = $98         ; the upload family (bits 3-4) and the SMS copy (bit 7)
+PALETTE_GB = $10
+PALETTE_HELL = $18          ; family 11: HELL, or SMS with SMS_FLAG
+SMS_FLAG = $80              ; $2100 bit 7: bits 3-5 are SMS ($38)
+PALETTE_STATE = $2104       ; bits 5-7: this module's state (below)
+MASTER_STATE = $2240        ; 0 gameplay, 1 cinema or title, 2 ending
+VISIBLE_STAGE = $2e5f       ; Level Select numbering: 0 is 1-1 (HELL's override)
+QUEUE_COUNT = $2260
+QUEUE_BYTES_LO = $2261      ; bytes to upload (2 per colour)
+QUEUE_BYTES_HI = $2269
+QUEUE_INDEX_LO = $2271      ; first colour (0-511)
+QUEUE_INDEX_HI = $2279
+BORDER = $2281              ; written to colour $100 after each upload
+FADE_LEVEL = $2a8a          ; the native fade's brightness (below, "Fades")
+PALETTE_LOCK = $2283
+NATIVE_UPLOAD = $f3b5
+NATIVE_UPLOAD_END = $f421     ; its rts
+RAM_PALETTE = $2286
+QUEUE_ALL = $f394           ; native: queue colours 0-511, under the lock
+MAPPED_STATE = $80          ; PALETTE_STATE bit 7: the VCE holds mapped colours
+LEFTOVER = $20              ; bit 5: the queue's one entry was left over
+WAS_BUSY = $40              ; bit 6: the main loop was busy at the last vblank with work
+PALETTE_BANK = $46
+PALETTE_FAR = $5a00         ; bank $46 $5A00-$5AFF: fold_queue and the SMS stubs
+SMS_BANK = $3b              ; the SMS copy of $5000-$57FF and PALETTE_FAR
+HELL_BANK = $43            ; HELL's code and table, mapped in MPR3 ($6000)
+HELL_CODE = $7800           ; while they run: bank $43 $7800-$7BFF ...
+HELL_TABLE = $7c00          ; ... and $7C00-$7FFF
+
+PALETTE_CAP = 168           ; colours per vblank (measured: docs/validation/gb-palette.md)
+ENTRY_COST = 6              ; colours' worth of time per further queue entry
+LEFTOVER_CAP = 16           ; colours a vblank for a left-over entry alone
+FADE_CAP = 136              ; ... once a fade-out has ended on black ("Fades")
+NATIVE_PLUS = 0             ; colours beyond the native upload's time
+BUDGET_MIN = 16
+; HELL: an unmapped chunk of n colours (a TIA from the RAM palette, at the
+; native 42 master clocks a colour) is charged n/4 + n/32 + RAW_SETUP mapped
+; colours' worth of the budget (measured: docs/validation/hell-palette.md).
+RAW_SETUP = 3
+RAW_ANY = 40                ; a budget this large fits any chunk (128: 39)
+
+; Zero page borrowed by the mapped upload; saved and restored around it.
+PTR = $20                   ; and $21: source pointer
+BUDGET = $22                ; colours left this vblank
+CHUNK = $23                 ; colours in this chunk (1-128)
+ENTRY = $24                 ; queue entry being read
+FULL = $25                  ; nonzero: the queue was full (8 entries)
+TMP = $26
+
+; Palette timing (1.11-dev, branch palette-lag; "Palette timing" below).
+WAITR = $37c0               ; RAM: the main loop's vblank wait ($37C0-$37DD)
+LIVE = $37e0                ; RAM: $10 = mapped gameplay seen by the worker, else 0
+FASTOK = $37e1              ; RAM: 1 = every queued colour is in SHADOW (0: not yet;
+                            ; $80/$81: a fallback upload with work ran since)
+BORDER_MAP = $37e2          ; RAM, 2 bytes: the border colour as the mode shows it
+W_LEFT = $37e4              ; RAM, 2 bytes: the worker's bytes left in an entry
+W_OVR = $37e6               ; RAM: bit 7 = HELL, bit 0 = override stage
+W_INDEX = $37e7             ; RAM, 2 bytes: SHADOW byte offset of the chunk
+ANIMR = $37ea               ; RAM, 20 bytes: the animation table choice (src/nes-palette)
+ANIM_TABLE = $cf32          ; bank 3: the original animation set pointers
+ANIM_POINTERS = $7400       ; bank 3 $D400 in MPR3: the NES animation table pointer
+SHADOW = $3c00              ; RAM, 1 KiB: the mapped colours, as $2286 is laid out
+W_SRC = $20                 ; zero page borrowed by the worker (saved, restored)
+W_DST = $22
+W_SRC_HI = $24              ; W_SRC + 1 (even W_SRC: same high byte, low | 1)
+W_ENTRY = $26
+RENT = $3740                ; RAM, $3740-$37BF: the vblank's palette upload ($3740-$37B4)
+RENT_SIZE = $74             ; bytes 0-$73 hold the routine; $74 is RENT_STOP
+RENT_STOP = $74             ; offset of an rts that configure routes the entry to
+RENT_ROUTE = RENT_STOP - 5  ; the beq's offset that reaches RENT_STOP
+RENT_BEQ = 3                ; offset of the entry's beq (the queue is empty)
+BOOT_PAD = 6                ; configure_body's delay: 6 x 6 cycles (palette_boot)
+WAIT_ENTRY = $5b00          ; fixed addresses: the boot trampoline (src/bram)
+CONFIGURE_ENTRY = $5b03     ; ... and the menu's set_palette (src/options)
+
+ .bank 0
+ ; The main loop's vblank wait (native: jsr $fd67): WAITR in RAM (below,
+ ; "Palette timing"), the same cycles in every mode.
+ .org $e061
+ jsr WAITR
+ ; The vblank interrupt's palette upload (native: jsr $f3b5): RENT in RAM
+ ; (below, "Palette timing"), the native upload's cycles in every mode.
+ .org $fd13
+ jsr RENT
+ ; Fixed-bank trampoline: map the module's bank for the call and restore
+ ; MPR2. palette_now (carry set; stage modules) writes colours X to X+Y-1 of
+ ; the RAM palette to the VCE at once; palette_upload (carry clear; the
+ ; vblank interrupt, which has saved A, X and Y) uploads the queue. A, X and
+ ; Y are not preserved.
+ .org $febe
+palette_now:
+ sec
+ .db $24                    ; bit <$18: skips the clc
+palette_upload:
+ clc
+ tma #2
+ pha
+ lda #PALETTE_BANK
+ tam #2
+ jsr palette_entry
+ pla
+ tam #2
+ rts
+palette_upload_end:
+ .if (palette_now <> $febe)  ; stage11 and stage22 call $febe
+ .fail
+ .endif
+ .if (palette_upload_end > $fee0)
+ .fail
+ .endif
+
+ .bank PALETTE_BANK
+ ; Everything between the ;@mirror lines is also assembled, byte for byte the
+ ; same at the same addresses, in bank SMS_BANK (scripts/palette_tables.py
+ ; writes sms-mirror.inc from these lines, every label defined here renamed
+ ; sms_..., with a guard that each sms_ label equals its original).
+;@mirror begin
+ .org $5000
+palette_entry:
+ ; palette_now (carry set; stage modules), or the vblank from RENT's
+ ; dispatch (carry clear; see "Palette timing" at the end): RENT runs the
+ ; native upload itself in every case Original's cycles allow, and comes
+ ; here only when a mapped mode's queue holds colours the worker has not
+ ; converted (or the VCE holds mapped colours where original ones are due),
+ ; or right after the reset, before RENT is written.
+ bcs palette_now_mapped
+palette_vblank:
+ ; A worker this vblank interrupted after its last check of $12 must not
+ ; arm RENT with its inc FASTOK (palette-lag review F2): $80 + 1 is not 1.
+ ; (MS stays disarmed until the worker's next stz/inc; MN, which needs 0,
+ ; never comes here once written: the worker's stz puts 0 back if it did.)
+ lda #$80
+ sta FASTOK
+ ; As the native upload: nothing happens while the palette is locked.
+ lda PALETTE_LOCK
+ bne entry_return
+ ; LIVE (palette timing, 1.11-dev): zero in Original, NES and HELL/SMS
+ ; cinemas, $10 in GB DMG (always) and HELL/SMS gameplay once seen.
+ ; Mapped modes reach here only when the worker has not converted the
+ ; queue: the fallback below (or on reset's first vblank when GB DMG boots).
+ lda LIVE
+ bne vblank_fallback
+vblank_plain:
+ lda PALETTE_STATE
+ bmi plain_requeue
+ ; The reset leaves RENT as a jmp here (palette_boot; LIVE is 0 then): the
+ ; first unlocked vblank writes it, once (FASTOK 0 again), then uploads (or
+ ; enters the mapped fallback in GB DMG).
+ lda RENT
+ cmp #$4c
+ bne plain_written
+ jmp plain_install
+plain_written:
+ jmp NATIVE_UPLOAD
+plain_requeue:
+ ; The VCE holds mapped colours (the mode just changed to Original or NES,
+ ; or a cinema began in a mapped mode): queue all 512 colours first, as
+ ; cinema_requeue does.
+ and #$ff - MAPPED_STATE
+ sta PALETTE_STATE
+ jsr QUEUE_ALL
+ jmp NATIVE_UPLOAD
+vblank_fallback:
+ ; The worker has not converted the queue (it did not run, or the vblank
+ ; came first): the mapped upload below, as before palette-lag. (RENT
+ ; comes here only with colours queued; the test stays for the reset's
+ ; first vblank.)
+ lda QUEUE_COUNT
+ bne fallback_work
+entry_return:
+ rts
+fallback_work:
+ lda OPTIONS
+ and #DISPATCH_BITS
+ cmp #PALETTE_GB
+ bne fallback_other
+ jmp vblank_gb
+fallback_other:
+ jmp vblank_other           ; HELL, SMS (carry set); Original, NES (clear)
+
+ ; palette_now: colours X (0-255) to X+Y-1 (Y = 1-127) of the RAM palette
+ ; to the VCE at once, in the active mode's colours (the stage modules'
+ ; merged palettes, which the display shows in the frame they are drawn;
+ ; they queue the same range too). The upload lock is held meanwhile so the
+ ; vblank upload cannot move the VCE address.
+palette_now_mapped:
+ lda <PTR
+ pha
+ lda <PTR+1
+ pha
+ lda <CHUNK
+ pha
+ lda PALETTE_LOCK
+ pha
+ lda #1
+ sta PALETTE_LOCK
+ tya
+ asl a
+ sta <CHUNK
+ stx $0402
+ stz $0403
+ stz <PTR+1
+ txa
+ asl a
+ rol <PTR+1
+ adc #$86
+ sta <PTR
+ lda <PTR+1
+ adc #$22
+ sta <PTR+1
+ cly
+ lda OPTIONS
+ and #DISPATCH_BITS
+ cmp #PALETTE_GB
+ bne now_other              ; Original, NES (carry clear), HELL, SMS (set)
+ nop                        ; GB DMG: the 2 cycles the entry saved
+now_gb:
+ ; GB DMG (always), and SMS from now_sms (in bank SMS_BANK, with the SMS
+ ; table; gameplay only, checked by now_gb_far).
+ lda MASTER_STATE
+ bne now_gb_cinema
+now_mapped:
+ lda [PTR],y
+ tax
+ iny
+ lda [PTR],y
+ iny
+ lsr a
+ bcs now_high
+ lda gb_lo0,x
+ sta $0404
+ lda gb_hi0,x
+ sta $0405
+ cpy <CHUNK
+ bne now_mapped
+ bra now_done
+now_high:
+ lda gb_lo1,x
+ sta $0404
+ lda gb_hi1,x
+ sta $0405
+ cpy <CHUNK
+ bne now_mapped
+ bra now_done
+now_hell_far:
+ ; HELL (N clear) or SMS (N set). HELL: bank HELL_BANK in MPR3 while
+ ; now_hell maps the colours below HELL_MAPPED; it comes back to
+ ; now_hell_exit with Y = the bytes done (or, in a cinema, to
+ ; now_hell_cinema_exit). The bmi's 2 cycles are paid in now_hell (a sec
+ ; it can do without) and now_hell_cinema_exit.
+ bmi now_sms_near
+ tma #3
+ pha
+ lda #HELL_BANK
+ tam #3
+ jmp now_hell
+now_sms_near:
+ jmp now_sms
+now_hell_exit:
+ pla
+ tam #3
+ cpy <CHUNK
+ bne now_raw
+ bra now_done
+now_gb_cinema:
+ jmp now_gb_far
+now_other:
+ bcs now_hell_far           ; Original, NES: 2 cycles, the 2 the entry saved
+now_raw:
+ lda [PTR],y
+ sta $0404
+ iny
+ lda [PTR],y
+ sta $0405
+ iny
+ cpy <CHUNK
+ bne now_raw
+now_done:
+ pla
+ sta PALETTE_LOCK
+ pla
+ sta <CHUNK
+ pla
+ sta <PTR+1
+ pla
+ sta <PTR
+ rts
+
+ ; Stack in mapped_upload after its 9 pushes: S+10/11 return to the
+ ; trampoline, S+12 its saved MPR2, S+13/14 return to $FD16, S+15-17 the
+ ; interrupt's Y, X, A, S+18 P, S+19/20 the interrupted PC.
+mapped_upload:
+ phx
+ phy
+ lda <PTR
+ pha
+ lda <PTR+1
+ pha
+ lda <BUDGET
+ pha
+ lda <CHUNK
+ pha
+ lda <ENTRY
+ pha
+ lda <FULL
+ pha
+ lda <TMP
+ pha
+ ; A full queue may have dropped an entry ($F350 drops when full): once
+ ; this upload is done, all 512 colours are left over instead.
+ stz <FULL
+ lda QUEUE_COUNT
+ cmp #8
+ bcc queue_not_full
+ inc <FULL
+queue_not_full:
+ lda #PALETTE_CAP
+ sta <BUDGET
+ ; Was the main loop waiting for vblank when the interrupt came (the
+ ; interrupted PC in $FD67-$FD6F)? CHUNK = WAS_BUSY if not, ENTRY = the
+ ; same for the last vblank that found work queued ($2100 bit 6).
+ ldy #0
+ tsx
+ lda $2100 + 20,x           ; the interrupted PC, high byte (see below)
+ cmp #$fd
+ bne busy_now
+ lda $2100 + 19,x
+ cmp #$67
+ bcc busy_now
+ cmp #$70
+ bcc idle_now
+busy_now:
+ ldy #WAS_BUSY
+idle_now:
+ sty <CHUNK
+ lda PALETTE_STATE
+ and #WAS_BUSY
+ sta <ENTRY
+ lda PALETTE_STATE
+ and #$ff - WAS_BUSY
+ ora <CHUNK
+ sta PALETTE_STATE
+ ; A single entry that an upload left over ($2100 bit 5) is work the native
+ ; game does not have in this frame, and the main loop may need the time
+ ; (the frames after a large upload are often an area change's load). It
+ ; waits while the main loop is busy, or was at the last vblank with work;
+ ; otherwise LEFTOVER_CAP colours go (about 4 lines).
+ ldx QUEUE_COUNT
+ cpx #1
+ bne new_work
+ lda PALETTE_STATE
+ and #LEFTOVER
+ beq new_work
+ lda <CHUNK
+ ora <ENTRY
+ beq leftover_idle
+ nop                        ; busy: 2 + 2 + 4 cycles, the taken bne and the jmp before 1.11-dev's fade rule
+ jmp mapped_return
+leftover_idle:
+ ; A fade-out that has ended on black (FADE_LEVEL = $FF, below) is followed
+ ; by a load that holds the lock and then drops the queue, so what is left
+ ; over must be in the VCE before it: FADE_CAP colours go, not LEFTOVER_CAP.
+ ; Otherwise this is the path before the rule, cycle for cycle (39 from the
+ ; branch above to next_chunk: budget_done's work for the one entry, here).
+ bit FADE_LEVEL
+ bmi leftover_fade
+ lda #LEFTOVER_CAP
+leftover_set:
+ sta <BUDGET
+ lda PALETTE_STATE
+ and #$ff - LEFTOVER
+ sta PALETTE_STATE
+ stz <ENTRY
+ clx
+ jmp next_chunk
+leftover_fade:
+ lda #FADE_CAP
+ bra leftover_set
+new_work:
+ ; New entries: about the time the native upload would take for them (a
+ ; mapped colour costs about 156 master clocks, a native one 42, so 0.266
+ ; mapped colours per native one) plus NATIVE_PLUS colours, at most
+ ; PALETTE_CAP, less ENTRY_COST for each further entry, at least
+ ; BUDGET_MIN. An entry left over in slot 0 is not counted. PTR = the new
+ ; entries' bytes.
+ stz <PTR
+ stz <PTR+1
+ ldx #0
+ lda PALETTE_STATE
+ and #LEFTOVER
+ beq sum_bytes
+ inx
+sum_bytes:
+ cpx QUEUE_COUNT
+ bcs bytes_summed
+ lda QUEUE_BYTES_LO,x
+ clc
+ adc <PTR
+ sta <PTR
+ lda QUEUE_BYTES_HI,x
+ adc <PTR+1
+ sta <PTR+1
+ inx
+ bra sum_bytes
+bytes_summed:
+ lda <PTR+1
+ sta <TMP                   ; 4 or more: the new entries cover 512 colours
+ cmp #8
+ bcs budget_large           ; 2048 bytes or more
+ ; colours x 0.266 = bytes / 8 + bytes / 128
+ lda <PTR
+ asl a
+ lda <PTR+1
+ rol a
+ sta <CHUNK                 ; bytes / 128
+ lsr <PTR+1
+ ror <PTR
+ lsr <PTR+1
+ ror <PTR
+ lsr <PTR+1
+ ror <PTR                   ; bytes / 8 (< 256)
+ lda <PTR
+ clc
+ adc <CHUNK
+ bcs budget_large
+ adc #NATIVE_PLUS
+ bcc budget_costs
+budget_large:
+ lda #$ff
+budget_costs:
+ cmp #PALETTE_CAP
+ bcc budget_capped
+ lda #PALETTE_CAP
+budget_capped:
+ ldx QUEUE_COUNT
+ sec
+ sbc entry_costs-1,x
+ bcc budget_min
+ cmp #BUDGET_MIN
+ bcs budget_set
+budget_min:
+ lda #BUDGET_MIN
+budget_set:
+ sta <BUDGET
+ ; Small new entries (a palette animation) go before an entry left over in
+ ; slot 0, which moves to the end, so they are not held up behind it. New
+ ; entries of 512 colours or more (a fade step) go after it: the left-over
+ ; entry then carries on from where it stopped and every colour comes in
+ ; turn.
+ lda PALETTE_STATE
+ and #LEFTOVER
+ beq budget_done
+ lda <TMP
+ cmp #4
+ bcs budget_done
+ lda QUEUE_BYTES_LO
+ pha
+ lda QUEUE_BYTES_HI
+ pha
+ lda QUEUE_INDEX_LO
+ pha
+ lda QUEUE_INDEX_HI
+ pha
+ ldx #0
+rotate_entry:
+ lda QUEUE_BYTES_LO+1,x
+ sta QUEUE_BYTES_LO,x
+ lda QUEUE_BYTES_HI+1,x
+ sta QUEUE_BYTES_HI,x
+ lda QUEUE_INDEX_LO+1,x
+ sta QUEUE_INDEX_LO,x
+ lda QUEUE_INDEX_HI+1,x
+ sta QUEUE_INDEX_HI,x
+ inx
+ cpx QUEUE_COUNT
+ bcc rotate_entry
+ ldx QUEUE_COUNT
+ pla
+ sta QUEUE_INDEX_HI-1,x
+ pla
+ sta QUEUE_INDEX_LO-1,x
+ pla
+ sta QUEUE_BYTES_HI-1,x
+ pla
+ sta QUEUE_BYTES_LO-1,x
+budget_done:
+ lda PALETTE_STATE
+ and #$ff - LEFTOVER
+ sta PALETTE_STATE
+ stz <ENTRY
+next_entry:
+ ldx <ENTRY
+ cpx QUEUE_COUNT
+ bcs queue_done
+next_chunk:
+ lda QUEUE_BYTES_LO,x
+ ora QUEUE_BYTES_HI,x
+ beq entry_done
+ ; CHUNK = min(128, colours left in the entry, BUDGET): one pass of the
+ ; indexed loop below (Y covers at most 256 bytes).
+ lda QUEUE_BYTES_HI,x
+ bne entry_long
+ lda QUEUE_BYTES_LO,x
+ lsr a
+ bra entry_short
+entry_long:
+ lda #128
+entry_short:
+ sta <CHUNK
+ lda <BUDGET
+ cmp <CHUNK
+ bcs budget_ok
+ sta <CHUNK
+budget_ok:
+ ; ... and no further than colour 511: a left-over entry may run on from
+ ; colour 0 (only this upload sees such an entry: whenever the native
+ ; upload takes over, all 512 colours are queued first).
+ lda QUEUE_INDEX_HI,x
+ beq to_end_ok
+ lda QUEUE_INDEX_LO,x
+ beq to_end_ok
+ eor #$ff
+ inc a
+ cmp <CHUNK
+ bcs to_end_ok
+ sta <CHUNK
+to_end_ok:
+ jsr upload_chunk
+ ; The entry moves on by CHUNK colours.
+ ldx <ENTRY
+ lda QUEUE_INDEX_LO,x
+ clc
+ adc <CHUNK
+ sta QUEUE_INDEX_LO,x
+ bcc index_done
+ lda QUEUE_INDEX_HI,x
+ inc a
+ and #1
+ sta QUEUE_INDEX_HI,x
+index_done:
+ lda <CHUNK
+ asl a
+ sta <PTR
+ cla
+ rol a
+ sta <PTR+1
+ lda QUEUE_BYTES_LO,x
+ sec
+ sbc <PTR
+ sta QUEUE_BYTES_LO,x
+ lda QUEUE_BYTES_HI,x
+ sbc <PTR+1
+ sta QUEUE_BYTES_HI,x
+ lda <BUDGET
+ sec
+ sbc <CHUNK
+ sta <BUDGET
+ bne next_chunk
+ jsr fold_queue
+ bra border
+entry_done:
+ inc <ENTRY
+ bra next_entry
+queue_done:
+ stz QUEUE_COUNT
+border:
+ lda <FULL
+ beq full_done
+ jsr QUEUE_ALL
+full_done:
+ ; Bit 5: an entry is left over (it was cleared above).
+ lda QUEUE_COUNT
+ beq nothing_left
+ lda PALETTE_STATE
+ ora #LEFTOVER
+ sta PALETTE_STATE
+nothing_left:
+ ; The border colour (entry $100), mapped like the rest.
+ stz $0402
+ lda #1
+ sta $0403
+ ldx BORDER
+ lda BORDER+1
+ lsr a
+ bcs border_high
+ lda gb_lo0,x
+ sta $0404
+ lda gb_hi0,x
+ sta $0405
+ bra mapped_return
+border_high:
+ lda gb_lo1,x
+ sta $0404
+ lda gb_hi1,x
+ sta $0405
+mapped_return:
+ pla
+ sta <TMP
+ pla
+ sta <FULL
+ pla
+ sta <ENTRY
+ pla
+ sta <CHUNK
+ pla
+ sta <BUDGET
+ pla
+ sta <PTR+1
+ pla
+ sta <PTR
+ ply
+ plx
+ rts
+entry_costs:
+ .db 0, ENTRY_COST, 2 * ENTRY_COST, 3 * ENTRY_COST
+ .db 4 * ENTRY_COST, 5 * ENTRY_COST, 6 * ENTRY_COST, 7 * ENTRY_COST
+
+ ; Upload CHUNK colours (1-128) of queue entry X, mapped, from its first
+ ; colour. Y runs from -2 x CHUNK up to 0 with
+ ; PTR = $2286 + 2 x (first colour + CHUNK) - 256.
+upload_chunk:
+ lda QUEUE_INDEX_LO,x
+ sta $0402
+ lda QUEUE_INDEX_HI,x
+ sta $0403
+ lda QUEUE_INDEX_LO,x
+ clc
+ adc <CHUNK
+ sta <PTR
+ lda QUEUE_INDEX_HI,x
+ adc #0
+ asl <PTR
+ rol a
+ sta <PTR+1
+ lda <PTR
+ clc
+ adc #$86
+ sta <PTR
+ lda <PTR+1
+ adc #$21
+ sta <PTR+1
+ lda <CHUNK
+ asl a
+ eor #$ff
+ inc a
+ tay
+upload_colour:
+ lda [PTR],y
+ tax
+ iny
+ lda [PTR],y
+ lsr a
+ bcs upload_high
+ lda gb_lo0,x
+ sta $0404
+ lda gb_hi0,x
+ sta $0405
+ iny
+ bne upload_colour
+ rts
+upload_high:
+ lda gb_lo1,x
+ sta $0404
+ lda gb_hi1,x
+ sta $0405
+ iny
+ bne upload_colour
+ rts
+
+ ; The mapped upload's dispatch (the fallback since palette-lag).
+vblank_gb:
+ ; GB DMG (always), and SMS from vblank_sms (in bank SMS_BANK, with the
+ ; SMS table; gameplay only, checked by vblank_gb_far).
+ lda MASTER_STATE
+ bne vblank_gb_cinema
+vblank_gb_map:
+ ; GB DMG in every state (including cinemas, the title and the ending);
+ ; SMS in gameplay. If the VCE still holds original colours (bit 7 clear:
+ ; the mode was just chosen, or a cinema or the title just ended in SMS),
+ ; queue all 512 colours ($F394) first.
+ lda PALETTE_STATE
+ bmi mapped_state
+ ora #MAPPED_STATE
+ sta PALETTE_STATE
+ bra queue_everything
+mapped_state:
+ lda QUEUE_COUNT
+ bne queue_present
+ ; Nothing queued, so nothing is left over either.
+ lda PALETTE_STATE
+ and #$ff - LEFTOVER
+ sta PALETTE_STATE
+ rts
+queue_present:
+ jmp mapped_upload          ; 4 cycles, as the bra it replaces
+queue_everything:
+ jsr QUEUE_ALL
+ lda PALETTE_STATE
+ and #$ff - LEFTOVER
+ sta PALETTE_STATE
+ jmp mapped_upload
+vblank_gb_cinema:
+ jmp vblank_gb_far
+vblank_other:
+ ; Original or NES (carry clear) in 2 + 5 + 2 + 4 cycles, as the 5 + 4 + 4
+ ; of the lda/bpl/jmp before HELL; HELL (carry set) has its own path.
+ ; (With bit 7 set, the mode just changed to Original, the requeue below
+ ; starts 4 cycles later than before HELL.)
+ bcs vblank_hell
+ lda PALETTE_STATE
+ bmi cinema_requeue
+ jmp NATIVE_UPLOAD
+vblank_hell:
+ ; HELL (N clear) or SMS (N set: $2100 bit 7), from the compare above.
+ ; HELL's code and table are in bank HELL_BANK, mapped in MPR3 until it
+ ; leaves by hell_done, which puts MPR3 back (code running in MPR3 cannot
+ ; unmap itself). Cycles from the bcs, as before SMS: gameplay reaches
+ ; hell_gameplay in 31 (then: tma/pha/lda/tam/jmp, and in bank HELL_BANK
+ ; lda $2240 and a taken beq; now: a bmi, lda $2240 and a bne not taken,
+ ; then tma/pha/lda/tam/jmp); a cinema reaches vblank_cinema in 42.
+ bmi vblank_sms_near
+ lda MASTER_STATE
+ bne hell_cinema
+ tma #3
+ pha
+ lda #HELL_BANK
+ tam #3
+ jmp hell_gameplay
+hell_cinema:
+ ; 27 cycles, so HELL's cinema vblank is as long as before SMS (when it
+ ; mapped bank HELL_BANK, tested $2240 there and came back through here).
+ tma #3                     ; 4
+ pha                        ; 3
+ pla                        ; 4
+ tam #3                     ; 5: MPR3 as it was
+ lda MASTER_STATE           ; 5
+ nop                        ; 2
+ nop                        ; 2
+ nop                        ; 2
+vblank_cinema:
+ ; HELL or SMS in a cinema, the title or the ending: original colours.
+ ; If the VCE holds mapped ones (bit 7 set: a cinema just began, or the
+ ; mode was just changed), queue all 512 colours first.
+ lda PALETTE_STATE
+ bpl native_upload
+cinema_requeue:
+ and #$ff - MAPPED_STATE
+ sta PALETTE_STATE
+ jsr QUEUE_ALL
+native_upload:
+ jmp NATIVE_UPLOAD
+hell_done:
+ pla
+ tam #3
+upload_return:
+ rts
+vblank_sms_near:
+ jmp vblank_sms
+
+ ; rent_ms (with rent_mn in the timing section below; here for room: the
+ ; bank $3B copy is never run).
+rent_ms:
+ lda #$ce                   ; dec abs
+ sta RENT+RENT_GATE
+ lda #LOW(SHADOW)
+ sta RENT+RENT_SRC_LO
+ lda #HIGH(SHADOW)
+ sta RENT+RENT_SRC_HI
+ lda #LOW(BORDER_MAP)
+ sta RENT+RENT_BORDER_LO
+ lda #HIGH(BORDER_MAP)
+ sta RENT+RENT_BORDER_LO+1
+ lda #LOW(BORDER_MAP+1)
+ sta RENT+RENT_BORDER_HI
+ lda #HIGH(BORDER_MAP+1)
+ sta RENT+RENT_BORDER_HI+1
+ rts
+
+palette_code_end:
+ .if (palette_code_end > $5400)
+ .fail
+ .endif
+;@mirror end
+
+ ; The GB DMG table (generated from gb-dmg.json by scripts/palette_tables.py):
+ ; four pages, the mapped colour's low and high byte for colours $000-$0FF
+ ; and $100-$1FF, indexed by the colour's low byte.
+ .org $5400
+ .include "gb-table.inc"
+palette_tables_end:
+ .if (palette_tables_end > $5800)
+ .fail
+ .endif
+
+ ; Bank $46 $5A00-$5AFF (file offsets $8DA00-$8DAFF), the unused tail of
+ ; the speed module's old claim ($5900-$5FFF; its fixed code ends at $598E;
+ ; since 1.11-dev speed claims $5900-$59FF): code reached only by jsr or
+ ; jmp, so it costs the same cycles here. Mirrored in bank SMS_BANK, where
+ ; vblank_sms and now_sms go on after their tam #2.
+;@mirror begin
+ .org PALETTE_FAR
+ ; The budget ran out in entry X: what is left of it and the entries after
+ ; it become one entry that starts where the upload stopped and runs on
+ ; (past colour 511 to 0) far enough to cover them all, at most 512 colours,
+ ; so the producers keep seven free entries and every colour comes in turn.
+ ; PTR = its first colour, BUDGET:CHUNK its length E, ENTRY:TMP scratch.
+fold_queue:
+ cpx QUEUE_COUNT
+ bcs fold_none
+ lda QUEUE_BYTES_LO,x
+ ora QUEUE_BYTES_HI,x
+ bne fold_start
+ inx
+ bra fold_queue
+fold_none:
+ stz QUEUE_COUNT
+ rts
+fold_start:
+ lda QUEUE_INDEX_LO,x
+ sta <PTR
+ lda QUEUE_INDEX_HI,x
+ sta <PTR+1
+ stz <CHUNK
+ stz <BUDGET
+fold_entry:
+ lda QUEUE_BYTES_LO,x
+ ora QUEUE_BYTES_HI,x
+ beq fold_next
+ ; e = ((first colour - PTR) mod 512) + colours, at most 512
+ lda QUEUE_INDEX_LO,x
+ sec
+ sbc <PTR
+ sta <TMP
+ lda QUEUE_INDEX_HI,x
+ sbc <PTR+1
+ and #1
+ sta <ENTRY
+ lda QUEUE_BYTES_HI,x
+ lsr a
+ tay
+ lda QUEUE_BYTES_LO,x
+ ror a
+ clc
+ adc <TMP
+ sta <TMP
+ tya
+ adc <ENTRY
+ sta <ENTRY
+ cmp #2
+ bcc fold_max
+ lda #2
+ sta <ENTRY
+ stz <TMP
+fold_max:
+ lda <CHUNK
+ cmp <TMP
+ lda <BUDGET
+ sbc <ENTRY
+ bcs fold_next
+ lda <TMP
+ sta <CHUNK
+ lda <ENTRY
+ sta <BUDGET
+fold_next:
+ inx
+ cpx QUEUE_COUNT
+ bcc fold_entry
+ lda <PTR
+ sta QUEUE_INDEX_LO
+ lda <PTR+1
+ sta QUEUE_INDEX_HI
+ asl <CHUNK
+ rol <BUDGET
+ lda <CHUNK
+ sta QUEUE_BYTES_LO
+ lda <BUDGET
+ sta QUEUE_BYTES_HI
+ lda #1
+ sta QUEUE_COUNT
+ rts
+
+vblank_sms:
+ ; SMS: the GB DMG path, run from bank SMS_BANK (the same code, the SMS
+ ; table at $5400); the trampoline puts MPR2 back when it returns.
+ lda #SMS_BANK
+ tam #2
+ jmp vblank_gb
+now_sms:
+ ; SMS: GB DMG's palette_now from bank SMS_BANK (from now_hell_far: Y = 0,
+ ; PTR, CHUNK and the VCE address set, the lock held).
+ lda #SMS_BANK
+ tam #2
+ jmp now_gb
+now_hell_cinema_exit:
+ ; palette_now in HELL in a cinema (Y = 0, so now_hell_exit's cpy/bne would
+ ; go on to now_raw): 2 cycles less than that way, for now_hell_far's bmi.
+ pla
+ tam #3
+ nop
+ jmp now_raw
+now_gb_far:
+ ; GB DMG maps non-gameplay too (bit 7 clear); SMS (bit 7 set) uses raw.
+ lda OPTIONS
+ bmi now_gb_raw
+ jmp now_mapped
+now_gb_raw:
+ jmp now_raw
+vblank_gb_far:
+ lda OPTIONS
+ bmi vblank_gb_raw
+ jmp vblank_gb_map
+vblank_gb_raw:
+ jmp vblank_cinema
+;@mirror end
+
+ ; Bank-$46-only tails of the dispatcher and reset install (not mirrored to
+ ; SMS_BANK).
+plain_install:
+ jsr rent_install
+ lda LIVE
+ beq plain_native
+ jmp vblank_fallback
+plain_native:
+ jmp NATIVE_UPLOAD
+
+install_mapped_mode:
+ lda OPTIONS
+ and #DISPATCH_BITS
+ cmp #PALETTE_GB
+ beq install_gb
+ lda PALETTE_STATE
+ and #MAPPED_STATE
+ ora LIVE
+ bne install_mode_done
+ jmp rent_mn
+install_gb:
+ lda #$10
+ sta LIVE
+install_mode_done:
+ rts
+palette_far_end:
+ .if (palette_far_end > PALETTE_FAR + $100)
+ .fail
+ .endif
+
+ ; ---------------------------------------------------------------------
+ ; Palette timing (1.11-dev, branches palette-lag and palette-exact;
+ ; docs/validation/palette-lag.md, docs/validation/palette-exact.md).
+ ;
+ ; The mapped modes (GB DMG, HELL, SMS) used to map every queued colour in
+ ; the vblank interrupt: 3.6 times the native upload's time a colour, taken
+ ; from the update that follows. Now the main loop's idle time does it. The
+ ; main loop's only vblank wait (bank 0 $E061, jsr $FD67) calls WAITR, a
+ ; copy of the native wait in RAM: in Original, NES (and the
+ ; unassigned values with bit 4 clear) it is the native code byte for byte
+ ; ($FD67-$FD6F), so those modes run exactly as before. In a mapped mode
+ ; WAITR, after the same STZ $12, calls the worker when the queue holds
+ ; work; the worker converts every queued colour from the RAM palette into
+ ; SHADOW (the same layout, mapped) and arms RENT (inc FASTOK). If the
+ ; worker did not finish before the vblank (no idle time, or no wait at
+ ; all), the mapped upload of before runs (the fallback).
+ ;
+ ; RENT (palette-exact): the vblank interrupt calls the upload in RAM
+ ; ($FD13 jsr RENT, native jsr $F3B5), so the upload costs exactly the
+ ; native upload's cycles in every mode (before, a trampoline and
+ ; palette_entry's dispatch added 76 cycles to every vblank in every mode,
+ ; enough to lose a frame in the act 3 story scene). What RENT holds is
+ ; decided outside the vblank, by configure and the worker:
+ ; - Original, NES (bit 4 clear): N, the native upload $F3B5-$F421
+ ;   byte for byte (copied from bank 0).
+ ; - GB DMG, HELL, SMS: M (rent_m below), the native upload instruction for
+ ;   instruction with a gate: the queue and lock tests as the native ones,
+ ;   then a read-modify-write of FASTOK and a bne to the dispatcher
+ ;   (palette_upload, as $FD13 called before). The gate's 9 cycles are paid
+ ;   for by the native phx/plx (X is never changed by the upload) and the
+ ;   second lda #$04, so every path costs what the native one does:
+ ;   empty queue, locked, and an upload of the same queue.
+ ;   MS (GB DMG everywhere; HELL and SMS in gameplay): dec FASTOK; colours
+ ;   from SHADOW, the border from BORDER_MAP. The worker's inc arms it
+ ;   (FASTOK 1 -> 0: upload); a fallback leaves $80 and the dispatcher stores
+ ;   $80 again, so it stays disarmed until the worker's next stz/inc.
+ ;   MN (HELL and SMS in cinemas, the title and the ending, or before the
+ ;   worker has seen gameplay; the native upload as LIVE = 0 had it): lsr
+ ;   FASTOK with FASTOK 0, colours from the RAM palette and the border from
+ ;   BORDER, so every upload goes through at native cost. Entered only
+ ;   while the VCE holds original colours (PALETTE_STATE bit 7 clear);
+ ;   otherwise the dispatcher re-queues first (vblank_plain).
+ ;   The worker switches MS <-> MN when it sees MASTER_STATE change in HELL
+ ;   and SMS, in an order that is safe against the vblank at every step
+ ;   (rent_ms, rent_mn). GB DMG keeps LIVE = $10 and MS across all screens.
+ ; configure rewrites RENT behind an entry routed to an rts (rent_install);
+ ; the reset leaves a jmp to the trampoline that the first vblank replaces
+ ; (palette_boot), so the reset takes the cycles it took before RENT.
+ ;
+ ; With an empty queue WAITR spends 10 cycles (tst/bne) before the native
+ ; loop: a multiple of the loop's 10, so the loop's exit after the vblank
+ ; interrupt is at the same cycle as Original's (unless the vblank comes
+ ; within those 10 cycles of the STZ).
+ ;
+ ; RAM: $3740-$37E8 and SHADOW $3C00-$3FFF, never read or written by the
+ ; original game or 1.11-dev before this (docs/validation/palette-lag.md
+ ; and palette-exact.md, "RAM audit"). The RAM clear zeroes them;
+ ; palette_boot writes WAITR before the main loop first runs and RENT's
+ ; jmp before interrupts are enabled.
+ .org $5b00
+ jmp palette_boot           ; WAIT_ENTRY: src/bram's reset trampoline
+ jmp palette_configure      ; CONFIGURE_ENTRY: src/options's set_palette
+
+palette_boot:
+ ; The reset (interrupts off, MPR2 = this bank): the saved settings
+ ; (src/bram, its entry $4B00), then WAITR, ANIMR and LIVE for the mode
+ ; loaded, and RENT as a jmp to the trampoline's vblank entry (the first
+ ; vblank interrupt, at the reset's cli, writes the routine: palette_entry).
+ ; A, X, Y and the flags as the settings loader left them. Exactly as many
+ ; cycles as before RENT (configure_body's copy loops count down, 2 cycles
+ ; a byte less, which pays for the jmp; its BOOT_PAD delay makes up the
+ ; rest: measured, palette-exact.md), so the hardware timer, started later
+ ; in the reset, keeps its phase against the frame.
+ jsr $4b00
+ php
+ pha
+ lda #$4c                   ; jmp palette_upload
+ sta RENT
+ lda #LOW(palette_upload)
+ sta RENT+1
+ lda #HIGH(palette_upload)
+ sta RENT+2
+ pla
+ plp
+ jsr configure_body
+ rts
+
+ ; The menu's set_palette, after any change of $2100 bits 3-5: WAITR,
+ ; ANIMR, LIVE, PALETTE_STATE and RENT for the new mode. A, X, Y and the
+ ; flags are kept.
+palette_configure:
+ jsr configure_body
+ php
+ pha
+ phx
+ phy
+ jsr rent_install
+ ply
+ plx
+ pla
+ plp
+ rts
+
+ ; WAITR, LIVE and ANIMR for $2100's mode (bit 4: GB DMG, HELL, SMS);
+ ; PALETTE_STATE bit 7 cleared in Original and NES (the colours queued with
+ ; the change are uploaded unmapped by RENT, which has no requeue of its
+ ; own). A, X, Y and the flags are kept.
+configure_body:
+ ; Branch-free, so it takes the same cycles in every mode (at the reset it
+ ; sets where the timer starts against the frame: a mode-dependent length
+ ; would move every timer interrupt for the whole session).
+ php
+ pha
+ phx
+ phy
+ lda OPTIONS
+ and #$10                   ; mapped (GB DMG, HELL, SMS)?
+ lsr a
+ lsr a
+ lsr a
+ lsr a
+ tay                        ; 0 / 1
+ ldx wait_base,y            ; 29 / 59: the last byte
+ lda LIVE
+ and live_keep,y            ; Original, NES: 0; mapped: as it is
+ sta LIVE
+ lda PALETTE_STATE
+ and state_keep,y           ; Original, NES: VCE bit cleared
+ sta PALETTE_STATE
+ ldy #29
+configure_wait:
+ lda wait_plain,x
+ sta WAITR,y
+ dex
+ dey
+ bpl configure_wait
+ stz FASTOK
+ ; ANIMR: the animation set table for the mode (src/nes-palette's hook at
+ ; bank 3 $CE98 calls it). 24 cycles to its rts in every mode and way.
+ lda OPTIONS
+ and #PALETTE_HELL          ; bits 3-4
+ lsr a
+ lsr a
+ lsr a
+ tay                        ; 0 Original, 1 NES, 2 GB DMG, 3 HELL / SMS
+ ldx anim_base,y            ; 19 / 39: the last byte
+ lda anim_target,y          ; NES: ANIMR + 6; else the unused tail
+ sta W_LEFT
+ ldy #19
+configure_anim:
+ lda anim_plain,x
+ sta ANIMR,y
+ dex
+ dey
+ bpl configure_anim
+ tma #3
+ pha
+ lda #3
+ tam #3
+ cly                        ; 2: ANIM_POINTERS + 0 ($D400)
+ php                        ; 3
+ plp                        ; 4
+ nop                        ; 2
+ nop                        ; 2
+ nop                        ; 2
+ nop                        ; 2: 17 cycles (keeps cold-boot timer phase identical)
+ ldx W_LEFT
+ lda ANIM_POINTERS,y
+ sta ANIMR,x
+ lda ANIM_POINTERS+1,y
+ sta ANIMR+2,x
+ pla
+ tam #3
+ ldx #BOOT_PAD              ; 6 n cycles: the reset's length as before RENT
+configure_pad:
+ dex
+ bne configure_pad
+ ply
+ plx
+ pla
+ plp
+ rts
+wait_base:
+ .db 29, wait_mapped - wait_plain + 29
+live_keep:
+ .db $00, $ff
+state_keep:
+ .db $ff - MAPPED_STATE, $ff
+anim_base:
+ .db 19, anim_nes - anim_plain + 19, 19, 19
+anim_target:
+ .db 16, 6, 16, 16          ; NES: the lda/ldy operands; else bytes 16-19 (after the rts)
+
+ ; RENT for $2100's mode and the module's state (configure; the first
+ ; vblank after the reset, from palette_entry). While it changes, the
+ ; entry's beq is a bra to RENT_STOP's rts: a vblank then uploads nothing
+ ; and the queue waits for the next one. Its first three bytes (lda $2260)
+ ; are the same in every form; they replace the reset's jmp. A, X, Y are
+ ; not kept.
+rent_install:
+ stz FASTOK                 ; MS: disarmed; MN: every upload goes
+ lda #$60                   ; rts
+ sta RENT+RENT_STOP
+ lda #RENT_ROUTE
+ sta RENT+RENT_BEQ+1
+ lda #$80                   ; bra
+ sta RENT+RENT_BEQ
+ ldy #RENT_BEQ+2
+ lda OPTIONS
+ and #$10
+ bne install_mapped
+install_native:
+ ; N: $F3BA-$F428 (the bytes after the routine are never reached).
+ lda NATIVE_UPLOAD,y
+ sta RENT,y
+ iny
+ cpy #RENT_SIZE
+ bne install_native
+ lda #NATIVE_UPLOAD_END - (NATIVE_UPLOAD + RENT_BEQ + 2)
+ bra install_entry
+install_mapped:
+ lda rent_m,y
+ sta RENT,y
+ iny
+ cpy #RENT_SIZE
+ bne install_mapped
+ ; GB DMG maps every screen including cinemas, title and ending, so LIVE
+ ; starts at $10 and RENT stays in MS form. HELL and SMS keep MN until
+ ; gameplay (LIVE 0) while the VCE still holds original colours (bit 7 clear).
+ jsr install_mapped_mode
+install_ms:
+ lda #rent_m_rts - (rent_m + RENT_BEQ + 2)
+install_entry:
+ sta RENT+RENT_BEQ+1
+ lda #$ad                   ; lda $2260 (the reset left a jmp)
+ sta RENT
+ lda #LOW(QUEUE_COUNT)
+ sta RENT+1
+ lda #HIGH(QUEUE_COUNT)
+ sta RENT+2
+ lda #$f0                   ; beq: the routine is live
+ sta RENT+RENT_BEQ
+ rts
+
+ ; M's two forms (RENT holds M). MN: the RAM palette and BORDER, lsr
+ ; FASTOK (0: always through). MS: SHADOW and BORDER_MAP, dec FASTOK (an
+ ; upload per inc). Each changes its gate last (rent_mn: from MS, where
+ ; FASTOK 0 is disarmed, so the source bytes change while vblanks use the
+ ; dispatcher) or first (rent_ms: from MN to dec with FASTOK 0, disarmed).
+ ; A is not kept.
+rent_mn:
+ lda #LOW(RAM_PALETTE)
+ sta RENT+RENT_SRC_LO
+ lda #HIGH(RAM_PALETTE)
+ sta RENT+RENT_SRC_HI
+ lda #LOW(BORDER)
+ sta RENT+RENT_BORDER_LO
+ lda #HIGH(BORDER)
+ sta RENT+RENT_BORDER_LO+1
+ lda #LOW(BORDER+1)
+ sta RENT+RENT_BORDER_HI
+ lda #HIGH(BORDER+1)
+ sta RENT+RENT_BORDER_HI+1
+ stz FASTOK
+ lda #$4e                   ; lsr abs
+ sta RENT+RENT_GATE
+ rts
+
+ ; M as it stands in RENT in MS form (assembled here, run at RENT: only
+ ; relative branches and fixed addresses). Cycles against the native
+ ; upload ($F3B5): the same to the gate; gate dec (7) + bne (2) for phx
+ ; (3) and the second lda #$04 (2); ply without plx (4 less): the same
+ ; total on every path (verified by trace: palette-exact.md).
+rent_m:
+ lda QUEUE_COUNT            ; +$00
+ .db $80, RENT_ROUTE        ; +$03 beq rent_m_rts (rent_install writes it last)
+ lda PALETTE_LOCK           ; +$05
+ bne rent_m_rts             ; +$08
+rent_m_gate:
+ dec FASTOK                 ; +$0A: MS dec, MN lsr
+ bne rent_m_dispatch
+ phy
+ lda #$04
+ sta $2208
+ sta $2209
+ cly
+rent_m_entry:
+ lda QUEUE_INDEX_LO,y
+ sta $0402
+ asl a
+ sta $2284
+ lda QUEUE_INDEX_HI,y
+ sta $0403
+ rol a
+ sta $2285
+ lda $2284
+ clc
+ adc #LOW(SHADOW)
+rent_m_src_lo = * - 1
+ sta $2206
+ lda $2285
+ adc #HIGH(SHADOW)
+rent_m_src_hi = * - 1
+ sta $2207
+ lda QUEUE_BYTES_LO,y
+ sta $220a
+ lda QUEUE_BYTES_HI,y
+ sta $220b
+ lda #$e3
+ sta $2205
+ jsr $2205
+ iny
+ dec QUEUE_COUNT
+ bne rent_m_entry
+ stz $0402
+ lda #$01
+ sta $0403
+ lda BORDER_MAP
+rent_m_border_lo = * - 2
+ sta $0404
+ lda BORDER_MAP+1
+rent_m_border_hi = * - 2
+ sta $0405
+ ply
+rent_m_rts:
+ rts
+rent_m_dispatch:
+ jmp palette_upload
+rent_m_end:                 ; (rent_install copies RENT_SIZE bytes: the rest is never run)
+RENT_GATE = rent_m_gate - rent_m
+RENT_SRC_LO = rent_m_src_lo - rent_m
+RENT_SRC_HI = rent_m_src_hi - rent_m
+RENT_BORDER_LO = rent_m_border_lo - rent_m
+RENT_BORDER_HI = rent_m_border_hi - rent_m
+ .if (rent_m_end - rent_m > RENT_SIZE)
+ .fail
+ .endif
+ .if (RENT + RENT_STOP + 1 > $37c0)
+ .fail
+ .endif
+
+anim_plain:
+ .db $a9, LOW(ANIM_TABLE)   ; lda #<$CF32   2
+ .db $a0, HIGH(ANIM_TABLE)  ; ldy #>$CF32   2
+ .db $08, $28               ; php, plp      7
+ .db $ea, $ea, $ea          ; nop x 3       6
+ .db $60                    ; rts           7: 24
+ .db $ea, $ea, $ea, $ea, $ea, $ea, $ea, $ea, $ea, $ea ; never run; 16-19: configure's unused pointer write
+anim_plain_end:
+ .if (anim_plain_end - anim_plain <> 20)
+ .fail
+ .endif
+anim_nes:
+ .db $ad, LOW(MASTER_STATE), HIGH(MASTER_STATE) ; lda $2240   5
+ .db $d0, $08               ; bne (a cinema)  2 (taken 4)
+ .db $a9, $00               ; lda #<table   2 (configure)
+ .db $a0, $00               ; ldy #>table   2 (configure)
+ .db $ea, $ea, $ea          ; nop x 3       6
+ .db $60                    ; rts           7: 24
+ .db $a9, LOW(ANIM_TABLE)   ; lda #<$CF32   2
+ .db $a0, HIGH(ANIM_TABLE)  ; ldy #>$CF32   2
+ .db $ea, $ea               ; nop x 2       4
+ .db $60                    ; rts           7: 24
+anim_nes_end:
+ .if (anim_nes_end - anim_nes <> 20)
+ .fail
+ .endif
+
+wait_plain:
+ ; $FD67-$FD6F byte for byte, at WAITR.
+ .db $64, $12               ; stz <$12
+ .db $a5, $12               ; lda <$12
+ .db $c9, $01               ; cmp #1
+ .db $90, $fa               ; bcc (lda)
+ .db $60                    ; rts
+ .db $ea, $ea, $ea, $ea, $ea, $ea, $ea, $ea, $ea, $ea, $ea
+ .db $ea, $ea, $ea, $ea, $ea, $ea, $ea, $ea, $ea, $ea ; never run (configure copies 30 bytes)
+wait_plain_end:
+ .if (wait_plain_end - wait_plain <> 30)
+ .fail
+ .endif
+wait_mapped:
+ .db $64, $12               ; $37C0 stz <$12
+ .db $93, $ff, $60, $22     ; $37C2 tst #$ff, $2260: 8 cycles
+ .db $d0, $07               ; $37C6 bne $37CF (not taken: 2)
+ .db $a5, $12               ; $37C8 lda <$12
+ .db $c9, $01               ; $37CA cmp #1
+ .db $90, $fa               ; $37CC bcc $37C8
+ .db $60                    ; $37CE rts
+ .db $43, $04               ; $37CF tma #2
+ .db $48                    ; $37D1 pha
+ .db $a9, PALETTE_BANK      ; $37D2 lda #PALETTE_BANK
+ .db $53, $04               ; $37D4 tam #2
+ .db $20, LOW(worker), HIGH(worker) ; $37D6 jsr worker
+ .db $68                    ; $37D9 pla
+ .db $53, $04               ; $37DA tam #2
+ .db $80, $ea               ; $37DC bra $37C8
+wait_mapped_end:
+ .if (wait_mapped_end - wait_mapped <> $1e)
+ .fail
+ .endif
+
+ ; The worker: from WAITR (main loop, interrupts on, MPR2 = this bank) when
+ ; the queue holds work, after the update. Sets LIVE (0 in HELL/SMS
+ ; cinemas, $10 in GB DMG everywhere or HELL/SMS gameplay) and RENT's form
+ ; (MN in HELL/SMS cinemas once the VCE holds original colours, MS otherwise)
+ ; and, when it converts every queued colour before the vblank comes ($12
+ ; is checked before each colour), FASTOK = 1 (inc from the 0 it starts
+ ; with; a vblank's fallback in between leaves it at $81). X and Y are kept;
+ ; the zero page it borrows and MPR3 are put back. Exit latency when the
+ ; vblank comes in the middle: the colour under way, then the restores.
+worker:
+ phx
+ phy
+ stz FASTOK                 ; MS: disarmed; MN: as it must be
+ lda MASTER_STATE
+ beq worker_gameplay
+ lda OPTIONS
+ and #DISPATCH_BITS
+ cmp #PALETTE_GB
+ beq worker_gameplay
+ stz LIVE                   ; HELL/SMS cinema, title, ending: the native upload
+ lda PALETTE_STATE
+ bpl worker_cinema_original
+ ; The VCE holds mapped colours (the cinema just began): all 512 colours
+ ; again, to be uploaded unmapped (what the dispatcher's cinema_requeue
+ ; does in the vblank, here in the idle time, so the cinema's vblanks all
+ ; go through RENT's MN form at the native cost).
+ ; Not while the game holds the lock (cinema-lock, review F1): locked
+ ; vblanks upload nothing, and the game may clear the queue ($F345) before
+ ; it unlocks (the 4-4 clear's act 5 scene does), which lost the 512
+ ; colours with bit 7 already clear. Locked, everything stays as it is:
+ ; bit 7 set, LIVE 0 and RENT in MS (never MN while bit 7 is set) with its
+ ; gate shut by the stz above. The first unlocked vblank with colours
+ ; queued then re-queues in the dispatcher (vblank_plain, +113 cycles),
+ ; or this worker does at its next unlocked run, whichever comes first
+ ; (every other path that clears bit 7 queues all 512 colours too:
+ ; plain_requeue, cinema_requeue, and configure, whose caller queues them).
+ lda PALETTE_LOCK
+ bne worker_cinema_done
+worker_requeue:
+ jsr QUEUE_ALL
+ lda PALETTE_STATE
+ and #$ff - MAPPED_STATE
+ sta PALETTE_STATE
+worker_cinema_original:
+ lda RENT+RENT_GATE
+ cmp #$4e
+ beq worker_cinema_done     ; MN already
+ jsr rent_mn
+worker_cinema_done:
+ ply
+ plx
+ rts
+worker_gameplay:
+ lda #$10                   ; LIVE first: from now on the dispatcher maps
+ sta LIVE
+ lda RENT+RENT_GATE
+ cmp #$ce
+ beq worker_ms              ; MS already
+ jsr rent_ms
+worker_ms:
+ lda PALETTE_LOCK
+ beq worker_unlocked
+ jmp worker_exit            ; locked: no upload at this vblank anyway
+worker_unlocked:
+ lda PALETTE_STATE
+ bmi worker_vce_mapped
+ ; The VCE holds original colours (the mode was chosen, or a cinema or
+ ; the title ended): all 512 colours, as the mapped upload's
+ ; queue_everything does.
+ jsr QUEUE_ALL
+ lda PALETTE_STATE
+ ora #MAPPED_STATE
+ and #$ff - LEFTOVER
+ sta PALETTE_STATE
+ bra worker_convert
+worker_vce_mapped:
+ and #LEFTOVER
+ beq worker_convert
+ ; An entry the fallback left over (slot 0; it may run past colour 511 to
+ ; 0): split it at 511 into two entries the native upload's layout can
+ ; take (all 512 colours when the queue has no room), so the fast upload
+ ; carries it on.
+ lda PALETTE_STATE
+ and #$ff - LEFTOVER
+ sta PALETTE_STATE
+ lda QUEUE_INDEX_LO
+ asl a
+ sta W_INDEX
+ lda QUEUE_INDEX_HI
+ and #1
+ rol a
+ sta W_INDEX+1              ; 2 x first colour
+ lda #LOW(1024)
+ sec
+ sbc W_INDEX
+ sta W_LEFT
+ lda #HIGH(1024)
+ sbc W_INDEX+1
+ sta W_LEFT+1               ; bytes up to colour 511
+ cmp QUEUE_BYTES_HI
+ bcc worker_split
+ bne worker_convert
+ lda W_LEFT
+ cmp QUEUE_BYTES_LO
+ bcs worker_convert         ; it does not run past 511
+worker_split:
+ ldx QUEUE_COUNT
+ cpx #8
+ bcs worker_split_full
+ lda QUEUE_BYTES_LO
+ sec
+ sbc W_LEFT
+ sta QUEUE_BYTES_LO,x
+ lda QUEUE_BYTES_HI
+ sbc W_LEFT+1
+ sta QUEUE_BYTES_HI,x
+ stz QUEUE_INDEX_LO,x
+ stz QUEUE_INDEX_HI,x
+ inc QUEUE_COUNT
+ lda W_LEFT
+ sta QUEUE_BYTES_LO
+ lda W_LEFT+1
+ sta QUEUE_BYTES_HI
+ bra worker_convert
+worker_split_full:
+ jsr QUEUE_ALL
+ bra worker_convert
+worker_exit:
+ ply
+ plx
+ rts
+worker_convert:
+ lda <W_SRC
+ pha
+ lda <W_SRC+1
+ pha
+ lda <W_DST
+ pha
+ lda <W_DST+1
+ pha
+ lda <W_SRC_HI
+ pha
+ lda <W_SRC_HI+1
+ pha
+ lda <W_ENTRY
+ pha
+ tma #3
+ pha
+ ; The table in MPR3 ($7400: GB DMG's bank $46 $5400 or SMS's bank $3B
+ ; $5400; $7C00: HELL's bank $43 $7C00). W_OVR bit 7 = HELL, bit 0 =
+ ; HELL_OVERRIDE_STAGE (0 in GB DMG and SMS).
+ stz W_OVR
+ lda OPTIONS
+ and #DISPATCH_BITS
+ cmp #PALETTE_GB
+ beq worker_gb
+ lda OPTIONS
+ bmi worker_sms
+ lda #HELL_BANK
+ tam #3
+ lda #$80
+ ldx VISIBLE_STAGE
+ cpx #HELL_OVERRIDE_STAGE
+ bne worker_hell_set
+ inc a
+worker_hell_set:
+ sta W_OVR
+ bra worker_entries
+worker_sms:
+ lda #SMS_BANK
+ tam #3
+ bra worker_entries
+worker_gb:
+ lda #PALETTE_BANK
+ tam #3
+worker_entries:
+ stz <W_ENTRY
+worker_entry:
+ ldx <W_ENTRY
+ cpx QUEUE_COUNT
+ bcc worker_entry_go
+ jmp worker_border
+worker_entry_go:
+ ; W_INDEX = 2 x first colour (0-1022), W_LEFT = bytes (at most to colour
+ ; 511: entries never run past it except one the fallback left over,
+ ; which the worker does not take).
+ lda QUEUE_INDEX_LO,x
+ asl a
+ sta W_INDEX
+ lda QUEUE_INDEX_HI,x
+ and #1
+ rol a
+ sta W_INDEX+1
+ lda QUEUE_BYTES_LO,x
+ sta W_LEFT
+ lda QUEUE_BYTES_HI,x
+ sta W_LEFT+1
+ ; clamp: W_LEFT <= 1024 - W_INDEX (W_SRC is scratch until worker_setup).
+ cla
+ sec
+ sbc W_INDEX
+ sta <W_SRC
+ lda #HIGH(1024)
+ sbc W_INDEX+1
+ tax
+ cmp W_LEFT+1
+ bcc worker_clamp
+ bne worker_chunk
+ lda <W_SRC
+ cmp W_LEFT
+ bcs worker_chunk
+worker_clamp:
+ lda <W_SRC
+ sta W_LEFT
+ stx W_LEFT+1
+worker_chunk:
+ ; One chunk of at most 256 bytes: W_SRC = chunk (0 = 256).
+ lda W_LEFT
+ ora W_LEFT+1
+ bne worker_chunk_go
+ inc <W_ENTRY
+ bra worker_entry
+worker_chunk_go:
+ lda W_LEFT+1
+ beq worker_short
+ cla                        ; 256 bytes (0 mod 256)
+ bra worker_sized
+worker_short:
+ lda W_LEFT
+worker_sized:
+ sta <W_SRC
+ clx                        ; X = 0: mapped / table
+ bit W_OVR
+ bpl worker_setup
+ ; HELL: mapped below 2 * HELL_MAPPED, raw from there on (X = 1).
+ lda #LOW(2 * HELL_MAPPED)
+ sec
+ sbc W_INDEX
+ tay
+ lda #HIGH(2 * HELL_MAPPED)
+ sbc W_INDEX+1
+ bcc worker_is_raw          ; W_INDEX > 2 * HELL_MAPPED
+ bne worker_setup           ; rem >= 256 >= chunk
+ cpy #0
+ beq worker_is_raw          ; W_INDEX == 2 * HELL_MAPPED
+ lda <W_SRC
+ beq worker_cap             ; chunk = 256 > rem (1..255)
+ cpy <W_SRC
+ bcs worker_setup
+worker_cap:
+ sty <W_SRC
+ bra worker_setup
+worker_is_raw:
+ inx
+worker_setup:
+ ; Y = (256 - chunk) & $FF; advance W_INDEX += chunk and W_LEFT -= chunk,
+ ; then point W_SRC to $2186 + W_INDEX, W_SRC_HI to W_SRC + 1 (W_SRC is
+ ; even), and W_DST to SHADOW - $100 + W_INDEX.
+ cla
+ sec
+ sbc <W_SRC
+ tay
+ lda <W_SRC
+ beq worker_page
+ clc
+ adc W_INDEX
+ sta W_INDEX
+ bcc worker_sub_left
+ inc W_INDEX+1
+worker_sub_left:
+ lda W_LEFT
+ sec
+ sbc <W_SRC
+ sta W_LEFT
+ bcs worker_ptrs
+ dec W_LEFT+1
+ bra worker_ptrs
+worker_page:
+ inc W_INDEX+1
+ dec W_LEFT+1
+worker_ptrs:
+ lda W_INDEX
+ sta <W_DST
+ clc
+ adc #$86
+ sta <W_SRC
+ ora #1
+ sta <W_SRC_HI
+ lda W_INDEX+1
+ adc #$21
+ sta <W_SRC+1
+ sta <W_SRC_HI+1
+ lda W_INDEX+1
+ clc
+ adc #HIGH(SHADOW) - 1
+ sta <W_DST+1
+ lda W_OVR
+ bmi worker_hell_kind
+ jsr convert_table
+ jmp worker_chunk
+worker_hell_kind:
+ cpx #0
+ bne worker_do_raw
+ lsr a
+ bcs worker_do_ovr
+ jsr convert_hell_mapped
+ bra worker_next_chunk
+worker_do_ovr:
+ jsr convert_hell_ovr
+ bra worker_next_chunk
+worker_do_raw:
+ lda <$12
+ bne worker_abort
+ lda [W_SRC],y
+ sta [W_DST],y
+ iny
+ lda [W_SRC],y
+ sta [W_DST],y
+ iny
+ bne worker_do_raw
+worker_next_chunk:
+ jmp worker_chunk
+worker_border:
+ ; The border colour (entry $100): mapped in GB DMG and SMS, as the
+ ; mapped upload writes it; HELL keeps it (a sprite-palette entry).
+ lda W_OVR
+ bmi worker_border_raw
+ ldx BORDER
+ lda BORDER+1
+ lsr a
+ bcs worker_border_high
+ lda $7400,x
+ ldy $7500,x
+ bra worker_border_set
+worker_border_high:
+ lda $7600,x
+ ldy $7700,x
+ bra worker_border_set
+worker_border_raw:
+ lda BORDER
+ ldy BORDER+1
+worker_border_set:
+ sta BORDER_MAP
+ sty BORDER_MAP+1
+worker_done:
+ ; One instruction (palette-lag review F2): 0 -> 1 when no vblank came
+ ; since the worker's stz; after a fallback ($80) it gives $81.
+ inc FASTOK
+worker_abort:
+ pla
+ tam #3
+ pla
+ sta <W_ENTRY
+ pla
+ sta <W_SRC_HI+1
+ pla
+ sta <W_SRC_HI
+ pla
+ sta <W_DST+1
+ pla
+ sta <W_DST
+ pla
+ sta <W_SRC+1
+ pla
+ sta <W_SRC
+ ply
+ plx
+ rts
+
+ ; Convert bytes Y..255 (256 - Y bytes) of [W_SRC] into [W_DST] through the
+ ; table in MPR3 at $7400. If the vblank came ($12 nonzero) before a colour,
+ ; discard the return address and abort.
+convert_table:
+ lda <$12
+ bne convert_stop
+ lda [W_SRC],y
+ tax
+ lda [W_SRC_HI],y
+ lsr a
+ bcs convert_table_high
+ lda $7400,x
+ sta [W_DST],y
+ iny
+ lda $7500,x
+ sta [W_DST],y
+ iny
+ bne convert_table
+ rts
+convert_table_high:
+ lda $7600,x
+ sta [W_DST],y
+ iny
+ lda $7700,x
+ sta [W_DST],y
+ iny
+ bne convert_table
+ rts
+convert_stop:
+ pla
+ pla
+ bra worker_abort
+
+ ; HELL mapped chunk (W_OVR bit 0 = 0): table at $7C00, no override check.
+convert_hell_mapped:
+ lda <$12
+ bne convert_stop
+ lda [W_SRC],y
+ tax
+ lda [W_SRC_HI],y
+ lsr a
+ bcs convert_hell_high
+ lda $7c00,x
+ sta [W_DST],y
+ iny
+ lda $7d00,x
+ sta [W_DST],y
+ iny
+ bne convert_hell_mapped
+ rts
+convert_hell_high:
+ lda $7e00,x
+ sta [W_DST],y
+ iny
+ lda $7f00,x
+ sta [W_DST],y
+ iny
+ bne convert_hell_mapped
+ rts
+
+ ; HELL mapped chunk on HELL_OVERRIDE_STAGE (W_OVR bit 0 = 1).
+convert_hell_ovr:
+ lda <$12
+ bne convert_stop
+ lda [W_SRC],y
+ tax
+ lda [W_SRC_HI],y
+ lsr a
+ bcs convert_ovr_high
+ cpx #HELL_OVERRIDE_KEY
+ beq convert_ovr_hit
+ lda $7c00,x
+ sta [W_DST],y
+ iny
+ lda $7d00,x
+convert_ovr_store:
+ sta [W_DST],y
+ iny
+ bne convert_hell_ovr
+ rts
+convert_ovr_hit:
+ lda #HELL_OVERRIDE_LO
+ sta [W_DST],y
+ iny
+ lda #HELL_OVERRIDE_HI
+ bra convert_ovr_store
+convert_ovr_high:
+ lda $7e00,x
+ sta [W_DST],y
+ iny
+ lda $7f00,x
+ bra convert_ovr_store
+timing_end:
+ .if (timing_end > $6000)
+ .fail
+ .endif
+
+ ; HELL, in bank $43 $7800-$7FFF (file offsets $87800-$87FFF): the tail of
+ ; stage11's last data bank, which its generator can never reach (phases 6
+ ; and 7 of at most 83 pairs end by $74C0; claimed by this module since
+ ; 1.11-dev, docs/validation/hell-palette.md). Mapped in MPR3 while it runs;
+ ; every way out restores MPR3 from the byte vblank_hell or now_hell_far
+ ; pushed.
+ .bank HELL_BANK
+ .org HELL_CODE
+hell_gameplay:
+ ; HELL in gameplay (from vblank_hell: mapped_upload's stack depth plus
+ ; MPR3's byte).
+ ; If the VCE holds original colours (bit 7 clear: the mode was just
+ ; chosen, or a cinema or the title just ended), queue all 512 first.
+ lda PALETTE_STATE
+ bmi hell_mapped_state
+ ora #MAPPED_STATE
+ sta PALETTE_STATE
+ jsr QUEUE_ALL
+ bra hell_fresh
+hell_mapped_state:
+ lda QUEUE_COUNT
+ bne hell_upload
+hell_fresh:
+ ; Nothing queued, so nothing is left over either (or all 512 colours were
+ ; just queued afresh).
+ lda PALETTE_STATE
+ and #$ff - LEFTOVER
+ sta PALETTE_STATE
+ lda QUEUE_COUNT
+ bne hell_upload
+ jmp hell_done
+
+ ; As mapped_upload (the same budget rules; the stack one byte deeper), but each
+ ; chunk stops at HELL_MAPPED: below it the colours are looked up in the
+ ; HELL table and cost a budget colour each; from it on they go to the VCE
+ ; unchanged by a TIA and cost RAW_SETUP + n/4 + n/32 for n colours.
+hell_upload:
+ phx
+ phy
+ lda <PTR
+ pha
+ lda <PTR+1
+ pha
+ lda <BUDGET
+ pha
+ lda <CHUNK
+ pha
+ lda <ENTRY
+ pha
+ lda <FULL
+ pha
+ lda <TMP
+ pha
+ stz <FULL
+ lda QUEUE_COUNT
+ cmp #8
+ bcc hell_not_full
+ inc <FULL
+hell_not_full:
+ lda #PALETTE_CAP
+ sta <BUDGET
+ ldy #0
+ tsx
+ lda $2100 + 21,x           ; the interrupted PC (mapped_upload's S+20, +1)
+ cmp #$fd
+ bne hell_busy_now
+ lda $2100 + 20,x
+ cmp #$67
+ bcc hell_busy_now
+ cmp #$70
+ bcc hell_idle_now
+hell_busy_now:
+ ldy #WAS_BUSY
+hell_idle_now:
+ sty <CHUNK
+ lda PALETTE_STATE
+ and #WAS_BUSY
+ sta <ENTRY
+ lda PALETTE_STATE
+ and #$ff - WAS_BUSY
+ ora <CHUNK
+ sta PALETTE_STATE
+ ldx QUEUE_COUNT
+ cpx #1
+ bne hell_new_work
+ lda PALETTE_STATE
+ and #LEFTOVER
+ beq hell_new_work
+ lda <CHUNK
+ ora <ENTRY
+ beq hell_leftover_idle
+ nop                        ; busy: 8 cycles, as before the fade rule
+ jmp hell_return
+hell_leftover_idle:
+ ; mapped_upload's fade rule (leftover_idle): FADE_CAP for what is left
+ ; over once a fade-out has ended on black. Otherwise 45 cycles from the
+ ; branch above to hell_next_chunk, as before the rule (the three nops).
+ bit FADE_LEVEL
+ bmi hell_leftover_fade
+ lda #LEFTOVER_CAP
+hell_leftover_set:
+ sta <BUDGET
+ lda PALETTE_STATE
+ and #$ff - LEFTOVER
+ sta PALETTE_STATE
+ stz <ENTRY
+ clx
+ nop
+ nop
+ nop
+ jmp hell_next_chunk
+hell_leftover_fade:
+ lda #FADE_CAP
+ bra hell_leftover_set
+hell_new_work:
+ stz <PTR
+ stz <PTR+1
+ ldx #0
+ lda PALETTE_STATE
+ and #LEFTOVER
+ beq hell_sum
+ inx
+hell_sum:
+ cpx QUEUE_COUNT
+ bcs hell_summed
+ lda QUEUE_BYTES_LO,x
+ clc
+ adc <PTR
+ sta <PTR
+ lda QUEUE_BYTES_HI,x
+ adc <PTR+1
+ sta <PTR+1
+ inx
+ bra hell_sum
+hell_summed:
+ lda <PTR+1
+ sta <TMP
+ cmp #8
+ bcs hell_large
+ lda <PTR
+ asl a
+ lda <PTR+1
+ rol a
+ sta <CHUNK
+ lsr <PTR+1
+ ror <PTR
+ lsr <PTR+1
+ ror <PTR
+ lsr <PTR+1
+ ror <PTR
+ lda <PTR
+ clc
+ adc <CHUNK
+ bcs hell_large
+ adc #NATIVE_PLUS
+ bcc hell_costs
+hell_large:
+ lda #$ff
+hell_costs:
+ cmp #PALETTE_CAP
+ bcc hell_capped
+ lda #PALETTE_CAP
+hell_capped:
+ ldx QUEUE_COUNT
+ sec
+ sbc entry_costs-1,x
+ bcc hell_min
+ cmp #BUDGET_MIN
+ bcs hell_set
+hell_min:
+ lda #BUDGET_MIN
+hell_set:
+ sta <BUDGET
+ lda PALETTE_STATE
+ and #LEFTOVER
+ beq hell_budget_done
+ lda <TMP
+ cmp #4
+ bcs hell_budget_done
+ lda QUEUE_BYTES_LO
+ pha
+ lda QUEUE_BYTES_HI
+ pha
+ lda QUEUE_INDEX_LO
+ pha
+ lda QUEUE_INDEX_HI
+ pha
+ ldx #0
+hell_rotate:
+ lda QUEUE_BYTES_LO+1,x
+ sta QUEUE_BYTES_LO,x
+ lda QUEUE_BYTES_HI+1,x
+ sta QUEUE_BYTES_HI,x
+ lda QUEUE_INDEX_LO+1,x
+ sta QUEUE_INDEX_LO,x
+ lda QUEUE_INDEX_HI+1,x
+ sta QUEUE_INDEX_HI,x
+ inx
+ cpx QUEUE_COUNT
+ bcc hell_rotate
+ ldx QUEUE_COUNT
+ pla
+ sta QUEUE_INDEX_HI-1,x
+ pla
+ sta QUEUE_INDEX_LO-1,x
+ pla
+ sta QUEUE_BYTES_HI-1,x
+ pla
+ sta QUEUE_BYTES_LO-1,x
+hell_budget_done:
+ lda PALETTE_STATE
+ and #$ff - LEFTOVER
+ sta PALETTE_STATE
+ stz <ENTRY
+ bra hell_next_entry
+hell_entry_done:
+ inc <ENTRY
+hell_next_entry:
+ ldx <ENTRY
+ cpx QUEUE_COUNT
+ bcc hell_next_chunk
+ jmp hell_queue_done
+hell_next_chunk:
+ lda QUEUE_BYTES_LO,x
+ ora QUEUE_BYTES_HI,x
+ beq hell_entry_done
+ ; CHUNK = min(128, colours left in the entry), then by the kind of colour.
+ lda QUEUE_BYTES_HI,x
+ bne hell_long
+ lda QUEUE_BYTES_LO,x
+ lsr a
+ bra hell_short
+hell_long:
+ lda #128
+hell_short:
+ sta <CHUNK
+ lda QUEUE_INDEX_HI,x
+ bne hell_high_half
+ lda #HELL_MAPPED
+ sec
+ sbc QUEUE_INDEX_LO,x       ; colours left below HELL_MAPPED
+ beq hell_raw
+ bcc hell_raw
+ ; Mapped: no further than HELL_MAPPED, BUDGET colours at most.
+ cmp <CHUNK
+ bcs hell_below
+ sta <CHUNK
+hell_below:
+ lda <BUDGET
+ cmp <CHUNK
+ bcs hell_mapped_fits
+ sta <CHUNK
+hell_mapped_fits:
+ jsr hell_chunk
+ lda <CHUNK
+ bra hell_advance
+hell_high_half:
+ ; No further than colour 511 (a left-over entry may run on from 0).
+ lda QUEUE_INDEX_LO,x
+ beq hell_raw
+ eor #$ff
+ inc a
+ cmp <CHUNK
+ bcs hell_raw
+ sta <CHUNK
+hell_raw:
+ ; Unmapped: as many as the budget pays for. With BUDGET = RAW_SETUP + k
+ ; (k < RAW_ANY - RAW_SETUP), 3.5 k colours cost at most RAW_SETUP + k.
+ lda <BUDGET
+ cmp #RAW_ANY
+ bcs hell_raw_fits
+ sec
+ sbc #RAW_SETUP
+ bcc hell_spent
+ beq hell_spent
+ sta <TMP
+ asl a
+ clc
+ adc <TMP
+ lsr <TMP
+ clc
+ adc <TMP                   ; 3.5 k
+ cmp <CHUNK
+ bcs hell_raw_fits
+ sta <CHUNK
+hell_raw_fits:
+ jsr hell_raw_chunk
+ lda <CHUNK
+ lsr a
+ lsr a
+ lsr a
+ lsr a
+ lsr a
+ sta <TMP                   ; n / 32
+ lda <CHUNK
+ lsr a
+ lsr a                      ; n / 4
+ sec                        ; + RAW_SETUP (adc #RAW_SETUP-1 with carry)
+ adc <TMP
+ adc #RAW_SETUP - 1
+hell_advance:
+ ; A = the chunk's cost. The entry moves on by CHUNK colours.
+ sta <TMP
+ ldx <ENTRY
+ lda QUEUE_INDEX_LO,x
+ clc
+ adc <CHUNK
+ sta QUEUE_INDEX_LO,x
+ bcc hell_index_done
+ lda QUEUE_INDEX_HI,x
+ inc a
+ and #1
+ sta QUEUE_INDEX_HI,x
+hell_index_done:
+ lda <CHUNK
+ asl a
+ sta <PTR
+ cla
+ rol a
+ sta <PTR+1
+ lda QUEUE_BYTES_LO,x
+ sec
+ sbc <PTR
+ sta QUEUE_BYTES_LO,x
+ lda QUEUE_BYTES_HI,x
+ sbc <PTR+1
+ sta QUEUE_BYTES_HI,x
+ lda <BUDGET
+ sec
+ sbc <TMP
+ sta <BUDGET
+ beq hell_spent
+ jmp hell_next_chunk
+hell_spent:
+ ldx <ENTRY
+ jsr fold_queue
+ bra hell_border
+hell_queue_done:
+ stz QUEUE_COUNT
+hell_border:
+ lda <FULL
+ beq hell_full_done
+ jsr QUEUE_ALL
+hell_full_done:
+ lda QUEUE_COUNT
+ beq hell_nothing_left
+ lda PALETTE_STATE
+ ora #LEFTOVER
+ sta PALETTE_STATE
+hell_nothing_left:
+ ; The border colour (entry $100, sprite palette 0's transparent colour):
+ ; unmapped, like the rest of the sprite palettes.
+ stz $0402
+ lda #1
+ sta $0403
+ lda BORDER
+ sta $0404
+ lda BORDER+1
+ sta $0405
+hell_return:
+ ; mapped_return, then MPR3 as it was (hell_done).
+ pla
+ sta <TMP
+ pla
+ sta <FULL
+ pla
+ sta <ENTRY
+ pla
+ sta <CHUNK
+ pla
+ sta <BUDGET
+ pla
+ sta <PTR+1
+ pla
+ sta <PTR
+ ply
+ plx
+ jmp hell_done
+
+ ; CHUNK colours (1-128, all below HELL_MAPPED) of queue entry X, mapped:
+ ; upload_chunk with the HELL table.
+hell_chunk:
+ lda QUEUE_INDEX_LO,x
+ sta $0402
+ stz $0403
+ clc
+ adc <CHUNK
+ stz <PTR+1
+ asl a
+ rol <PTR+1
+ clc
+ adc #$86
+ sta <PTR
+ lda <PTR+1
+ adc #$21                   ; $2286 + 2 x (first + CHUNK) - 256
+ sta <PTR+1
+ lda <CHUNK
+ asl a
+ eor #$ff
+ inc a
+ tay
+ lda VISIBLE_STAGE          ; the stage with an override (1-1) has its
+ cmp #HELL_OVERRIDE_STAGE   ; own loop: 9 cycles a chunk elsewhere
+ beq hell_colour_ovr
+hell_colour:
+ lda [PTR],y
+ tax
+ iny
+ lda [PTR],y
+ lsr a
+ bcs hell_colour_high
+ lda hell_lo0,x
+ sta $0404
+ lda hell_hi0,x
+ sta $0405
+ iny
+ bne hell_colour
+ rts
+hell_colour_high:
+ lda hell_lo1,x
+ sta $0404
+ lda hell_hi1,x
+ sta $0405
+ iny
+ bne hell_colour
+ rts
+
+ ; The per-stage override (1.11-dev, hell.json "stage_overrides"; the
+ ; generated HELL_OVERRIDE_* equates): in the visible stage
+ ; HELL_OVERRIDE_STAGE ($2E5F, Level Select numbering) the colour
+ ; HELL_OVERRIDE_KEY (low half, $001-$0FF) shows HELL_OVERRIDE_LO/HI instead
+ ; of its table colour; the table stays as it is for every other stage (1-1's
+ ; sidewalk fleck and skyline shadow $094 is 2-2's far ridge too). These are
+ ; hell_colour's and now_hell_map's loops with one compare more on the low
+ ; half (cpx #/beq: 4 cycles a colour, in that stage only; a hit costs 4
+ ; fewer than the lookup). No RAM: the stage is read where the loop is
+ ; chosen. A further colour for the stage is one more cpx/beq and hit in
+ ; each loop (4 cycles a low-half colour each).
+hell_colour_ovr:
+ lda [PTR],y
+ tax
+ iny
+ lda [PTR],y
+ lsr a
+ bcs hell_ovr_high
+ cpx #HELL_OVERRIDE_KEY
+ beq hell_ovr_hit
+ lda hell_lo0,x
+ sta $0404
+ lda hell_hi0,x
+ sta $0405
+ iny
+ bne hell_colour_ovr
+ rts
+hell_ovr_hit:
+ lda #HELL_OVERRIDE_LO
+ sta $0404
+ lda #HELL_OVERRIDE_HI
+ sta $0405
+ iny
+ bne hell_colour_ovr
+ rts
+hell_ovr_high:
+ lda hell_lo1,x
+ sta $0404
+ lda hell_hi1,x
+ sta $0405
+ iny
+ bne hell_colour_ovr
+ rts
+
+ ; CHUNK colours (1-128) of queue entry X unchanged, by a TIA built on the
+ ; stack (the vblank interrupt's; anything nested goes below it):
+ ; tia $2286 + 2 x first, $0404, 2 x CHUNK / rts. X and Y are not kept.
+hell_raw_chunk:
+ lda QUEUE_INDEX_LO,x
+ sta $0402
+ lda QUEUE_INDEX_HI,x
+ sta $0403
+ lda #$60                   ; rts
+ pha
+ lda <CHUNK
+ asl a
+ tay
+ cla
+ rol a
+ pha                        ; length, high byte
+ phy                        ; low byte
+ lda #$04
+ pha                        ; destination $0404 (the TIA alternates
+ pha                        ; $0404 and $0405)
+ lda QUEUE_INDEX_LO,x
+ asl a
+ tay
+ lda QUEUE_INDEX_HI,x
+ rol a
+ tax
+ tya
+ clc
+ adc #$86
+ tay
+ txa
+ adc #$22
+ pha                        ; source $2286 + 2 x first, high byte
+ phy                        ; low byte
+ lda #$e3                   ; tia
+ pha
+ tsx
+ inx
+ stx <PTR
+ lda #$21
+ sta <PTR+1
+ jsr hell_run_tia
+ tsx
+ txa
+ clc
+ adc #8
+ tax
+ txs
+ rts
+hell_run_tia:
+ jmp [$2000 + PTR]
+
+ ; palette_now in HELL (from now_hell_far, MPR3's byte on the stack; Y = 0,
+ ; CHUNK = 2 x count, PTR = the first colour's RAM word, VCE address set,
+ ; X = the first colour): colours below HELL_MAPPED mapped here, the rest
+ ; (HUD and sprite palettes) as they are by now_raw, after now_hell_exit.
+now_hell:
+ lda MASTER_STATE
+ bne now_hell_cinema
+ lda <CHUNK
+ pha
+ txa
+ eor #$ff                   ; carry is set (HELL's cmp in palette_now)
+ adc #HELL_MAPPED           ; colours below HELL_MAPPED from X on
+ bcc now_hell_mapped
+ beq now_hell_mapped
+ cmp #128
+ bcs now_hell_stage
+ asl a
+ cmp <CHUNK
+ bcs now_hell_stage
+ sta <CHUNK                 ; their bytes, the end of the mapped part
+now_hell_stage:
+ lda VISIBLE_STAGE          ; as hell_chunk: the override stage's own loop
+ cmp #HELL_OVERRIDE_STAGE
+ beq now_hell_ovr
+now_hell_map:
+ lda [PTR],y
+ tax
+ iny
+ lda [PTR],y
+ iny
+ lsr a
+ bcs now_hell_high
+ lda hell_lo0,x
+ sta $0404
+ lda hell_hi0,x
+ sta $0405
+ cpy <CHUNK
+ bne now_hell_map
+ bra now_hell_mapped
+now_hell_high:
+ lda hell_lo1,x
+ sta $0404
+ lda hell_hi1,x
+ sta $0405
+ cpy <CHUNK
+ bne now_hell_map
+now_hell_mapped:
+ pla
+ sta <CHUNK
+ jmp now_hell_exit
+now_hell_cinema:
+ jmp now_hell_cinema_exit
+
+ ; palette_now in the override stage: now_hell_map with the compare
+ ; (hell_colour_ovr above).
+now_hell_ovr:
+ lda [PTR],y
+ tax
+ iny
+ lda [PTR],y
+ iny
+ lsr a
+ bcs now_ovr_high
+ cpx #HELL_OVERRIDE_KEY
+ beq now_ovr_hit
+ lda hell_lo0,x
+ sta $0404
+ lda hell_hi0,x
+ sta $0405
+ cpy <CHUNK
+ bne now_hell_ovr
+ bra now_hell_mapped
+now_ovr_hit:
+ lda #HELL_OVERRIDE_LO
+ sta $0404
+ lda #HELL_OVERRIDE_HI
+ sta $0405
+ cpy <CHUNK
+ bne now_hell_ovr
+ bra now_hell_mapped
+now_ovr_high:
+ lda hell_lo1,x
+ sta $0404
+ lda hell_hi1,x
+ sta $0405
+ cpy <CHUNK
+ bne now_hell_ovr
+ bra now_hell_mapped
+hell_code_end:
+ .if (hell_code_end > HELL_TABLE)
+ .fail
+ .endif
+
+ ; The HELL table (generated from hell.json by scripts/palette_tables.py),
+ ; in the GB DMG table's format.
+ .org HELL_TABLE
+ .include "hell-table.inc"
+hell_table_end:
+ .if (hell_table_end > $8000)
+ .fail
+ .endif
+ .if (HELL_MAPPED > 256)
+ .fail
+ .endif
+
+ ; SMS, in bank SMS_BANK ($3B): a copy of bank $46 $5000-$53FF and
+ ; PALETTE_FAR at the same addresses (sms-mirror.inc, from the ;@mirror
+ ; lines above), and at $5400-$57FF the SMS table in the GB DMG table's
+ ; format (sms-table.inc, from sms.json). File offsets $77000-$777FF and
+ ; $77A00-$77AFF: the original game's $FF tail of bank $3B (its data ends
+ ; at $761CE), never read or executed (docs/validation/sms-palette.md).
+ ; vblank_sms and now_sms map this bank into MPR2 in place of bank $46 and
+ ; carry on with GB DMG's code here, which reads the SMS table where GB DMG
+ ; reads its own; the trampoline restores MPR2 on return.
+ .bank SMS_BANK
+ .include "sms-mirror.inc"
+ .org $5400
+ .include "sms-table.inc"
+sms_tables_end:
+ .if (sms_tables_end > $5800)
+ .fail
+ .endif
+ .if (sms_lo0 <> gb_lo0) | (sms_hi0 <> gb_hi0) | (sms_lo1 <> gb_lo1) | (sms_hi1 <> gb_hi1)
+ .fail
+ .endif

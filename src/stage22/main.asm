@@ -48,8 +48,8 @@ low_half:
  ; Only $2257-$225A (old renderer's bank saves and cursor) may be reused.
  stz <$2d
  lda $2258
- cmp #$ff
- beq phase_changed
+ cmp #$fc                   ; $FF, or a stage load's pending draw ($FD, $FC)
+ bcs phase_changed
  lda $2259
  and #7
  cmp <$27
@@ -66,8 +66,8 @@ same_phase:
  lda <$25
  sta <$2f
  lda $2258
- cmp #$ff
- beq initialize
+ cmp #$fc
+ bcs init_select
  lda <$25
  sec
  sbc $225a
@@ -122,40 +122,9 @@ new_right:
 new_left:
  inc <$30
  bra cache
-initialize:
- lda #101
- tam #3
- jsr $6000
- lda #208
- sta $0402
- stz $0403
- clx
-palette13_loop:
- lda palette13,x
- sta $2426,x
- sta $0404
- inx
- lda palette13,x
- sta $2426,x
- sta $0405
- inx
- cpx #32
- bne palette13_loop
- lda #224
- sta $0402
- stz $0403
- clx
-palette14_loop:
- lda palette14,x
- sta $2446,x
- sta $0404
- inx
- lda palette14,x
- sta $2446,x
- sta $0405
- inx
- cpx #32
- bne palette14_loop
+init_select:
+ ; (out of line: initialize_far, with the palette copy)
+ jmp initialize_far
 cache:
  lda $2e4b
  sta $2257
@@ -480,6 +449,129 @@ set_ports:
  adc #$ff
  sta <$2a
  rts
+initialize_far:
+ ; $2258: $FF draws at once: an area change's draw ($2257 holds the bank the
+ ; native $80AB saved there) or the gameplay fallback. A stage load
+ ; (init_background: $2257 = $FF) only writes the palettes here and leaves
+ ; the drawing to the entry's black frames (load_piece; load-exact).
+ lda $2258
+ cmp #$ff
+ bne load_piece
+ lda $2257
+ cmp #$ff
+ beq load_palette
+draw_all:
+ ; The native area transition keeps every VCE colour black until its last
+ ; dark frame, which is this one: it queues all 512 colours ($F394) here
+ ; and the vblank uploads them from the RAM palette for the original's first
+ ; visible frame. Original and NES ($2100 bit 4 clear): the merged palettes
+ ; go into the RAM palette only and come with that upload; writing them to
+ ; the VCE at once lit the backdrop's palette 13/14 rows in the black frame
+ ; (2-2 area 2: two lines; start-pos). The mapped modes (bit 4 set: GB DMG,
+ ; HELL, SMS) still write them at once (palette_now): their worker does not
+ ; convert all 512 colours before this vblank, which left those rows black
+ ; on the first visible frame without it.
+ jsr initialize
+ jsr palette_ram
+ lda $2100
+ and #$10
+ beq drawn
+ jsr cache
+ ldx #208
+ ldy #32
+ jmp $febe
+drawn:
+ jmp cache
+load_palette:
+ ; The stage load: the merged palettes into the RAM palette only. The load's
+ ; fade ($F436) copies the RAM palette to its backup and fades in from it,
+ ; so the VCE gets them with the first fade step that shows anything (the
+ ; original shows black until then; a VCE write here showed them early).
+ jsr palette_ram
+ lda #$fd
+ sta $2258
+ rts
+load_piece:
+ ; A stage load's draw in two pieces, in the entry's short updates while
+ ; every colour is black: $2E63 counts the entry's updates down from $3A
+ ; ($82D0); $FD at $38 uploads the tiles (fixed and phase), $FC at $37
+ ; writes the tile map and the real cache. Outside the entry ($2E63 = 0;
+ ; not expected) everything is drawn at once.
+ ldx $2e63
+ beq draw_rest
+ cmp #$fd
+ bne piece_two
+ cpx #$38
+ bne piece_wait
+ jsr initialize
+ stz <$30
+ jsr cache
+ lda #$fc
+ sta $2258
+piece_wait:
+ rts
+piece_two:
+ cpx #$37
+ bne piece_wait
+ stz <$2d
+ jmp cache
+draw_rest:
+ jsr initialize
+ jmp cache
+; The fixed tile upload (scripts/rev5_texture.py writes this bank and
+; address: it matches the label and the three lines below).
+initialize:
+ lda #101
+ tam #3
+ jsr $6000
+ rts
+palette_ram:
+ ; The merged palettes 13 and 14 into the RAM palette; the native uploads
+ ; (the load's fade, the area transition's full re-queue) take them to the
+ ; VCE in the active palette mode's colours (a mapped mode's area change
+ ; also writes them at once, draw_all). The NES
+ ; palette mode ($2100 bits 3-4 = 01, src/nes-palette) has its own
+ ; versions (palette13_nes, palette14_nes in nes-enhanced.inc).
+ clx
+ lda $2100
+ and #$18
+ cmp #$08
+ beq nes_palette
+palette_loop:
+ lda palette13,x
+ sta $2426,x
+ lda palette14,x
+ sta $2446,x
+ inx
+ cpx #32
+ bne palette_loop
+ bra palette_written
+nes_palette:
+ ; Palette timing (palette-lag): NES reaches here 2 cycles after
+ ; Original's beq, and Original's bra takes 4 at the end (+2 net):
+ ; index 0 copied unrolled (20 cycles vs 28 in the loop) plus ldx #1
+ ; (2) and 8 cycles of pad reach palette_written at cycle 900.
+ lda palette13_nes
+ sta $2426
+ lda palette14_nes
+ sta $2446
+ nop
+ nop
+ nop
+ nop
+ ldx #1
+nes_palette_loop:
+ lda palette13_nes,x
+ sta $2426,x
+ lda palette14_nes,x
+ sta $2446,x
+ inx
+ cpx #32
+ bne nes_palette_loop
+palette_written:
+ rts
+ ; The NES palette mode's palettes 13 and 14 (scripts/nes_palette.py).
+ .include "nes-enhanced.inc"
 helpers_end:
  .if (helpers_end > $5000)
  .fail
